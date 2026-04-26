@@ -1,0 +1,22 @@
+{
+  "name": "Joey Pizza – Painel",
+  "short_name": "Joey Painel",
+  "description": "Painel de controle de pedidos Joey Pizza",
+  "start_url": "/painel.html",
+  "display": "standalone",
+  "background_color": "#111318",
+  "theme_color": "#ff6b35",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
