@@ -1,4 +1,4 @@
-const CACHE = 'joey-v1';
+const CACHE = 'joey-v6';
 const ASSETS = ['/painel.html', '/manifest.json'];
 
 self.addEventListener('install', e => {

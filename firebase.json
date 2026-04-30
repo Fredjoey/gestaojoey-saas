@@ -6,26 +6,83 @@
   "firestore": {
     "rules": "firestore.rules"
   },
-  "hosting": {
-    "public": ".",
-    "ignore": [
-      "firebase.json",
-      ".firebaserc",
-      ".gitignore",
-      "firebase-debug.log",
-      "**/node_modules/**",
-      "*.bat",
-      "*.exe"
-    ],
-    "headers": [
-      {
-        "source": "/sw.js",
-        "headers": [{"key": "Cache-Control", "value": "no-cache"}]
-      },
-      {
-        "source": "/painel.html",
-        "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
-      }
-    ]
-  }
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": [
+    {
+      "site": "pedidos-joey",
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        ".firebaserc",
+        ".gitignore",
+        "firebase-debug.log",
+        "**/node_modules/**",
+        "*.bat",
+        "*.exe"
+      ],
+      "headers": [
+        {
+          "source": "/sw.js",
+          "headers": [{"key": "Cache-Control", "value": "no-cache"}]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/api/emitirNFCe",
+          "function": "emitirNFCe",
+          "region": "us-central1"
+        },
+        {
+          "source": "/api/cancelarNFCe",
+          "function": "cancelarNFCe",
+          "region": "us-central1"
+        },
+        {
+          "source": "/",
+          "destination": "/cardapio.html"
+        }
+      ]
+    },
+    {
+      "site": "pedidos-joey-painel",
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        ".firebaserc",
+        ".gitignore",
+        "firebase-debug.log",
+        "**/node_modules/**",
+        "*.bat",
+        "*.exe"
+      ],
+      "headers": [
+        {
+          "source": "/sw.js",
+          "headers": [{"key": "Cache-Control", "value": "no-cache"}]
+        },
+        {
+          "source": "/painel.html",
+          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/api/emitirNFCe",
+          "function": "emitirNFCe",
+          "region": "us-central1"
+        },
+        {
+          "source": "/api/cancelarNFCe",
+          "function": "cancelarNFCe",
+          "region": "us-central1"
+        },
+        {
+          "source": "/",
+          "destination": "/painel.html"
+        }
+      ]
+    }
+  ]
 }

@@ -6,6 +6,262 @@ const axios = require('axios');
 admin.initializeApp();
 const db = admin.firestore();
 
+// ── FOCUS NFe — EMISSÃO DE NFCe ──────────────────────────────────────────────
+
+function mapFormaPagamento(pagamento) {
+  const p = (pagamento || '').toLowerCase();
+  if (p.includes('pix'))      return '17';
+  if (p.includes('dinheiro')) return '01';
+  if (p.includes('cr'))       return '03';
+  if (p.includes('d') && p.includes('b')) return '04';
+  return '99';
+}
+
+const CAT_DEFAULTS = {
+  'pizza':  { ncm: '21069090', cest: '',        cfop: '5101', csosn: '102', cst_pis: '07', cst_cofins: '07', cclass_trib: '200047', ibs_estadual: 0.1, ibs_municipal: 0, cbs: 0.9 },
+  'bebida': { ncm: '22089000', cest: '0300504', cfop: '5405', csosn: '500', cst_pis: '04', cst_cofins: '04', cclass_trib: '200047', ibs_estadual: 0.1, ibs_municipal: 0, cbs: 0.9 },
+  'burger': { ncm: '21069090', cest: '',        cfop: '5101', csosn: '102', cst_pis: '07', cst_cofins: '07', cclass_trib: '200047', ibs_estadual: 0.1, ibs_municipal: 0, cbs: 0.9 },
+  'lanche': { ncm: '21069090', cest: '',        cfop: '5101', csosn: '102', cst_pis: '07', cst_cofins: '07', cclass_trib: '200047', ibs_estadual: 0.1, ibs_municipal: 0, cbs: 0.9 },
+  'porcao': { ncm: '21069090', cest: '',        cfop: '5101', csosn: '102', cst_pis: '07', cst_cofins: '07', cclass_trib: '200047', ibs_estadual: 0.1, ibs_municipal: 0, cbs: 0.9 },
+  'outro':  { ncm: '21069090', cest: '',        cfop: '5101', csosn: '102', cst_pis: '07', cst_cofins: '07', cclass_trib: '200047', ibs_estadual: 0.1, ibs_municipal: 0, cbs: 0.9 },
+};
+
+function getTrib(categoria, catTrib) {
+  const cat = (categoria || 'Outro').trim();
+  if (catTrib[cat]) return catTrib[cat];
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
+  const catN = norm(cat);
+  for (const [k, v] of Object.entries(catTrib)) {
+    if (norm(k) === catN) return v;
+  }
+  if (CAT_DEFAULTS[catN]) return CAT_DEFAULTS[catN];
+  for (const [k, v] of Object.entries(CAT_DEFAULTS)) {
+    if (catN.includes(k) || k.includes(catN)) return v;
+  }
+  return { ncm: '21069090', cfop: '5102', csosn: '400' };
+}
+
+exports.emitirNFCe = onRequest(
+  { invoker: 'public', region: 'us-central1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ ok: false, erro: 'Método não permitido' });
+    }
+
+    try {
+      const { pedidoId, itens, total, pagamento, cpfCnpj, cliente } = req.body || {};
+
+      if (!pedidoId || !Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ ok: false, erro: 'pedidoId e itens são obrigatórios' });
+      }
+
+      // Lê config fiscal, categorias tributárias e NCM individuais do Firestore
+      const [fiscalSnap, catTribSnap, ncmProdSnap] = await Promise.all([
+        db.collection('config').doc('fiscal').get(),
+        db.collection('config').doc('categoriasTributarias').get(),
+        db.collection('config').doc('ncmProdutos').get(),
+      ]);
+      const fiscal    = fiscalSnap.exists    ? fiscalSnap.data()    : {};
+      const catTrib   = catTribSnap.exists   ? catTribSnap.data()   : {};
+      const ncmProdutos = ncmProdSnap.exists ? ncmProdSnap.data()   : {};
+
+      const focusToken = (fiscal.apiKey || fiscal.tokenProducao || '').trim();
+
+      if (!focusToken) {
+        return res.status(400).json({
+          ok: false,
+          erro: 'Token da Focus NFe não configurado. Acesse Fiscal → Configuração.',
+        });
+      }
+
+      const baseUrl = 'https://api.focusnfe.com.br';
+
+      const ref = `joey-${pedidoId}-${Date.now()}`;
+
+      // Data/hora em horário de Brasília
+      const dataEmissao = new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T') + '-03:00';
+
+      // Monta itens para o JSON da Focus NFe
+      const items = itens.map((item, idx) => {
+        const qty    = parseFloat(item.qty || item.quantidade || 1);
+        const preco  = parseFloat(item.preco || item.price || 0);
+        const trib   = getTrib(item.categoria || item.category, catTrib);
+        // NCM individual do produto tem prioridade sobre o NCM da categoria
+        const ncmInd = ncmProdutos[String(item.id)] || '';
+        const ncmFinal = (ncmInd.length === 8 ? ncmInd : null) || trib.ncm;
+        return {
+          numero_item:              idx + 1,
+          codigo_produto:           String(item.id || idx + 1).padStart(3, '0'),
+          descricao:                String(item.nome || item.name || 'Produto').substring(0, 120),
+          codigo_ncm:               ncmFinal,
+          ...(trib.cest ? { codigo_cest: trib.cest } : {}),
+          cfop:                     trib.cfop,
+          unidade_comercial:        'UN',
+          quantidade_comercial:     qty,
+          valor_unitario_comercial: preco,
+          valor_bruto:              parseFloat((preco * qty).toFixed(2)),
+          icms_origem:              0,
+          icms_situacao_tributaria: trib.csosn,
+          pis_situacao_tributaria:  trib.cst_pis    || trib.pis    || '07',
+          cofins_situacao_tributaria: trib.cst_cofins || trib.cofins || '07',
+        };
+      });
+
+      const nfcePayload = {
+        natureza_operacao:           'Venda ao consumidor',
+        data_emissao:                dataEmissao,
+        tipo_documento:              1,
+        finalidade_emissao:          1,
+        consumidor_final:            1,
+        presenca_comprador:          1,
+        modalidade_frete:            9,
+        valor_frete:                 0,
+        cnpj_emitente:               (fiscal.cnpj || '').replace(/\D/g, '') || undefined,
+        inscricao_estadual_emitente: (fiscal.ie || '').trim() || undefined,
+        regime_tributario_emitente:  fiscal.regime === 'simples' ? 1 : (parseInt(fiscal.regime) || 1),
+        csc:                         (fiscal.csc || '').trim() || undefined,
+        csc_id:                      String(fiscal.idCsc || '').trim() || undefined,
+        serie:                       fiscal.serieNfce || fiscal.serieNFCe || 2,
+        items,
+        formas_pagamento: [{
+          forma_pagamento: mapFormaPagamento(pagamento),
+          valor_pagamento: parseFloat((total || 0).toFixed(2)),
+        }],
+      };
+
+      // Remove campos undefined para não poluir o JSON enviado
+      Object.keys(nfcePayload).forEach(k => nfcePayload[k] === undefined && delete nfcePayload[k]);
+
+      // CPF/CNPJ do consumidor (opcional)
+      if (cpfCnpj) {
+        const nums = cpfCnpj.replace(/\D/g, '');
+        if (nums.length === 11)      nfcePayload.cpf_destinatario  = nums;
+        else if (nums.length === 14) nfcePayload.cnpj_destinatario = nums;
+      }
+
+      // Envia para Focus NFe
+      const focusResp = await axios.post(
+        `${baseUrl}/v2/nfce?ref=${ref}`,
+        nfcePayload,
+        {
+          auth:           { username: focusToken, password: '' },
+          headers:        { 'Content-Type': 'application/json' },
+          timeout:        30000,
+          validateStatus: () => true,
+        }
+      );
+
+      const focusData  = focusResp.data || {};
+      const httpStatus = focusResp.status;
+
+      const statusNota = focusData.status === 'autorizado' ? 'emitida'
+                       : httpStatus >= 400               ? 'erro'
+                       :                                   'pendente';
+
+      // Salva resultado no Firestore
+      const agora2 = new Date();
+      await db.collection('notasFiscais').doc(String(pedidoId)).set({
+        pedidoId:     String(pedidoId),
+        cliente:      cliente || null,
+        total:        total   || 0,
+        pagamento:    pagamento || null,
+        cpfCnpj:      cpfCnpj   || null,
+        focusRef:     ref,
+        focusStatus:  focusData.status        || null,
+        focusMsg:     focusData.mensagem_sefaz || focusData.mensagem || null,
+        nf:           focusData.numero         || null,
+        numeroNota:   focusData.numero         || null,
+        chaveAcesso:  focusData.chave_nfe      || null,
+        chaveNfe:     focusData.chave_nfe      || null,
+        danfeUrl:     focusData.caminho_danfe ? baseUrl + focusData.caminho_danfe : null,
+        status:       statusNota,
+        data: agora2.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+        hora: agora2.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+        criadoEm: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      if (statusNota === 'emitida') {
+        const danfeUrl = focusData.caminho_danfe ? baseUrl + focusData.caminho_danfe : null;
+        console.log('[emitirNFCe] autorizado — caminho_danfe:', focusData.caminho_danfe, '| danfeUrl:', danfeUrl);
+        return res.json({
+          ok:        true,
+          status:    statusNota,
+          nf:        focusData.numero,
+          numeroNota:focusData.numero,
+          chaveNfe:  focusData.chave_nfe,
+          mensagem:  focusData.mensagem_sefaz,
+          danfe:     danfeUrl,
+        });
+      }
+
+      const erroMsg = focusData.mensagem_sefaz
+        || focusData.mensagem
+        || (Array.isArray(focusData.erros) ? focusData.erros.map(e => e.mensagem).join('; ') : null)
+        || `Erro HTTP ${httpStatus}`;
+
+      console.error('[emitirNFCe] Focus NFe erro:', erroMsg, JSON.stringify(focusData));
+      return res.status(422).json({ ok: false, erro: erroMsg, focusStatus: focusData.status });
+
+    } catch (err) {
+      console.error('[emitirNFCe] exceção:', err.message, err.response?.data);
+      return res.status(500).json({ ok: false, erro: 'Erro interno: ' + err.message });
+    }
+  }
+);
+
+// ── FOCUS NFe — CANCELAMENTO DE NFCe ─────────────────────────────────────────
+
+exports.cancelarNFCe = onRequest(
+  { invoker: 'public', region: 'us-central1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ ok: false, erro: 'Método não permitido' });
+    }
+    try {
+      const { pedidoId, ref, justificativa } = req.body || {};
+      if (!pedidoId || !ref || !justificativa || String(justificativa).trim().length < 15) {
+        return res.status(400).json({ ok: false, erro: 'pedidoId, ref e justificativa (mín. 15 caracteres) são obrigatórios' });
+      }
+      const fiscalSnap = await db.collection('config').doc('fiscal').get();
+      const fiscal = fiscalSnap.exists ? fiscalSnap.data() : {};
+      const focusToken = (fiscal.apiKey || fiscal.tokenProducao || '').trim();
+      if (!focusToken) {
+        return res.status(400).json({ ok: false, erro: 'Token da Focus NFe não configurado.' });
+      }
+      const just = justificativa.trim();
+      const focusResp = await axios.delete(
+        `https://api.focusnfe.com.br/v2/nfce/${encodeURIComponent(ref)}`,
+        {
+          data: { justificativa: just },
+          auth: { username: focusToken, password: '' },
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 30000,
+          validateStatus: () => true,
+        }
+      );
+      const focusData  = focusResp.data || {};
+      const httpStatus = focusResp.status;
+      if (httpStatus >= 200 && httpStatus < 300) {
+        await db.collection('notasFiscais').doc(String(pedidoId)).set({
+          status: 'cancelada',
+          canceladoEm: admin.firestore.FieldValue.serverTimestamp(),
+          justificativaCancelamento: just,
+        }, { merge: true });
+        return res.json({ ok: true, status: 'cancelada' });
+      }
+      const erroMsg = focusData.mensagem_sefaz
+        || focusData.mensagem
+        || (Array.isArray(focusData.erros) ? focusData.erros.map(e => e.mensagem).join('; ') : null)
+        || `Erro HTTP ${httpStatus}`;
+      console.error('[cancelarNFCe] Focus NFe erro:', erroMsg, JSON.stringify(focusData));
+      return res.status(422).json({ ok: false, erro: erroMsg });
+    } catch (err) {
+      console.error('[cancelarNFCe] exceção:', err.message, err.response?.data);
+      return res.status(500).json({ ok: false, erro: 'Erro interno: ' + err.message });
+    }
+  }
+);
+
 const ZAPI_INSTANCE     = '3F23093AB48C02D2FF299E024201EAF7';
 const ZAPI_TOKEN        = 'F1844E4F81266A7B25882914';
 const ZAPI_CLIENT_TOKEN = 'F01b9a9a87d03458db9a16a29111a02e8S';

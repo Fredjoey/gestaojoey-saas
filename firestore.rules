@@ -22,5 +22,13 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /fechamentos/{id} {
+      allow read, write: if true;
+    }
+
+    match /clientes/{clienteId} {
+      allow read, write: if request.auth != null;
+    }
+
   }
 }

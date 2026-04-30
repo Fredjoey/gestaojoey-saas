@@ -1,0 +1,27 @@
+{
+  "_comentario": "Dados do emitente configurados no painel Fiscal > Configuração e na plataforma Focus NFe.",
+  "cnpj": "00.000.000/0001-00",
+  "inscricao_estadual": "ISENTO",
+  "nome": "JOEY PIZZARIA LTDA",
+  "nome_fantasia": "Joey Pizza",
+  "logradouro": "Rua das Pizzas",
+  "numero": "123",
+  "complemento": "",
+  "bairro": "Centro",
+  "municipio": "Petrópolis",
+  "uf": "RJ",
+  "cep": "25600-000",
+  "telefone": "2400000000",
+  "regime_tributario": 1,
+  "_regime_tributario_opcoes": {
+    "1": "Simples Nacional",
+    "2": "Simples Nacional — excesso sublimite",
+    "3": "Regime Normal"
+  },
+  "_focus_nfe": {
+    "ambiente": "homologacao",
+    "token": "CONFIGURE_EM_FISCAL_CHAVE_API_NFE",
+    "url_homologacao": "https://homologacao.focusnfe.com.br",
+    "url_producao": "https://api.focusnfe.com.br"
+  }
+}

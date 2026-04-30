@@ -2,4 +2,21 @@ node_modules/
 functions/node_modules/
 .firebase/
 .env
+*.env
 *.local
+
+# Credenciais / Service accounts
+serviceAccount*.json
+*service-account*.json
+*credentials*.json
+firebase-adminsdk*.json
+*.pem
+*.key
+
+# Dados pessoais (LGPD)
+clientes_joey.json
+clientes*.json
+contatos*.json
+
+# Scripts locais com credenciais
+importar_clientes.js

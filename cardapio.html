@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
+@import url('https://fonts.cdnfonts.com/css/abstante');
 *{box-sizing:border-box;margin:0;padding:0}
 input,textarea,select{font-size:16px}
 :root{
@@ -38,8 +39,9 @@ body{
 /* HERO */
 .hero{
   position:relative;
-  background:linear-gradient(160deg,#1a0a00 0%,#0f0f0f 60%);
-  padding:3rem 1.5rem 2rem;
+  isolation:isolate;
+  background:url('/joey_header.jpg') center 45% / 120% auto no-repeat;
+  padding:3.5rem 1.5rem 2rem;
   text-align:center;
   border-bottom:1px solid var(--border);
   overflow:hidden;
@@ -47,44 +49,42 @@ body{
 .hero::before{
   content:'';
   position:absolute;
-  top:-60px;right:-60px;
-  width:300px;height:300px;
-  background:radial-gradient(circle,rgba(255,107,53,0.15) 0%,transparent 70%);
+  inset:0;
+  background:linear-gradient(to bottom,rgba(6,3,1,.58) 0%,rgba(4,2,0,.82) 100%);
   pointer-events:none;
+  z-index:0;
 }
 .hero-logo{
-  font-family:'Playfair Display',serif;
-  font-size:clamp(2.5rem,8vw,4.5rem);
+  position:relative;z-index:1;
+  font-family:'Abstante',sans-serif;
+  font-size:clamp(3.5rem,12vw,6.5rem);
   font-weight:900;
-  color:var(--orange);
+  color:#fff;
   letter-spacing:-1px;
   line-height:1;
-  margin-bottom:6px;
-}
-.hero-sub{
-  font-size:13px;
-  color:var(--text2);
-  letter-spacing:3px;
-  text-transform:uppercase;
   margin-bottom:1.5rem;
+  text-shadow:0 2px 20px rgba(0,0,0,.9),0 0 40px rgba(255,107,53,.35);
 }
+.hero-sub{display:none}
 .hero-info{
+  position:relative;z-index:1;
   display:flex;align-items:center;justify-content:center;
   gap:8px;flex-wrap:wrap;
-  font-size:12px;color:var(--text2);
+  font-size:12px;color:rgba(255,255,255,.75);
   margin-bottom:1rem;
 }
-.hero-info-sep{color:var(--text3);margin:0 2px}
+.hero-info-sep{color:rgba(255,255,255,.35);margin:0 2px}
 .hero-badge{
+  position:relative;z-index:1;
   display:inline-flex;
   align-items:center;
   gap:6px;
-  background:rgba(255,107,53,0.12);
-  border:1px solid rgba(255,107,53,0.3);
+  background:rgba(255,107,53,0.15);
+  border:1px solid rgba(255,107,53,0.4);
   border-radius:999px;
   padding:6px 14px;
   font-size:12px;
-  color:var(--orange2);
+  color:#ff9d6f;
 }
 .dot-pulse{
   width:8px;height:8px;border-radius:50%;
@@ -573,11 +573,11 @@ body{
 
 /* BOTÃO INFO LOJA (hero) */
 .hero-info-btn{
-  position:absolute;top:14px;right:14px;
+  position:absolute;top:14px;right:14px;z-index:2;
   width:34px;height:34px;border-radius:50%;
-  background:rgba(255,255,255,.07);
-  border:1px solid rgba(255,255,255,.1);
-  color:rgba(255,255,255,.45);font-size:18px;
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.18);
+  color:rgba(255,255,255,.6);font-size:18px;
   cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   -webkit-tap-highlight-color:transparent;touch-action:manipulation;
@@ -617,7 +617,6 @@ body{
 <div class="hero">
   <button class="hero-info-btn" onclick="openInfoLoja()" aria-label="Perfil da loja">ℹ️</button>
   <div class="hero-logo" id="heroLogo">Joey</div>
-  <div class="hero-sub">Pizzaria Artesanal</div>
   <div class="hero-info" id="heroInfo"></div>
   <div class="hero-badge" id="heroBadge">
     <div class="dot-pulse"></div>
@@ -741,6 +740,10 @@ function carregarDadosPainel() {
     CONFIG.destaque        = cfg.destaque        || null;
     const heroLogo = document.getElementById('heroLogo');
     if (heroLogo) heroLogo.textContent = CONFIG.nome;
+    const hero = document.querySelector('.hero');
+    if (hero) hero.style.backgroundImage = cfg.bannerUrl
+      ? `url('${cfg.bannerUrl}')`
+      : "url('/joey_header.jpg')";
     atualizarStatusLoja();
   });
 
@@ -751,7 +754,7 @@ function carregarDadosPainel() {
   function buildCatalogo() {
     CARDAPIO.length = 0;
     _recipesRaw.forEach(r => {
-      if (_catalogoStatusMap[r.id] !== true) return;
+      if (_catalogoStatusMap[r.id]?.ativo !== true) return;
       CARDAPIO.push({
         id:         r.id,
         nome:       r.name || r.nome || '—',
@@ -759,7 +762,7 @@ function carregarDadosPainel() {
         preco:      r.price || r.preco || 0,
         desc:       r.desc || r.descricao || '',
         emoji:      r.emoji || EMOJI_CAT[r.categoria] || '🍽️',
-        foto:       r.foto || r.image || null,
+        foto:       _catalogoStatusMap[r.id]?.foto || r.foto || r.image || null,
         adicionais: r.adicionais || []
       });
     });
@@ -794,7 +797,7 @@ function carregarDadosPainel() {
 
   db.collection('catalogoStatus').onSnapshot(snap => {
     _catalogoStatusMap = {};
-    snap.docs.forEach(d => { _catalogoStatusMap[d.id] = d.data().ativo === true; });
+    snap.docs.forEach(d => { _catalogoStatusMap[d.id] = d.data(); });
     buildCatalogo();
   });
 
@@ -835,21 +838,32 @@ function scrollToSmooth(top) {
 }
 
 // =================== HORÁRIO / STATUS ===================
+
+// Retorna um objeto Date cujos getHours()/getDay() refletem o horário de Brasília
+// (America/Sao_Paulo, UTC-3), independente do timezone do navegador do cliente.
+function _agoraBRT() {
+  // toLocaleString('sv') com timezone SP devolve "YYYY-MM-DD HH:MM:SS" no horário local de SP.
+  // Ao re-parsear como string sem offset, getHours()/getDay() retornam os valores de SP
+  // em qualquer navegador, independente de configuração regional.
+  const brtStr = new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' });
+  return new Date(brtStr.replace(' ', 'T'));
+}
+
 function estaAberto() {
   if (CONFIG.aberto === false) return false;
   if (CONFIG.aberto === true && (!CONFIG.horarios || !Object.keys(CONFIG.horarios).length)) return true;
-  const agora = new Date();
+  const agora = _agoraBRT();
   const dia   = agora.getDay();
   const h     = (CONFIG.horarios || {})[dia];
   if (!h || !h.ativo) return false;
   const [hA, mA] = (h.abre  || '00:00').split(':').map(Number);
   const [hF, mF] = (h.fecha || '23:59').split(':').map(Number);
-  const min  = agora.getHours() * 60 + agora.getMinutes();
+  const min = agora.getHours() * 60 + agora.getMinutes();
   return min >= hA * 60 + mA && min < hF * 60 + mF;
 }
 
 function horarioHoje() {
-  const h = (CONFIG.horarios || {})[new Date().getDay()];
+  const h = (CONFIG.horarios || {})[_agoraBRT().getDay()];
   if (!h || !h.ativo) return '';
   const fmt = t => t.replace(':', 'h');
   return `${fmt(h.abre)} – ${fmt(h.fecha)}`;
@@ -857,11 +871,11 @@ function horarioHoje() {
 
 function proximoAbertura() {
   const horarios = CONFIG.horarios || {};
-  const agora = new Date();
-  const hoje = agora.getDay();
+  const agora    = _agoraBRT();
+  const hoje     = agora.getDay();
   const minAgora = agora.getHours() * 60 + agora.getMinutes();
   const DIAS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const fmt = t => t.replace(':', 'h');
+  const fmt  = t => t.replace(':', 'h');
   const hHoje = horarios[hoje];
   if (hHoje && hHoje.ativo) {
     const [hA, mA] = (hHoje.abre || '00:00').split(':').map(Number);
@@ -869,7 +883,7 @@ function proximoAbertura() {
   }
   for (let d = 1; d <= 7; d++) {
     const dia = (hoje + d) % 7;
-    const h = horarios[dia];
+    const h   = horarios[dia];
     if (h && h.ativo) {
       if (d === 1) return `Loja fechada · Abre amanhã às ${fmt(h.abre)}`;
       return `Loja fechada · Abre ${DIAS[dia]} às ${fmt(h.abre)}`;
@@ -1135,9 +1149,17 @@ function addToCartFromModal() {
   } else {
     cart.push({ id: p.id, nome: p.nome, preco: p.preco, qty: qtyModal, obs: obsModal, emoji: p.emoji, adicionais: adicionaisSelecionados });
   }
-  closeProduct();
   updateCartBtn();
   renderProducts();
+
+  const totalItens = cart.reduce((s, i) => s + i.qty, 0);
+  document.getElementById('productFooter').innerHTML = `
+    <div style="text-align:center;color:var(--success);font-weight:600;font-size:13px;margin-bottom:12px">
+      ✓ Adicionado! (${totalItens} item${totalItens !== 1 ? 's' : ''} no carrinho)
+    </div>
+    <button class="btn-main" onclick="closeProduct();openCart()">✓ Confirmar pedido</button>
+    <button class="btn-secondary" onclick="closeProduct()">🛒 Continuar comprando</button>
+  `;
 }
 
 function quickAdd(id) {
@@ -1259,6 +1281,8 @@ function changeCartQty(id, d) {
 
 // STEP 2: DADOS DO CLIENTE
 function renderStepDados(el) {
+  const _mesaNum = sessionStorage.getItem('mesaAtiva');
+  if (_mesaNum && !tipoEntrega) tipoEntrega = 'local';
   const c = clienteData || {};
   const temBairros = CONFIG.bairros && CONFIG.bairros.length > 0;
   const bairroOpts = temBairros
@@ -1275,6 +1299,7 @@ function renderStepDados(el) {
     </div>
     <div class="step-label">Etapa 2 de 3 — Seus dados</div>
     <div class="sheet-title">Seus Dados 👤</div>
+    ${_mesaNum ? `<div class="info-note" style="margin-bottom:4px">🍽️ Você está na <strong>Mesa ${_mesaNum}</strong></div>` : ''}
     ${clienteData ? `<div class="info-note">ℹ️ Encontramos seus dados salvos! Confirme ou edite abaixo.</div>` : ''}
     <div class="form-row">
       <div class="form-group">
@@ -1288,20 +1313,31 @@ function renderStepDados(el) {
     </div>
     <div class="form-group">
       <label class="form-label">Tipo de entrega *</label>
-      <div class="delivery-grid">
-        <div class="delivery-option ${tipoEntrega==='delivery'?'selected':''}" onclick="setEntrega('delivery')">
-          <span class="del-icon">🛵</span>
-          <span class="del-name">Delivery</span>
-        </div>
-        <div class="delivery-option ${tipoEntrega==='retirada'?'selected':''}" onclick="setEntrega('retirada')">
-          <span class="del-icon">🏠</span>
-          <span class="del-name">Retirada</span>
-        </div>
-        <div class="delivery-option ${tipoEntrega==='local'?'selected':''}" onclick="setEntrega('local')">
-          <span class="del-icon">🍽️</span>
-          <span class="del-name">No local</span>
-        </div>
-      </div>
+      ${_mesaNum ? `
+        <div class="delivery-grid" style="grid-template-columns:1fr 1fr">
+          <div class="delivery-option ${tipoEntrega!=='retirada'?'selected':''}" onclick="setEntrega('local')">
+            <span class="del-icon">🍽️</span>
+            <span class="del-name">No local</span>
+          </div>
+          <div class="delivery-option ${tipoEntrega==='retirada'?'selected':''}" onclick="setEntrega('retirada')">
+            <span class="del-icon">🥡</span>
+            <span class="del-name">Para levar</span>
+          </div>
+        </div>` : `
+        <div class="delivery-grid">
+          <div class="delivery-option ${tipoEntrega==='delivery'?'selected':''}" onclick="setEntrega('delivery')">
+            <span class="del-icon">🛵</span>
+            <span class="del-name">Delivery</span>
+          </div>
+          <div class="delivery-option ${tipoEntrega==='retirada'?'selected':''}" onclick="setEntrega('retirada')">
+            <span class="del-icon">🏠</span>
+            <span class="del-name">Retirada</span>
+          </div>
+          <div class="delivery-option ${tipoEntrega==='local'?'selected':''}" onclick="setEntrega('local')">
+            <span class="del-icon">🍽️</span>
+            <span class="del-name">No local</span>
+          </div>
+        </div>`}
     </div>
     <div id="enderecoFields" style="display:${tipoEntrega==='delivery'?'block':'none'}">
       <div class="form-group">
@@ -1334,6 +1370,7 @@ function renderStepDados(el) {
         <input class="form-input" id="fRef" placeholder="Próximo ao mercado X..." value="${c.ref||''}">
       </div>
     </div>
+    ${CONFIG.pedidoMinimo > 0 ? `<div id="minimoWarning" style="${tipoEntrega==='delivery'&&cartTotal()<CONFIG.pedidoMinimo?'':'display:none;'}background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.35);border-radius:10px;padding:12px 14px;font-size:13px;color:#ff6b35;margin-bottom:12px">⚠️ Valor mínimo para delivery é R$ ${CONFIG.pedidoMinimo.toFixed(2).replace('.',',')}. Seu carrinho: R$ ${cartTotal().toFixed(2).replace('.',',')}</div>` : '<div id="minimoWarning" style="display:none"></div>'}
     <button class="btn-main" onclick="confirmarDados()">Continuar →</button>
     <button class="btn-secondary" onclick="goStep(1)">← Voltar</button>
   `;
@@ -1361,6 +1398,16 @@ function setEntrega(tipo) {
   document.querySelectorAll('.delivery-option').forEach(el => el.classList.remove('selected'));
   event.currentTarget.classList.add('selected');
   if (tipo !== 'delivery') bairroSelecionado = null;
+  _atualizarMinimoWarning();
+}
+
+function _atualizarMinimoWarning() {
+  const warn = document.getElementById('minimoWarning');
+  if (!warn) return;
+  const minimo = CONFIG.pedidoMinimo || 0;
+  warn.style.display = (minimo > 0 && tipoEntrega === 'delivery' && cartTotal() < minimo) ? '' : 'none';
+  if (warn.style.display === '')
+    warn.innerHTML = `⚠️ Valor mínimo para delivery é R$ ${minimo.toFixed(2).replace('.',',')}. Seu carrinho: R$ ${cartTotal().toFixed(2).replace('.',',')}`;
 }
 
 function confirmarDados() {
@@ -1369,6 +1416,12 @@ function confirmarDados() {
   if (!nome || !tel) { alert('Por favor, preencha seu nome e WhatsApp.'); return; }
   if (!tipoEntrega)  { alert('Selecione o tipo de entrega.'); return; }
   if (tipoEntrega === 'delivery') {
+    const minimo = CONFIG.pedidoMinimo || 0;
+    if (minimo > 0 && cartTotal() < minimo) {
+      _atualizarMinimoWarning();
+      alert(`Valor mínimo para delivery é R$ ${minimo.toFixed(2).replace('.',',')}.\nAdicione mais itens ao carrinho.`);
+      return;
+    }
     const rua    = document.getElementById('fRua').value.trim();
     const fBairro = document.getElementById('fBairro');
     const bairro  = fBairro ? fBairro.value.trim() : '';
@@ -1388,7 +1441,7 @@ function confirmarDados() {
   } else {
     bairroSelecionado = null;
     clienteData = { nome, tel };
-    if (tipoEntrega === 'local') clienteData.mesa = document.getElementById('fMesa')?.value.trim() || '';
+    if (tipoEntrega === 'local') clienteData.mesa = sessionStorage.getItem('mesaAtiva') || document.getElementById('fMesa')?.value.trim() || '';
   }
   try{ localStorage.setItem('joey_cliente', JSON.stringify(clienteData)); }catch(e){}
   goStep(3);
@@ -1396,37 +1449,44 @@ function confirmarDados() {
 
 // STEP 3: PAGAMENTO
 function renderStepPagamento(el) {
+  const _mesaNum = sessionStorage.getItem('mesaAtiva');
+  if (_mesaNum) formaPag = 'balcao';
   el.innerHTML = `
     <div class="steps">
       <div class="step done"></div><div class="step done"></div><div class="step done"></div>
     </div>
-    <div class="step-label">Etapa 3 de 3 — Pagamento</div>
-    <div class="sheet-title">Forma de Pagamento 💳</div>
-    <div class="payment-grid">
-      <div class="payment-option ${formaPag==='pix'?'selected':''}" onclick="setPag('pix',this)">
-        <span class="pay-icon">💚</span>
-        <span class="pay-name">PIX</span>
+    <div class="step-label">Etapa 3 de 3 — ${_mesaNum ? 'Confirmação' : 'Pagamento'}</div>
+    <div class="sheet-title">${_mesaNum ? '📋 Confirmar Pedido' : 'Forma de Pagamento 💳'}</div>
+    ${_mesaNum ? `
+      <div style="background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.35);border-radius:14px;padding:1.25rem 1rem;text-align:center;margin-bottom:1rem">
+        <div style="font-size:2rem;margin-bottom:8px">💳</div>
+        <div style="font-size:14px;font-weight:600;color:var(--cream);line-height:1.5">O pagamento é realizado<br>no balcão ao final</div>
+      </div>` : `
+      <div class="payment-grid">
+        <div class="payment-option ${formaPag==='pix'?'selected':''}" onclick="setPag('pix',this)">
+          <span class="pay-icon">💚</span>
+          <span class="pay-name">PIX</span>
+        </div>
+        <div class="payment-option ${formaPag==='debito'?'selected':''}" onclick="setPag('debito',this)">
+          <span class="pay-icon">💳</span>
+          <span class="pay-name">Débito</span>
+        </div>
+        <div class="payment-option ${formaPag==='credito'?'selected':''}" onclick="setPag('credito',this)">
+          <span class="pay-icon">💳</span>
+          <span class="pay-name">Crédito</span>
+        </div>
+        <div class="payment-option ${formaPag==='dinheiro'?'selected':''}" onclick="setPag('dinheiro',this)">
+          <span class="pay-icon">💵</span>
+          <span class="pay-name">Dinheiro</span>
+        </div>
       </div>
-      <div class="payment-option ${formaPag==='debito'?'selected':''}" onclick="setPag('debito',this)">
-        <span class="pay-icon">💳</span>
-        <span class="pay-name">Débito</span>
-      </div>
-      <div class="payment-option ${formaPag==='credito'?'selected':''}" onclick="setPag('credito',this)">
-        <span class="pay-icon">💳</span>
-        <span class="pay-name">Crédito</span>
-      </div>
-      <div class="payment-option ${formaPag==='dinheiro'?'selected':''}" onclick="setPag('dinheiro',this)">
-        <span class="pay-icon">💵</span>
-        <span class="pay-name">Dinheiro</span>
-      </div>
-    </div>
-    <div class="troco-box ${formaPag==='dinheiro'?'visible':''}" id="trocoBox">
-      <label class="form-label">Troco para quanto?</label>
-      <input class="form-input" id="fTroco" placeholder="Ex: R$ 100,00" type="number" step="0.01">
-      <div style="font-size:12px;color:var(--text3);margin-top:6px;">
-        Total do pedido: R$ ${cartTotal().toFixed(2).replace('.',',')}
-      </div>
-    </div>
+      <div class="troco-box ${formaPag==='dinheiro'?'visible':''}" id="trocoBox">
+        <label class="form-label">Troco para quanto?</label>
+        <input class="form-input" id="fTroco" placeholder="Ex: R$ 100,00" type="number" step="0.01">
+        <div style="font-size:12px;color:var(--text3);margin-top:6px;">
+          Total do pedido: R$ ${cartTotal().toFixed(2).replace('.',',')}
+        </div>
+      </div>`}
     <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px">
         <span style="color:var(--text2)">Subtotal</span>
@@ -1456,6 +1516,7 @@ function setPag(forma, el) {
 
 function finalizarPedido() {
   if (!formaPag) { alert('Selecione a forma de pagamento.'); return; }
+  if (formaPag === 'balcao') formaPag = 'local'; // mesa: pagamento no balcão — registra como 'local'
   const btn = document.getElementById('btnFinalizar');
   btn.textContent = 'Enviando pedido...';
   btn.disabled = true;
@@ -1492,7 +1553,9 @@ function finalizarPedido() {
     ultimoPedido = pedido;
     return db.collection('pedidos').doc(pedido.id).set(pedido).then(() => pedido);
   }).then(pedido => {
-    if (formaPag !== 'pix') enviarWhatsApp(pedido);
+    const _mesaAtiva = sessionStorage.getItem('mesaAtiva');
+    if (_mesaAtiva) atualizarMesaComPedido(pedido, _mesaAtiva);
+    if (formaPag !== 'pix' && !_mesaAtiva && !pedido.mesa) enviarWhatsApp(pedido);
     cart = [];
     updateCartBtn();
     renderProducts();
@@ -1503,6 +1566,26 @@ function finalizarPedido() {
     btn.disabled = false;
     alert('Erro ao enviar pedido. Verifique sua conexão e tente novamente.');
   });
+}
+
+function atualizarMesaComPedido(pedido, mesaNum) {
+  const mesaRef = db.doc('mesas/mesa-' + mesaNum);
+  const itensMesa = (pedido.itens || []).map(i => ({
+    id: i.id,
+    nome: i.nome,
+    preco: i.preco,
+    qty: i.qty,
+    adicionais: (i.adicionais || []).map(a => ({ id: a.id, nome: a.nome, preco: a.preco || 0, qty: a.qty || 1 })),
+    obs: i.obs || ''
+  }));
+  const subtotal = pedido.subtotal || 0;
+  mesaRef.get().then(doc => {
+    const m = doc.exists ? doc.data() : {};
+    const pedidosMesa = [...(m.pedidos || [])];
+    pedidosMesa.push({ itens: itensMesa, subtotal, obs: '', hora: pedido.hora, pedidoId: pedido.id });
+    const total = pedidosMesa.reduce((s, p) => s + (p.subtotal || 0), 0);
+    return mesaRef.set({ status: 'ocupada', pedidos: pedidosMesa, total }, { merge: true });
+  }).catch(e => console.warn('[mesa sync]', e));
 }
 
 function enviarWhatsApp(pedido) {
