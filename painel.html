@@ -479,7 +479,7 @@ textarea.fi{resize:vertical;min-height:60px}
     <div class="topbar-right">
       <button class="tb-btn tb-btn-ghost" onclick="testeImpressao()" title="Testar impressão">🖨️ Teste Impressão</button>
       <button class="tb-btn tb-btn-ghost" id="wpp-fab" onclick="toggleWppPanel()" title="WhatsApp — Conversas">💬<span id="wpp-badge"></span></button>
-      <button class="tb-btn tb-btn-ghost" onclick="tocarSomPedido()" title="Testar som">🔔</button>
+      <button class="tb-btn tb-btn-ghost" id="btnSom" onclick="toggleSom()" title="Som de novo pedido (clique para silenciar/ativar)">🔔</button>
       <button class="tb-btn tb-btn-ghost" id="btnNotifPerm" onclick="ativarNotificacoes()" style="display:none;align-items:center;gap:6px;background:rgba(245,158,11,.15);color:#f59e0b;border-color:rgba(245,158,11,.3)">🔔 Ativar notificações</button>
       <button class="tb-btn tb-btn-primary" onclick="abrirNovoPedidoModal()">+ Novo Pedido</button>
       <button class="tb-btn tb-btn-ghost" onclick="copiarLink()">📋 Link cardápio</button>
@@ -1426,6 +1426,7 @@ function showPanel(panel, navEl) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   if (navEl) navEl.classList.add('active');
   document.getElementById('topbarTitle').textContent = titulos[panel]||'';
+  if (panel==='pedidos')    _pararTitleFlash();
   if (panel==='cardapio')   { renderCatFilters(); renderCardapioEditor(); }
   if (panel==='config')     carregarConfig();
   if (panel==='relatorios') renderRelatorios();
@@ -3788,36 +3789,82 @@ function logoutUser() {
 
 // =================== SOM DE NOTIFICAÇÃO ===================
 let audioCtx = null;
+let _somAtivo = localStorage.getItem('somPedido') !== 'off';
+let _titleFlashInterval = null;
+const _originalTitle = document.title;
 
 document.addEventListener('click', () => {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
 });
 
+function _atualizarBtnSom() {
+  const btn = document.getElementById('btnSom');
+  if (!btn) return;
+  btn.textContent = _somAtivo ? '🔔' : '🔇';
+  btn.title = _somAtivo ? 'Som ativo — clique para silenciar' : 'Som silenciado — clique para ativar';
+  btn.style.opacity = _somAtivo ? '' : '0.45';
+}
+
+function toggleSom() {
+  _somAtivo = !_somAtivo;
+  localStorage.setItem('somPedido', _somAtivo ? 'on' : 'off');
+  _atualizarBtnSom();
+  if (_somAtivo) tocarSomPedido();
+  notify(_somAtivo ? '🔔 Som de pedido ativado' : '🔇 Som de pedido silenciado');
+}
+
+function _tocarSequencia(notas, repetir) {
+  if (!audioCtx) return;
+  const durNota = 0.28;
+  const gapNota = 0.16;
+  const gapRep  = 0.55;
+  const totalNota = durNota + gapNota;
+  const totalRep  = notas.length * totalNota;
+  const vezes = repetir || 1;
+  for (let r = 0; r < vezes; r++) {
+    const base = audioCtx.currentTime + r * (totalRep + gapRep);
+    notas.forEach((freq, i) => {
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = base + i * totalNota;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.45, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + durNota);
+      osc.start(t);
+      osc.stop(t + durNota);
+    });
+  }
+}
+
 function tocarSomPedido() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const play = () => {
-      const notas = [880, 1100, 880];
-      notas.forEach((freq, i) => {
-        const osc  = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        const t = audioCtx.currentTime + i * 0.18;
-        gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.4, t + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-        osc.start(t);
-        osc.stop(t + 0.3);
-      });
-    };
+    const play = () => _tocarSequencia([987, 1318, 1567, 1318], 2);
     if (audioCtx.state === 'suspended') audioCtx.resume().then(play);
     else play();
   } catch(e) {}
 }
+
+function _iniciarTitleFlash(qtd) {
+  if (_titleFlashInterval) return;
+  let visible = true;
+  _titleFlashInterval = setInterval(() => {
+    document.title = visible ? `🆕 ${qtd} novo(s) pedido(s)!` : _originalTitle;
+    visible = !visible;
+  }, 900);
+}
+
+function _pararTitleFlash() {
+  if (_titleFlashInterval) { clearInterval(_titleFlashInterval); _titleFlashInterval = null; }
+  document.title = _originalTitle;
+}
+
+_atualizarBtnSom();
 
 // =================== LISTENERS FIREBASE (TEMPO REAL) ===================
 db.doc('config/loja').onSnapshot(snap => {
@@ -4390,20 +4437,29 @@ function tocarSomPixPago() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-let lastNovos = -1;
 let _pedidosAnt = [];
+let _knownPedidoIds = null; // null = primeira carga, não dispara som
 db.collection('pedidos').onSnapshot(snap => {
   _pedidosAnt = [...pedidos];
   pedidos = snap.docs.map(d => d.data());
   pedidos.sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
-  const novos = pedidos.filter(p => p.status === 'novo').length;
-  if (lastNovos >= 0 && novos > lastNovos) {
-    notify('🆕 Novo pedido chegou!');
-    tocarSomPedido();
-    mostrarNotificacaoPush('🍕 Novo pedido!', 'Um novo pedido chegou no Joey Pizza');
+  const novosIds = new Set(snap.docs.map(d => d.id));
+
+  if (_knownPedidoIds === null) {
+    // Primeira carga — apenas inicializa, sem disparar som
+    _knownPedidoIds = novosIds;
+  } else {
+    const chegaram = snap.docs.filter(d => !_knownPedidoIds.has(d.id) && d.data().status === 'novo');
+    if (chegaram.length > 0) {
+      const qtd = chegaram.length;
+      notify(`🆕 ${qtd > 1 ? qtd + ' novos pedidos!' : 'Novo pedido chegou!'}`);
+      if (_somAtivo) tocarSomPedido();
+      mostrarNotificacaoPush('🍕 Novo pedido!', 'Um novo pedido chegou no Joey Pizza');
+      _iniciarTitleFlash(qtd);
+    }
+    _knownPedidoIds = novosIds;
   }
-  lastNovos = novos;
 
   // PIX: gerar pagamento para pedidos novos aguardando
   pedidos.filter(p => p.pagamento === 'pix' && p.pixStatus === 'aguardando_geracao').forEach(p => gerarPixMP(p));
