@@ -925,6 +925,16 @@ textarea.fi{resize:vertical;min-height:60px}
           </div>
         </div>
 
+        <!-- Notificações automáticas de pedido -->
+        <div class="card-box">
+          <div class="section-lbl" style="margin-top:0">📱 Notificações Automáticas de Pedido</div>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Mensagens enviadas automaticamente ao cliente quando o status do pedido muda. Use <b>{nome}</b>, <b>{id}</b>, <b>{loja}</b> e <b>{itens}</b> como variáveis.</p>
+          <div style="display:flex;flex-direction:column;gap:10px" id="notifPedidoCards"></div>
+          <div style="margin-top:14px">
+            <button class="btn btn-primary" onclick="salvarNotifConfig()">✓ Salvar notificações</button>
+          </div>
+        </div>
+
         <!-- Cards de mensagens -->
         <div class="card-box">
           <div class="section-lbl" style="margin-top:0">Mensagens do Robô</div>
@@ -1760,6 +1770,7 @@ function avancarStatus(id) {
   notify(`Pedido ${id} → ${STATUS_LABELS[novoStatus].label}`);
   const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
   if (statusAnterior === 'novo') { imprimirPedidoProducao(p); if (!isMesa) enviarWppConfirmado(p); }
+  if (statusAnterior === 'producao' && novoStatus === 'pronto' && !isMesa && p.entrega === 'retirada') enviarWppProntoRetirada(p);
   if (statusAnterior === 'pronto' && novoStatus === 'entregue' && !isMesa) enviarWppEntregue(p);
   if (novoStatus === 'entregue') salvarNotaFiscalPedido(p);
 }
@@ -2157,32 +2168,34 @@ function testeImpressao() {
 }
 
 function enviarWppConfirmado(p) {
-  if (!p?.cliente?.tel) return;
-  const tel  = p.cliente.tel.replace(/\D/g, '');
-  const nome = p.cliente.nome?.split(' ')[0] || 'cliente';
-  const loja = config.nome || 'Joey';
-
-  const msg = `✅ Olá ${nome}! Seu pedido *${p.id}* foi confirmado e já está sendo preparado! Em breve ficará pronto. 🍕 Obrigado por escolher o ${loja}!`;
-
-  enviarWhatsAppBot(tel, msg);
+  _dispararNotif('confirmado', p);
+  const nome = p.cliente?.nome?.split(' ')[0] || 'cliente';
   notify(`📱 WhatsApp de confirmação enviado para ${nome}!`);
 }
 
 function enviarWppEntregue(p) {
-  if (!p?.cliente?.tel) return;
-  const tel  = p.cliente.tel.replace(/\D/g, '');
-  const nome = p.cliente.nome?.split(' ')[0] || 'cliente';
-  const loja = config.nome || 'Joey';
-
-  const msg = `🛵 Olá ${nome}! Seu pedido *${p.id}* saiu para entrega e já está a caminho. Em breve estará na sua porta! 🍕 Obrigado por escolher o ${loja}!`;
-
-  enviarWhatsAppBot(tel, msg);
-  notify(`📱 WhatsApp enviado para ${nome}!`);
+  // delivery: notifica saiu para entrega; retirada: notifica pronto (disparo já feito em avancarStatus)
+  if (p.entrega === 'delivery') {
+    _dispararNotif('prontoDelivery', p);
+    const nome = p.cliente?.nome?.split(' ')[0] || 'cliente';
+    notify(`📱 WhatsApp de entrega enviado para ${nome}!`);
+  }
 }
+function enviarWppProntoRetirada(p) {
+  _dispararNotif('prontoRetirada', p);
+  const nome = p.cliente?.nome?.split(' ')[0] || 'cliente';
+  notify(`📱 WhatsApp "pronto para retirar" enviado para ${nome}!`);
+}
+
 function cancelarPedido(id) {
   if (!confirm(`Cancelar pedido ${id}?`)) return;
   const p = pedidos.find(x => x.id === id);
-  if (p) { p.status = 'cancelado'; renderKanban(); }
+  if (p) {
+    const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
+    if (!isMesa) _dispararNotif('cancelado', p);
+    p.status = 'cancelado';
+    renderKanban();
+  }
   atualizarStatusFb(id, 'cancelado');
   notify('Pedido cancelado.', 'warning');
 }
@@ -4593,6 +4606,7 @@ async function carregarRobo() {
 
     const loja = lojaSnap.exists ? lojaSnap.data() : {};
     setBotToggle(loja.botAtivo !== false);
+    renderNotifConfig();
 
     const saved = {};
     botSnap.forEach(d => { saved[d.id] = d.data(); });
@@ -4642,6 +4656,128 @@ async function salvarStatusBot(cb) {
     console.error('[salvarStatusBot]', e);
     notify('Erro ao salvar status do robô');
   }
+}
+
+// ── NOTIFICAÇÕES AUTOMÁTICAS DE PEDIDO ──────────────────────────────────────
+
+const NOTIF_DEFS = [
+  {
+    key: 'confirmado',
+    label: '✅ Pedido Confirmado',
+    desc: 'Ao mover de "Em análise" → "Em produção" (exceto mesa)',
+    defaultAtivo: true,
+    defaultTemplate: '✅ Olá {nome}! Seu pedido *{id}* foi confirmado e já está sendo preparado! 🍕 Obrigado por escolher o {loja}!',
+  },
+  {
+    key: 'prontoDelivery',
+    label: '🛵 Saiu para Entrega',
+    desc: 'Ao mover de "Pronto" → "Entregue" para pedidos delivery',
+    defaultAtivo: true,
+    defaultTemplate: '🛵 Olá {nome}! Seu pedido *{id}* saiu para entrega e já está a caminho! Em breve estará na sua porta. 🍕',
+  },
+  {
+    key: 'prontoRetirada',
+    label: '🏠 Pronto para Retirada',
+    desc: 'Ao mover de "Em produção" → "Pronto" para pedidos de retirada',
+    defaultAtivo: true,
+    defaultTemplate: '🏠 Olá {nome}! Seu pedido *{id}* está pronto para retirada! Pode vir buscar no {loja}. 🍕',
+  },
+  {
+    key: 'cancelado',
+    label: '❌ Pedido Cancelado',
+    desc: 'Ao cancelar o pedido (qualquer tipo)',
+    defaultAtivo: false,
+    defaultTemplate: '❌ Olá {nome}, infelizmente seu pedido *{id}* foi cancelado. Para mais informações, entre em contato conosco.',
+  },
+];
+
+function _notifCfg(key) {
+  const saved = config.wppNotifs?.[key] || {};
+  const def   = NOTIF_DEFS.find(d => d.key === key) || {};
+  return {
+    ativo:    saved.ativo !== undefined ? saved.ativo : def.defaultAtivo,
+    template: saved.template || def.defaultTemplate || '',
+  };
+}
+
+function renderNotifConfig() {
+  const container = document.getElementById('notifPedidoCards');
+  if (!container) return;
+  container.innerHTML = NOTIF_DEFS.map(def => {
+    const cfg = _notifCfg(def.key);
+    const chk = cfg.ativo ? 'checked' : '';
+    return `
+    <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--text)">${def.label}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${def.desc}</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer;flex-shrink:0">
+          <input type="checkbox" id="notif-ativo-${def.key}" style="opacity:0;width:0;height:0" ${chk}
+            onchange="document.getElementById('notif-body-${def.key}').style.opacity=this.checked?'1':'0.4'">
+          <span style="position:absolute;inset:0;border-radius:11px;background:${cfg.ativo ? 'var(--orange)' : 'var(--bg3)'};border:1px solid var(--border2);transition:all .2s" id="notif-track-${def.key}"></span>
+          <span style="position:absolute;top:2px;${cfg.ativo ? 'left:20px' : 'left:2px'};width:16px;height:16px;border-radius:50%;background:${cfg.ativo ? '#fff' : 'var(--text3)'};transition:all .2s" id="notif-thumb-${def.key}"></span>
+        </label>
+      </div>
+      <div id="notif-body-${def.key}" style="opacity:${cfg.ativo ? '1' : '0.4'};transition:opacity .2s">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Mensagem</label>
+        <textarea id="notif-tpl-${def.key}" class="fi" rows="3"
+          style="width:100%;resize:vertical;font-family:inherit;font-size:12px">${_esc(cfg.template)}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Sincroniza toggle visual ao carregar
+  NOTIF_DEFS.forEach(def => {
+    const cb = document.getElementById('notif-ativo-' + def.key);
+    if (cb) cb.addEventListener('change', () => {
+      const track = document.getElementById('notif-track-' + def.key);
+      const thumb = document.getElementById('notif-thumb-' + def.key);
+      if (track) track.style.background = cb.checked ? 'var(--orange)' : 'var(--bg3)';
+      if (thumb) { thumb.style.left = cb.checked ? '20px' : '2px'; thumb.style.background = cb.checked ? '#fff' : 'var(--text3)'; }
+    });
+  });
+}
+
+async function salvarNotifConfig() {
+  const wppNotifs = {};
+  NOTIF_DEFS.forEach(def => {
+    const cb  = document.getElementById('notif-ativo-' + def.key);
+    const tpl = document.getElementById('notif-tpl-' + def.key);
+    wppNotifs[def.key] = {
+      ativo:    cb  ? cb.checked  : def.defaultAtivo,
+      template: tpl ? tpl.value.trim() : def.defaultTemplate,
+    };
+  });
+  try {
+    await db.doc('config/loja').set({ wppNotifs }, { merge: true });
+    config.wppNotifs = wppNotifs;
+    notify('✅ Notificações salvas!');
+  } catch (e) {
+    notify('Erro ao salvar notificações', 'error');
+  }
+}
+
+function _buildNotifMsg(template, p) {
+  const nome  = p.cliente?.nome?.split(' ')[0] || 'cliente';
+  const id    = p.id || '';
+  const loja  = config.nome || 'Joey';
+  const itens = (p.itens || []).map(i => `${i.qty}× ${i.nome}`).join(', ');
+  return template
+    .replace(/\{nome\}/gi, nome)
+    .replace(/\{id\}/gi, id)
+    .replace(/\{loja\}/gi, loja)
+    .replace(/\{itens\}/gi, itens);
+}
+
+function _dispararNotif(key, p) {
+  const cfg = _notifCfg(key);
+  if (!cfg.ativo || !cfg.template) return;
+  if (!p?.cliente?.tel) return;
+  const tel = p.cliente.tel.replace(/\D/g, '');
+  const msg = _buildNotifMsg(cfg.template, p);
+  enviarWhatsAppBot(tel, msg);
 }
 
 async function salvarGatilho(id) {
