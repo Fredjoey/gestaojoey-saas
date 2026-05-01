@@ -2,7 +2,6 @@ const { onRequest }  = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const axios = require('axios');
-
 admin.initializeApp();
 const db = admin.firestore();
 
@@ -475,6 +474,130 @@ exports.mensagensProgramadas = onSchedule(
       } catch (err) {
         console.error('[SCHED] erro:', data.nome, err.message);
       }
+    }
+  }
+);
+
+// ── BACKUP AUTOMÁTICO DO FIRESTORE ───────────────────────────────────────────
+// Lê todas as coleções via Admin SDK e grava JSON no Cloud Storage.
+// Não requer datastore.importExportAdmin — usa apenas as permissões do
+// Firebase Admin SDK que a Cloud Function já possui por padrão.
+// Destino: gs://<bucket>/firestore-backups/<timestamp>/backup.json
+// Histórico salvo na coleção `backups`.
+
+const BACKUP_PREFIX = 'firestore-backups';
+const BACKUP_RETAIN_LOG = 90;
+
+async function executarBackup(origem) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+
+  const logRef = await db.collection('backups').add({
+    iniciadoEm: admin.firestore.FieldValue.serverTimestamp(),
+    stamp,
+    origem,
+    status: 'iniciado',
+  });
+
+  try {
+    const collections = await db.listCollections();
+    const backup = {};
+
+    for (const colRef of collections) {
+      const snap = await colRef.get();
+      backup[colRef.id] = {};
+      snap.forEach(doc => {
+        // Converte Timestamp → ISO string para JSON serializable
+        const data = doc.data();
+        const clean = JSON.parse(JSON.stringify(data, (k, v) => {
+          if (v && typeof v === 'object' && typeof v.toDate === 'function') {
+            return v.toDate().toISOString();
+          }
+          return v;
+        }));
+        backup[colRef.id][doc.id] = clean;
+      });
+    }
+
+    const totalColecoes = Object.keys(backup).length;
+    const totalDocs = Object.values(backup).reduce((s, c) => s + Object.keys(c).length, 0);
+    console.log(`[BACKUP] (${origem}) ${totalColecoes} coleções, ${totalDocs} docs → gravando JSON`);
+
+    const bucket = admin.storage().bucket();
+    const fileName = `${BACKUP_PREFIX}/${stamp}/backup.json`;
+    const file = bucket.file(fileName);
+    await file.save(JSON.stringify(backup, null, 2), {
+      contentType: 'application/json',
+      metadata: { origem, stamp, totalDocs: String(totalDocs) },
+    });
+
+    const gcsPath = `gs://${bucket.name}/${fileName}`;
+    console.log(`[BACKUP] concluído: ${gcsPath}`);
+
+    await logRef.update({
+      gcsPath,
+      totalColecoes,
+      totalDocs,
+      status: 'concluído',
+      concluidoEm: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true, gcsPath, totalColecoes, totalDocs, logId: logRef.id };
+  } catch (err) {
+    console.error('[BACKUP] erro:', err.message);
+    await logRef.update({ status: 'erro', erro: err.message });
+    throw err;
+  }
+}
+
+// Schedule diário às 03:00 horário de Brasília (baixa carga)
+exports.backupFirestoreDaily = onSchedule(
+  {
+    schedule: '0 3 * * *',
+    timeZone: 'America/Sao_Paulo',
+    region: 'us-central1',
+    timeoutSeconds: 540,
+    memory: '256MiB',
+  },
+  async () => {
+    try {
+      await executarBackup('schedule');
+    } catch (err) {
+      console.error('[BACKUP DAILY] falhou:', err.message);
+    }
+    // Limpa logs antigos (>90 dias) — opcional
+    try {
+      const limite = Date.now() - BACKUP_RETAIN_LOG * 24 * 60 * 60 * 1000;
+      const antigos = await db.collection('backups')
+        .where('iniciadoEm', '<', new Date(limite))
+        .limit(50)
+        .get();
+      const batch = db.batch();
+      antigos.forEach(doc => batch.delete(doc.ref));
+      if (!antigos.empty) await batch.commit();
+    } catch (err) {
+      console.warn('[BACKUP DAILY] limpeza de logs falhou:', err.message);
+    }
+  }
+);
+
+// Disparo manual via HTTP — exige token via header `x-backup-token`
+// Defina o secret BACKUP_TRIGGER_TOKEN no Firebase Functions ou via gcloud
+exports.backupFirestoreManual = onRequest(
+  { invoker: 'public', region: 'us-central1', cors: true, timeoutSeconds: 540 },
+  async (req, res) => {
+    const expected = process.env.BACKUP_TRIGGER_TOKEN;
+    const provided = req.headers['x-backup-token'];
+    if (!expected) {
+      return res.status(503).json({ ok: false, erro: 'BACKUP_TRIGGER_TOKEN não configurado' });
+    }
+    if (provided !== expected) {
+      return res.status(401).json({ ok: false, erro: 'token inválido' });
+    }
+    try {
+      const result = await executarBackup('manual');
+      return res.json(result);
+    } catch (err) {
+      return res.status(500).json({ ok: false, erro: err.message });
     }
   }
 );
