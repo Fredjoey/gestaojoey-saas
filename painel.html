@@ -86,9 +86,24 @@ body{background:var(--bg);color:var(--text);display:flex;overflow:hidden}
 .search-wrap{
   flex:1;max-width:340px;display:flex;align-items:center;gap:8px;
   background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:0 12px;height:34px;
+  transition:border-color .2s;
 }
+.search-wrap.ativo{border-color:var(--orange)}
 .search-wrap input{background:none;border:none;outline:none;color:var(--text);font-size:13px;font-family:inherit;width:100%;}
 .search-wrap input::placeholder{color:var(--text3)}
+.search-clear{background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:0;line-height:1;flex-shrink:0;display:none}
+.search-clear:hover{color:var(--text)}
+.sr-wrap{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.sr-header{font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px;flex-shrink:0}
+.sr-item{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color .15s;display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:start}
+.sr-item:hover{border-color:var(--border2)}
+.sr-id{font-size:12px;font-weight:700;color:var(--text);grid-row:1}
+.sr-cliente{font-size:13px;font-weight:600;color:var(--text);grid-column:2;grid-row:1}
+.sr-data{font-size:11px;color:var(--text2);grid-column:2;grid-row:2}
+.sr-itens{font-size:11px;color:var(--text2);grid-column:2;grid-row:3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr-total{font-size:13px;font-weight:700;color:var(--text);grid-column:3;grid-row:1;white-space:nowrap}
+.sr-badge{grid-column:3;grid-row:2;text-align:right}
+.sr-empty{color:var(--text2);font-size:13px;text-align:center;padding:40px 0}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .tb-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:none;transition:all 0.15s;}
 .tb-btn-primary{background:var(--orange);color:#fff}
@@ -472,9 +487,10 @@ textarea.fi{resize:vertical;min-height:60px}
 <div class="main-wrap">
   <div class="topbar">
     <div class="topbar-title" id="topbarTitle">Meus Pedidos</div>
-    <div class="search-wrap">
+    <div class="search-wrap" id="searchWrap">
       <span style="color:var(--text3)">🔍</span>
-      <input type="text" placeholder="Buscar por cliente ou número..." id="searchInput" oninput="filtrarPedidos()">
+      <input type="text" placeholder="Buscar cliente, nº, telefone ou item..." id="searchInput" oninput="filtrarPedidos()" onkeydown="if(event.key==='Escape')limparBusca()">
+      <button class="search-clear" id="searchClear" onclick="limparBusca()" title="Limpar busca">✕</button>
     </div>
     <div class="topbar-right">
       <button class="tb-btn tb-btn-ghost" onclick="testeImpressao()" title="Testar impressão">🖨️ Teste Impressão</button>
@@ -524,6 +540,7 @@ textarea.fi{resize:vertical;min-height:60px}
         <button class="filter-btn filter-icon" onclick="setFiltro('mesa',this)" title="Pedidos de mesa">🍽️</button>
       </div>
       <div class="kanban-board" id="kanbanBoard"></div>
+      <div class="sr-wrap" id="busca-results" style="display:none"></div>
     </div>
 
     <!-- CARDÁPIO -->
@@ -1656,7 +1673,65 @@ function setFiltro(f,btn) {
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active'); renderKanban();
 }
-function filtrarPedidos() { buscaTermo=document.getElementById('searchInput').value; renderKanban(); }
+function filtrarPedidos() {
+  buscaTermo = document.getElementById('searchInput').value;
+  const temBusca = buscaTermo.trim().length > 0;
+  document.getElementById('searchWrap').classList.toggle('ativo', temBusca);
+  document.getElementById('searchClear').style.display = temBusca ? 'block' : 'none';
+  if (temBusca) {
+    document.getElementById('kanbanBoard').style.display = 'none';
+    document.getElementById('busca-results').style.display = '';
+    renderBusca();
+  } else {
+    document.getElementById('kanbanBoard').style.display = '';
+    document.getElementById('busca-results').style.display = 'none';
+    renderKanban();
+  }
+}
+
+function limparBusca() {
+  document.getElementById('searchInput').value = '';
+  filtrarPedidos();
+  document.getElementById('searchInput').focus();
+}
+
+function renderBusca() {
+  const t = buscaTermo.trim().toLowerCase();
+  const container = document.getElementById('busca-results');
+  if (!t) { container.innerHTML = ''; return; }
+
+  const resultados = pedidos.filter(p => {
+    return (p.cliente?.nome || '').toLowerCase().includes(t) ||
+           (p.cliente?.tel  || '').replace(/\D/g,'').includes(t.replace(/\D/g,'')) ||
+           (p.id || '').toLowerCase().includes(t) ||
+           (p.endereco || '').toLowerCase().includes(t) ||
+           (p.itens || []).some(i => (i.nome || '').toLowerCase().includes(t));
+  }).sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 60);
+
+  if (resultados.length === 0) {
+    container.innerHTML = `<div class="sr-empty">Nenhum pedido encontrado para "<b>${_esc(buscaTermo.trim())}</b>"</div>`;
+    return;
+  }
+
+  container.innerHTML =
+    `<div class="sr-header">${resultados.length} resultado${resultados.length !== 1 ? 's' : ''} para "${_esc(buscaTermo.trim())}"</div>` +
+    resultados.map(p => {
+      const st   = STATUS_LABELS[p.status] || { label: p.status, cls: '' };
+      const tipo = p.entrega === 'delivery' ? '🛵' : p.entrega === 'local' ? '🍽️' : '🏠';
+      const itensStr = (p.itens || []).map(i => `${i.qty}× ${i.nome}`).join(', ') || '—';
+      const total = `R$ ${(p.total || 0).toFixed(2).replace('.', ',')}`;
+      return `<div class="sr-item" onclick="openOrderModal('${p.id}')">
+        <div class="sr-id" style="grid-row:1 / span 3">#${p.id}</div>
+        <div class="sr-cliente">${_esc(p.cliente?.nome || '—')} <span style="font-weight:400;color:var(--text2)">${tipo}</span></div>
+        <div class="sr-total">${total}</div>
+        <div class="sr-data">${p.data || ''}${p.hora ? ' · ' + p.hora : ''}</div>
+        <div class="sr-badge"><span class="chip ${st.cls}">${st.label}</span></div>
+        <div class="sr-itens">${_esc(itensStr)}</div>
+      </div>`;
+    }).join('');
+}
+
+function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function filtrarEntregues(val) {
   buscaEntregues = val;
   const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
