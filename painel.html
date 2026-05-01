@@ -4597,6 +4597,7 @@ function setBotToggle(ativo) {
 }
 
 async function carregarRobo() {
+  renderNotifConfig(); // não depende de Promises — roda imediatamente com config global
   try {
     const [lojaSnap, botSnap, schedSnap] = await Promise.all([
       db.doc('config/loja').get(),
@@ -4606,7 +4607,6 @@ async function carregarRobo() {
 
     const loja = lojaSnap.exists ? lojaSnap.data() : {};
     setBotToggle(loja.botAtivo !== false);
-    renderNotifConfig();
 
     const saved = {};
     botSnap.forEach(d => { saved[d.id] = d.data(); });
