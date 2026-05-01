@@ -428,6 +428,7 @@ textarea.fi{resize:vertical;min-height:60px}
 @keyframes dot-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.3)}}
 .wpp-unread-dot{width:9px;height:9px;background:var(--orange);border-radius:50%;flex-shrink:0;animation:dot-pulse 1.4s ease-in-out infinite;margin-left:4px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
 
@@ -4031,97 +4032,216 @@ function pedidosDoPeriodo() {
   });
 }
 
+// instâncias Chart.js ativas — destruídas antes de recriar
+const _relCharts = {};
+
+function _destroyRelChart(key) {
+  if (_relCharts[key]) { _relCharts[key].destroy(); delete _relCharts[key]; }
+}
+
+function _chartDefaults() {
+  if (!window.Chart) return;
+  Chart.defaults.color            = 'rgba(255,255,255,0.5)';
+  Chart.defaults.borderColor      = 'rgba(255,255,255,0.07)';
+  Chart.defaults.font.family      = 'inherit';
+  Chart.defaults.plugins.legend.labels.boxWidth = 12;
+}
+
+const _CHART_COLORS = ['#f97316','#60a5fa','#34d399','#a78bfa','#fbbf24','#f87171','#38bdf8','#4ade80'];
+
 function renderRelatorios() {
   const lista = pedidosDoPeriodo().filter(p => p.status !== 'cancelado');
-  const total   = lista.length;
-  const fat     = lista.reduce((s,p) => s + (p.total||0), 0);
-  const ticket  = total ? fat / total : 0;
+  const total    = lista.length;
+  const fat      = lista.reduce((s,p) => s + (p.total||0), 0);
+  const ticket   = total ? fat / total : 0;
   const entregas = lista.filter(p => p.entrega==='delivery').length;
-  const retiradas = lista.filter(p => p.entrega!=='delivery').length;
 
-  // Produtos mais vendidos
-  const prodMap = {};
-  lista.forEach(p => {
-    (p.itens||[]).forEach(it => {
-      const k = it.nome||it.name||'?';
-      if (!prodMap[k]) prodMap[k] = { qtd:0, total:0 };
-      prodMap[k].qtd   += it.qty||it.quantidade||1;
-      prodMap[k].total += (it.preco||it.price||0) * (it.qty||it.quantidade||1);
-    });
-  });
-  const prods = Object.entries(prodMap).sort((a,b) => b[1].qtd - a[1].qtd).slice(0, 10);
-
-  // Pagamentos
-  const pgMap = { PIX:0, Débito:0, Crédito:0, Dinheiro:0 };
-  const pgQtd = { PIX:0, Débito:0, Crédito:0, Dinheiro:0 };
-  lista.forEach(p => {
-    const pg = p.pagamento||'Outro';
-    if (pgMap[pg] !== undefined) { pgMap[pg] += p.total||0; pgQtd[pg]++; }
-  });
-
-  // Gráfico por dia
+  // ── Faturamento por dia ──────────────────────────────────────────
   const diaMap = {};
   lista.forEach(p => {
     const d = p.data||'';
-    if (!diaMap[d]) diaMap[d] = 0;
-    diaMap[d] += p.total||0;
+    diaMap[d] = (diaMap[d]||0) + (p.total||0);
   });
   const dias = Object.entries(diaMap).sort((a,b) => {
     const pa=a[0].split('/'), pb=b[0].split('/');
     return new Date(+pa[2],+pa[1]-1,+pa[0]) - new Date(+pb[2],+pb[1]-1,+pb[0]);
   });
-  const maxDia = Math.max(...dias.map(d=>d[1]), 1);
 
+  // ── Pedidos por hora ─────────────────────────────────────────────
+  const horaMap = {};
+  for (let h=0; h<24; h++) horaMap[String(h).padStart(2,'0')] = 0;
+  lista.forEach(p => {
+    const h = (p.hora||'').slice(0,2);
+    if (horaMap[h] !== undefined) horaMap[h]++;
+  });
+  const horasComDados = Object.keys(horaMap).filter(h => horaMap[h] > 0);
+  const hMin = horasComDados.length ? Math.min(...horasComDados.map(Number)) : 10;
+  const hMax = horasComDados.length ? Math.max(...horasComDados.map(Number)) : 23;
+  const horasRange = Object.entries(horaMap).filter(([h]) => +h >= hMin && +h <= hMax);
+
+  // ── Pagamentos ───────────────────────────────────────────────────
+  const pgLabels = ['PIX','Débito','Crédito','Dinheiro'];
+  const pgValores = pgLabels.map(pg => lista.filter(p => p.pagamento===pg).reduce((s,p)=>s+(p.total||0),0));
+  const pgQtds    = pgLabels.map(pg => lista.filter(p => p.pagamento===pg).length);
+
+  // ── Produtos mais vendidos ───────────────────────────────────────
+  const prodMap = {};
+  lista.forEach(p => (p.itens||[]).forEach(it => {
+    const k = it.nome||it.name||'?';
+    if (!prodMap[k]) prodMap[k] = { qtd:0, total:0 };
+    prodMap[k].qtd   += it.qty||it.quantidade||1;
+    prodMap[k].total += (it.preco||it.price||0) * (it.qty||it.quantidade||1);
+  }));
+  const prods = Object.entries(prodMap).sort((a,b) => b[1].qtd - a[1].qtd).slice(0, 8);
+
+  // ── Render HTML ─────────────────────────────────────────────────
   document.getElementById('relContent').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
       ${relCard('📦','Total de pedidos', total)}
-      ${relCard('💰','Faturamento bruto', 'R$ '+fat.toFixed(2))}
-      ${relCard('🎯','Ticket médio', 'R$ '+ticket.toFixed(2))}
+      ${relCard('💰','Faturamento bruto', 'R$ '+fat.toFixed(2).replace('.',','))}
+      ${relCard('🎯','Ticket médio', 'R$ '+ticket.toFixed(2).replace('.',','))}
       ${relCard('🛵','Delivery', entregas)}
     </div>
     <div class="card-box" style="margin-bottom:16px">
       <div class="section-lbl" style="margin-top:0">Faturamento por dia</div>
-      ${dias.length === 0 ? '<p style="color:var(--text2);font-size:13px">Sem dados no período.</p>' : `
-      <div style="display:flex;align-items:flex-end;gap:6px;height:120px;overflow-x:auto;padding-bottom:4px">
-        ${dias.map(([d,v]) => `
-          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:44px">
-            <div style="font-size:10px;color:var(--text2)">R$${v.toFixed(0)}</div>
-            <div style="width:32px;background:var(--orange);border-radius:4px 4px 0 0;height:${Math.max(4, Math.round((v/maxDia)*100))}px;transition:height .3s"></div>
-            <div style="font-size:10px;color:var(--text2);white-space:nowrap">${d.slice(0,5)}</div>
-          </div>`).join('')}
-      </div>`}
+      ${dias.length===0
+        ? '<p style="color:var(--text2);font-size:13px">Sem dados no período.</p>'
+        : '<div style="position:relative;height:220px"><canvas id="cRelFat"></canvas></div>'}
     </div>
-    <div class="card-box" style="margin-bottom:16px">
-      <div class="section-lbl" style="margin-top:0">Produtos mais vendidos</div>
-      ${prods.length === 0 ? '<p style="color:var(--text2);font-size:13px">Sem dados no período.</p>' : `
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="color:var(--text2);border-bottom:1px solid var(--border)">
-          <th style="text-align:left;padding:6px 8px">Produto</th>
-          <th style="text-align:right;padding:6px 8px">Qtd</th>
-          <th style="text-align:right;padding:6px 8px">Total</th>
-          <th style="text-align:right;padding:6px 8px">% fat.</th>
-        </tr></thead><tbody>
-        ${prods.map(([nome,v]) => `
-          <tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:7px 8px">${nome}</td>
-            <td style="padding:7px 8px;text-align:right;color:var(--text2)">${v.qtd}</td>
-            <td style="padding:7px 8px;text-align:right">R$ ${v.total.toFixed(2)}</td>
-            <td style="padding:7px 8px;text-align:right;color:var(--text2)">${fat>0?(v.total/fat*100).toFixed(1):0}%</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card-box">
+        <div class="section-lbl" style="margin-top:0">Pedidos por hora</div>
+        ${horasRange.length===0
+          ? '<p style="color:var(--text2);font-size:13px">Sem dados.</p>'
+          : '<div style="position:relative;height:200px"><canvas id="cRelHora"></canvas></div>'}
+      </div>
+      <div class="card-box">
+        <div class="section-lbl" style="margin-top:0">Formas de pagamento</div>
+        ${pgValores.every(v=>v===0)
+          ? '<p style="color:var(--text2);font-size:13px">Sem dados.</p>'
+          : '<div style="position:relative;height:200px"><canvas id="cRelPg"></canvas></div>'}
+      </div>
     </div>
     <div class="card-box">
-      <div class="section-lbl" style="margin-top:0">Formas de pagamento</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
-        ${Object.entries(pgMap).map(([pg,v]) => `
-          <div style="background:var(--bg3);border-radius:8px;padding:12px 14px">
-            <div style="font-size:12px;color:var(--text2);margin-bottom:4px">${pg}</div>
-            <div style="font-size:16px;font-weight:600">R$ ${v.toFixed(2)}</div>
-            <div style="font-size:11px;color:var(--text2);margin-top:2px">${pgQtd[pg]} pedido${pgQtd[pg]!==1?'s':''}</div>
-          </div>`).join('')}
-      </div>
+      <div class="section-lbl" style="margin-top:0">Produtos mais vendidos</div>
+      ${prods.length===0
+        ? '<p style="color:var(--text2);font-size:13px">Sem dados no período.</p>'
+        : '<div style="position:relative;height:'+Math.max(180, prods.length*38)+'px"><canvas id="cRelProd"></canvas></div>'}
     </div>`;
+
+  // Desenha os gráficos após o DOM atualizar
+  requestAnimationFrame(() => _drawRelCharts({ dias, horasRange, pgLabels, pgValores, pgQtds, prods, fat }));
+}
+
+function _drawRelCharts({ dias, horasRange, pgLabels, pgValores, pgQtds, prods, fat }) {
+  if (!window.Chart) return;
+  _chartDefaults();
+
+  // ── Faturamento por dia ──────────────────────────────────────────
+  _destroyRelChart('fat');
+  const cFat = document.getElementById('cRelFat');
+  if (cFat && dias.length) {
+    _relCharts['fat'] = new Chart(cFat, {
+      type: 'bar',
+      data: {
+        labels: dias.map(([d]) => d.slice(0,5)),
+        datasets: [{ label: 'Faturamento (R$)', data: dias.map(([,v]) => v),
+          backgroundColor: 'rgba(249,115,22,0.7)', borderColor: '#f97316',
+          borderWidth: 1, borderRadius: 4 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ' R$ ' + ctx.parsed.y.toFixed(2).replace('.',',') } } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { ticks: { callback: v => 'R$'+v.toFixed(0) } }
+        }
+      }
+    });
+  }
+
+  // ── Pedidos por hora ─────────────────────────────────────────────
+  _destroyRelChart('hora');
+  const cHora = document.getElementById('cRelHora');
+  if (cHora && horasRange.length) {
+    _relCharts['hora'] = new Chart(cHora, {
+      type: 'bar',
+      data: {
+        labels: horasRange.map(([h]) => h+'h'),
+        datasets: [{ label: 'Pedidos', data: horasRange.map(([,v]) => v),
+          backgroundColor: 'rgba(96,165,250,0.7)', borderColor: '#60a5fa',
+          borderWidth: 1, borderRadius: 4 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { ticks: { stepSize: 1 }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  // ── Formas de pagamento ──────────────────────────────────────────
+  _destroyRelChart('pg');
+  const cPg = document.getElementById('cRelPg');
+  if (cPg && pgValores.some(v=>v>0)) {
+    const pgAtivos = pgLabels.map((l,i) => ({ l, v: pgValores[i], q: pgQtds[i] })).filter(x=>x.v>0);
+    _relCharts['pg'] = new Chart(cPg, {
+      type: 'doughnut',
+      data: {
+        labels: pgAtivos.map(x=>x.l),
+        datasets: [{ data: pgAtivos.map(x=>x.v),
+          backgroundColor: _CHART_COLORS.slice(0, pgAtivos.length),
+          borderColor: '#1a1a1a', borderWidth: 2, hoverOffset: 6 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '62%',
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: {
+            label: ctx => {
+              const x = pgAtivos[ctx.dataIndex];
+              const pct = fat>0 ? (x.v/fat*100).toFixed(1) : 0;
+              return ` R$ ${x.v.toFixed(2).replace('.',',')} (${pct}%) · ${x.q} ped.`;
+            }
+          }}
+        }
+      }
+    });
+  }
+
+  // ── Produtos mais vendidos ───────────────────────────────────────
+  _destroyRelChart('prod');
+  const cProd = document.getElementById('cRelProd');
+  if (cProd && prods.length) {
+    _relCharts['prod'] = new Chart(cProd, {
+      type: 'bar',
+      data: {
+        labels: prods.map(([nome]) => nome),
+        datasets: [{ label: 'Quantidade', data: prods.map(([,v]) => v.qtd),
+          backgroundColor: _CHART_COLORS.slice(0, prods.length),
+          borderRadius: 4 }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: ctx => {
+            const v = prods[ctx.dataIndex][1];
+            return ` ${v.qtd} un · R$ ${v.total.toFixed(2).replace('.',',')}`;
+          }}}
+        },
+        scales: {
+          x: { ticks: { stepSize: 1 }, beginAtZero: true },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+  }
 }
 
 function relCard(icon, label, value) {
