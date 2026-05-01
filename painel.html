@@ -603,7 +603,16 @@ textarea.fi{resize:vertical;min-height:60px}
                 <input type="date" id="relDataFim" class="fi" style="width:140px;padding:5px 10px;font-size:12px">
                 <button class="btn btn-primary btn-sm" onclick="aplicarPeriodoCustom()">Aplicar</button>
               </div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0">
+                <span style="font-size:12px;color:var(--text2)">↔️ Comparar</span>
+                <label style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer">
+                  <input type="checkbox" id="relCmpToggle" style="opacity:0;width:0;height:0" onchange="toggleRelComparar(this)">
+                  <span id="relCmpTrack" style="position:absolute;inset:0;border-radius:11px;background:var(--bg3);border:1px solid var(--border2);transition:background .2s"></span>
+                  <span id="relCmpThumb" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--text3);transition:all .2s"></span>
+                </label>
+              </div>
             </div>
+            <div id="relCmpLabel" style="display:none;margin-top:10px;font-size:12px;color:var(--text2)"></div>
           </div>
           <div id="relContent"></div>
         </div>
@@ -3991,6 +4000,99 @@ db.collection('catalogoStatus').onSnapshot(snap => {
 // ── RELATÓRIOS ──────────────────────────────────────────────────────────────
 let relPeriodo = 'hoje';
 let relInicio = null, relFim = null;
+let _relComparar = false;
+
+function toggleRelComparar(cb) {
+  _relComparar = cb.checked;
+  const track = document.getElementById('relCmpTrack');
+  const thumb = document.getElementById('relCmpThumb');
+  if (track) track.style.background = cb.checked ? 'var(--orange)' : 'var(--bg3)';
+  if (thumb) { thumb.style.left = cb.checked ? '20px' : '2px'; thumb.style.background = cb.checked ? '#fff' : 'var(--text3)'; }
+  renderRelatorios();
+}
+
+// Retorna {lista, label, ini, fim} para o período anterior equivalente, ou null
+function _getPeriodoAnterior() {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  let ini, fim, label;
+  if (relPeriodo === 'hoje') {
+    ini = new Date(hoje); ini.setDate(hoje.getDate() - 1);
+    fim = new Date(ini); fim.setHours(23,59,59,999);
+    label = 'Ontem';
+  } else if (relPeriodo === 'semana') {
+    const dom = new Date(hoje); dom.setDate(hoje.getDate() - hoje.getDay());
+    fim = new Date(dom); fim.setDate(dom.getDate() - 1); fim.setHours(23,59,59,999);
+    ini = new Date(fim); ini.setDate(fim.getDate() - 6); ini.setHours(0,0,0,0);
+    label = 'Semana passada';
+  } else if (relPeriodo === 'mes') {
+    ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0, 23, 59, 59, 999);
+    const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    label = nomes[ini.getMonth()] + '/' + ini.getFullYear();
+  } else if (relPeriodo === 'custom' && relInicio && relFim) {
+    const durMs = relFim.getTime() - relInicio.getTime();
+    fim = new Date(relInicio.getTime() - 1);
+    ini = new Date(fim.getTime() - durMs);
+    const fmt = d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+    label = `${fmt(ini)} – ${fmt(fim)}`;
+  } else { return null; }
+
+  const lista = pedidos.filter(p => {
+    if (!p.data || p.status === 'cancelado') return false;
+    const [dd,mm,aaaa] = p.data.split('/');
+    const d = new Date(+aaaa, +mm-1, +dd);
+    return d >= ini && d <= fim;
+  });
+  return { lista, label, ini, fim };
+}
+
+// Retorna [{slot, label, dateLabel, value}] para um período, normalizado ao range
+function _dadosPorSlot(lista, ini, fim) {
+  const map = {};
+  lista.forEach(p => { map[p.data] = (map[p.data]||0) + (p.total||0); });
+
+  const dias = [];
+  const cur = new Date(ini); cur.setHours(0,0,0,0);
+  const end = new Date(fim); end.setHours(23,59,59,999);
+  let i = 0;
+  const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  while (cur <= end) {
+    const key = cur.toLocaleDateString('pt-BR'); // dd/mm/yyyy
+    let slotLabel;
+    if (relPeriodo === 'semana') slotLabel = DIAS_SEMANA[cur.getDay()];
+    else if (relPeriodo === 'mes') slotLabel = String(cur.getDate());
+    else slotLabel = 'Dia ' + (i+1);
+    dias.push({ slot: i, label: slotLabel, dateLabel: cur.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}), value: map[key]||0 });
+    cur.setDate(cur.getDate()+1); i++;
+  }
+  return dias;
+}
+
+function _delta(atual, ant) {
+  if (!ant) return null;
+  if (ant === 0) return atual > 0 ? 100 : 0;
+  return ((atual - ant) / ant) * 100;
+}
+
+function relCardComDelta(icon, label, val, ant, antLabel) {
+  const numVal = typeof val === 'number' ? val : 0;
+  const numAnt = typeof ant === 'number' ? ant : 0;
+  const d = _delta(numVal, numAnt);
+  const cor = d > 0 ? '#34d399' : d < 0 ? '#f87171' : 'var(--text2)';
+  const seta = d > 0 ? '↑' : d < 0 ? '↓' : '→';
+  // Formata o valor: números com decimal → R$, inteiros → só número
+  const isFloat = !Number.isInteger(numVal) || label.toLowerCase().includes('fat') || label.toLowerCase().includes('ticket');
+  const valStr = typeof val === 'string' ? val
+    : isFloat ? 'R$ ' + numVal.toFixed(2).replace('.',',')
+    : String(numVal);
+  const antStr = isFloat ? 'R$ ' + numAnt.toFixed(2).replace('.',',') : String(numAnt);
+  return `<div class="card-box" style="padding:14px 16px">
+    <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${icon} ${label}</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text)">${valStr}</div>
+    <div style="font-size:11px;margin-top:4px;color:var(--text2)">ant.: ${antStr}</div>
+    <div style="font-size:11px;margin-top:2px;color:${cor}">${seta} ${d>0?'+':''}${d.toFixed(1)}% vs ${antLabel}</div>
+  </div>`;
+}
 
 function setRelPeriodo(p, btn) {
   relPeriodo = p;
@@ -4056,6 +4158,28 @@ function renderRelatorios() {
   const ticket   = total ? fat / total : 0;
   const entregas = lista.filter(p => p.entrega==='delivery').length;
 
+  // ── Comparação com período anterior ─────────────────────────────
+  let comp = null;
+  if (_relComparar) comp = _getPeriodoAnterior();
+  const listaAnt   = comp?.lista || [];
+  const fatAnt     = listaAnt.reduce((s,p) => s+(p.total||0), 0);
+  const totalAnt   = listaAnt.length;
+  const ticketAnt  = totalAnt ? fatAnt / totalAnt : 0;
+  const entregasAnt = listaAnt.filter(p => p.entrega==='delivery').length;
+  const antLabel   = comp?.label || '';
+
+  // Atualiza label de comparação
+  const cmpLblEl = document.getElementById('relCmpLabel');
+  if (cmpLblEl) {
+    if (comp) {
+      const fmt = d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+      cmpLblEl.style.display = '';
+      cmpLblEl.innerHTML = `Comparando <b style="color:var(--orange)">período atual</b> com <b style="color:#60a5fa">${antLabel}</b> (${fmt(comp.ini)} – ${fmt(comp.fim)})`;
+    } else {
+      cmpLblEl.style.display = 'none';
+    }
+  }
+
   // ── Faturamento por dia ──────────────────────────────────────────
   const diaMap = {};
   lista.forEach(p => {
@@ -4095,12 +4219,20 @@ function renderRelatorios() {
   const prods = Object.entries(prodMap).sort((a,b) => b[1].qtd - a[1].qtd).slice(0, 8);
 
   // ── Render HTML ─────────────────────────────────────────────────
+  const cardFn = comp
+    ? (icon, label, val, ant) => relCardComDelta(icon, label, val, ant, antLabel)
+    : (icon, label, val) => relCard(icon, label, typeof val === 'number' ? (Number.isInteger(val) ? val : 'R$ '+val.toFixed(2).replace('.',',')) : val);
+
   document.getElementById('relContent').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
-      ${relCard('📦','Total de pedidos', total)}
-      ${relCard('💰','Faturamento bruto', 'R$ '+fat.toFixed(2).replace('.',','))}
-      ${relCard('🎯','Ticket médio', 'R$ '+ticket.toFixed(2).replace('.',','))}
-      ${relCard('🛵','Delivery', entregas)}
+      ${comp ? relCardComDelta('📦','Total de pedidos', total,   totalAnt,   antLabel)
+             : relCard('📦','Total de pedidos', total)}
+      ${comp ? relCardComDelta('💰','Faturamento bruto', fat, fatAnt, antLabel)
+             : relCard('💰','Faturamento bruto', 'R$ '+fat.toFixed(2).replace('.',','))}
+      ${comp ? relCardComDelta('🎯','Ticket médio',     'R$ '+ticket.toFixed(2).replace('.',','), ticketAnt, antLabel)
+             : relCard('🎯','Ticket médio', 'R$ '+ticket.toFixed(2).replace('.',','))}
+      ${comp ? relCardComDelta('🛵','Delivery',         entregas, entregasAnt, antLabel)
+             : relCard('🛵','Delivery', entregas)}
     </div>
     <div class="card-box" style="margin-bottom:16px">
       <div class="section-lbl" style="margin-top:0">Faturamento por dia</div>
@@ -4129,36 +4261,101 @@ function renderRelatorios() {
         : '<div style="position:relative;height:'+Math.max(180, prods.length*38)+'px"><canvas id="cRelProd"></canvas></div>'}
     </div>`;
 
+  // Dados do período anterior para o gráfico de faturamento
+  let slotsAtu = null, slotsAnt = null;
+  if (comp) {
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    let iniAtu, fimAtu;
+    if (relPeriodo === 'hoje') {
+      iniAtu = new Date(hoje); fimAtu = new Date(hoje);
+    } else if (relPeriodo === 'semana') {
+      iniAtu = new Date(hoje); iniAtu.setDate(hoje.getDate() - hoje.getDay());
+      fimAtu = new Date(hoje);
+    } else if (relPeriodo === 'mes') {
+      iniAtu = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      fimAtu = new Date(hoje);
+    } else {
+      iniAtu = relInicio; fimAtu = relFim;
+    }
+    if (iniAtu && fimAtu) {
+      slotsAtu = _dadosPorSlot(lista,    iniAtu,   fimAtu);
+      slotsAnt = _dadosPorSlot(listaAnt, comp.ini, comp.fim);
+    }
+  }
+
   // Desenha os gráficos após o DOM atualizar
-  requestAnimationFrame(() => _drawRelCharts({ dias, horasRange, pgLabels, pgValores, pgQtds, prods, fat }));
+  requestAnimationFrame(() => _drawRelCharts({ dias, horasRange, pgLabels, pgValores, pgQtds, prods, fat, slotsAtu, slotsAnt, antLabel }));
 }
 
-function _drawRelCharts({ dias, horasRange, pgLabels, pgValores, pgQtds, prods, fat }) {
+function _drawRelCharts({ dias, horasRange, pgLabels, pgValores, pgQtds, prods, fat, slotsAtu, slotsAnt, antLabel }) {
   if (!window.Chart) return;
   _chartDefaults();
 
   // ── Faturamento por dia ──────────────────────────────────────────
   _destroyRelChart('fat');
   const cFat = document.getElementById('cRelFat');
-  if (cFat && dias.length) {
-    _relCharts['fat'] = new Chart(cFat, {
-      type: 'bar',
-      data: {
-        labels: dias.map(([d]) => d.slice(0,5)),
-        datasets: [{ label: 'Faturamento (R$)', data: dias.map(([,v]) => v),
-          backgroundColor: 'rgba(249,115,22,0.7)', borderColor: '#f97316',
-          borderWidth: 1, borderRadius: 4 }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ' R$ ' + ctx.parsed.y.toFixed(2).replace('.',',') } } },
-        scales: {
-          x: { grid: { display: false } },
-          y: { ticks: { callback: v => 'R$'+v.toFixed(0) } }
+  if (cFat) {
+    const temComp = slotsAtu && slotsAnt;
+
+    if (temComp) {
+      // Alinhar slots: usar todos os labels do período com mais dias
+      const maxLen = Math.max(slotsAtu.length, slotsAnt.length);
+      const labels = Array.from({ length: maxLen }, (_,i) =>
+        slotsAtu[i]?.label ?? slotsAnt[i]?.label ?? `Dia ${i+1}`);
+      const dataAtu = Array.from({ length: maxLen }, (_,i) => slotsAtu[i]?.value ?? 0);
+      const dataAnt = Array.from({ length: maxLen }, (_,i) => slotsAnt[i]?.value ?? 0);
+      const tooltipDatesAtu = Array.from({ length: maxLen }, (_,i) => slotsAtu[i]?.dateLabel ?? '');
+      const tooltipDatesAnt = Array.from({ length: maxLen }, (_,i) => slotsAnt[i]?.dateLabel ?? '');
+
+      _relCharts['fat'] = new Chart(cFat, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Período atual', data: dataAtu,
+              backgroundColor: 'rgba(249,115,22,0.75)', borderColor: '#f97316', borderWidth:1, borderRadius:3 },
+            { label: antLabel || 'Período anterior', data: dataAnt,
+              backgroundColor: 'rgba(96,165,250,0.45)', borderColor: '#60a5fa', borderWidth:1, borderRadius:3 },
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'top' },
+            tooltip: { callbacks: {
+              label: ctx => {
+                const dates = ctx.datasetIndex === 0 ? tooltipDatesAtu : tooltipDatesAnt;
+                const d = dates[ctx.dataIndex] ? ` (${dates[ctx.dataIndex]})` : '';
+                return ` R$ ${ctx.parsed.y.toFixed(2).replace('.',',')}${d}`;
+              }
+            }}
+          },
+          scales: {
+            x: { grid: { display: false } },
+            y: { ticks: { callback: v => 'R$'+v.toFixed(0) } }
+          }
         }
-      }
-    });
+      });
+    } else if (dias.length) {
+      _relCharts['fat'] = new Chart(cFat, {
+        type: 'bar',
+        data: {
+          labels: dias.map(([d]) => d.slice(0,5)),
+          datasets: [{ label: 'Faturamento (R$)', data: dias.map(([,v]) => v),
+            backgroundColor: 'rgba(249,115,22,0.7)', borderColor: '#f97316',
+            borderWidth: 1, borderRadius: 4 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ' R$ ' + ctx.parsed.y.toFixed(2).replace('.',',') } } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { ticks: { callback: v => 'R$'+v.toFixed(0) } }
+          }
+        }
+      });
+    }
   }
 
   // ── Pedidos por hora ─────────────────────────────────────────────
