@@ -216,8 +216,14 @@ textarea.fi{resize:vertical;min-height:60px}
 .btn-ghost:hover{border-color:var(--border2);color:var(--text)}
 .btn-danger{background:rgba(231,76,60,.15);color:#ff6b6b;border:1px solid rgba(231,76,60,.2)}
 .btn-sm{padding:5px 12px;font-size:11px}
+.robo-sec-hdr{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.robo-sec-hdr>span{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.robo-sec-toggle{background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;pointer-events:none;font-family:inherit}
+.bot-card-preview{font-size:11px;color:var(--text2);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-top:4px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.bot-card-edit{display:none;padding:0 12px 12px;border-top:1px solid var(--border)}
+.robo-divider{border:none;border-top:1px solid var(--border2);margin:0 0 1rem}
 
-.prod-row{display:grid;grid-template-columns:52px 1fr 110px 88px 36px;gap:10px;align-items:center;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;}
+.prod-row{display:grid;grid-template-columns:52px 1fr 110px 88px 36px 40px;gap:10px;align-items:center;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;}
 .prod-thumb{width:48px;height:48px;border-radius:8px;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:1.4rem;overflow:hidden;cursor:pointer;border:1px dashed var(--border2);transition:border-color .2s;}
 .prod-thumb:hover{border-color:var(--orange)}
 .prod-thumb img{width:100%;height:100%;object-fit:cover;border-radius:7px}
@@ -262,7 +268,7 @@ textarea.fi{resize:vertical;min-height:60px}
 
 @media(max-width:900px){.sidebar{display:none}.kanban-col{min-width:220px}}
 
-.tempo-strip{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0;}
+.tempo-strip{display:flex;gap:1px;background:var(--border);border-bottom:none;flex-shrink:0;}
 .tempo-item{flex:1;background:var(--bg3);padding:9px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .15s;user-select:none;}
 .tempo-item:hover{background:var(--bg4)}
 .tempo-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
@@ -388,6 +394,7 @@ textarea.fi{resize:vertical;min-height:60px}
 .pag-chip-cred{background:rgba(96,165,250,.15);color:#60a5fa}
 .pag-chip-deb{background:rgba(34,211,238,.15);color:#22d3ee}
 .pag-chip-out{background:rgba(255,107,53,.15);color:#ff6b35}
+.pag-chip-cancel{background:rgba(107,114,128,.15);color:#9ca3af}
 .nf-emitida{background:rgba(52,211,153,.15);color:#34d399;font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;display:inline-block}
 .nf-pendente{background:rgba(245,158,11,.15);color:#f59e0b;font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;display:inline-block}
 .nf-erro{background:rgba(255,107,107,.15);color:#ff6b6b;font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;display:inline-block}
@@ -427,6 +434,11 @@ textarea.fi{resize:vertical;min-height:60px}
 #wpp-badge.pulsing{animation:wpp-pulse 1.4s ease-in-out infinite}
 @keyframes dot-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.3)}}
 .wpp-unread-dot{width:9px;height:9px;background:var(--orange);border-radius:50%;flex-shrink:0;animation:dot-pulse 1.4s ease-in-out infinite;margin-left:4px}
+/* ====== ANIVERSARIANTES ====== */
+#aniversariantesBar{display:none;background:linear-gradient(135deg,rgba(236,72,153,.1),rgba(249,115,22,.08));border-bottom:1px solid rgba(236,72,153,.22);padding:7px 14px;flex-shrink:0}
+.aniv-nome{font-size:12px;font-weight:600;color:var(--text)}
+.aniv-btn{padding:3px 9px;border-radius:6px;border:none;background:rgba(236,72,153,.18);color:#ec4899;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s}
+.aniv-btn:hover{background:rgba(236,72,153,.32)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 </head>
@@ -456,7 +468,7 @@ textarea.fi{resize:vertical;min-height:60px}
 <aside class="sidebar">
   <div class="sb-brand">
     <div class="sb-logo"><img src="/joey_dog_refined.png" alt="Joey"></div>
-    <div class="sb-name" id="sbNome">Joey Pizza</div>
+    <div class="sb-name" id="sbNome"></div>
     <div class="sb-tag">Painel de controle</div>
   </div>
   <div class="sb-section">Pedidos</div>
@@ -477,7 +489,7 @@ textarea.fi{resize:vertical;min-height:60px}
     <div class="sb-store">
       <div class="sb-avatar" id="sbAvatar">J</div>
       <div>
-        <div class="sb-store-name" id="sbNome2">Joey Pizza</div>
+        <div class="sb-store-name" id="sbNome2"></div>
         <div class="sb-store-status"><span class="status-dot"></span>Aberto</div>
       </div>
     </div>
@@ -529,7 +541,6 @@ textarea.fi{resize:vertical;min-height:60px}
       <button class="bot-toggle" id="btnBot" onclick="toggleBot()">Ativo</button>
     </div>
   </div>
-
   <div class="content">
 
     <!-- PEDIDOS -->
@@ -540,6 +551,7 @@ textarea.fi{resize:vertical;min-height:60px}
         <button class="filter-btn filter-icon" onclick="setFiltro('retirada_local',this)" title="Retirada e No local">🏠</button>
         <button class="filter-btn filter-icon" onclick="setFiltro('mesa',this)" title="Pedidos de mesa">🍽️</button>
       </div>
+      <div id="aniversariantesBar"></div>
       <div class="kanban-board" id="kanbanBoard"></div>
       <div class="sr-wrap" id="busca-results" style="display:none"></div>
     </div>
@@ -651,9 +663,10 @@ textarea.fi{resize:vertical;min-height:60px}
 
         <!-- Abas internas -->
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--border)">
-          <button id="fTab-config"     class="filter-btn active" onclick="setFiscalTab('config')">⚙️ Configuração</button>
-          <button id="fTab-categorias" class="filter-btn"        onclick="setFiscalTab('categorias')">🏷️ Categorias Tributárias</button>
-          <button id="fTab-notas"      class="filter-btn"        onclick="setFiscalTab('notas')">📄 Relatório de Notas</button>
+          <button id="fTab-config"      class="filter-btn active" onclick="setFiscalTab('config')">⚙️ Configuração</button>
+          <button id="fTab-categorias"  class="filter-btn"        onclick="setFiscalTab('categorias')">🏷️ Categorias Tributárias</button>
+          <button id="fTab-notas"       class="filter-btn"        onclick="setFiscalTab('notas')">📄 Relatório de Notas</button>
+          <button id="fTab-verificacao" class="filter-btn"        onclick="setFiscalTab('verificacao')">🔍 Verificação Fiscal</button>
         </div>
 
         <!-- ABA: Configuração -->
@@ -670,10 +683,21 @@ textarea.fi{resize:vertical;min-height:60px}
               <div class="fg"><label class="fl">Rua / Logradouro</label><input class="fi" id="fRua" placeholder="Rua das Pizzas"></div>
               <div class="fg"><label class="fl">Número</label><input class="fi" id="fNumero" placeholder="123"></div>
             </div>
-            <div class="form-grid3">
+            <div class="form-grid3" style="margin-bottom:10px">
               <div class="fg"><label class="fl">Bairro</label><input class="fi" id="fBairro" placeholder="Centro"></div>
               <div class="fg"><label class="fl">Cidade</label><input class="fi" id="fCidade" placeholder="Petrópolis"></div>
               <div class="fg"><label class="fl">Estado (UF)</label><input class="fi" id="fEstado" placeholder="RJ" maxlength="2" style="text-transform:uppercase"></div>
+            </div>
+            <div class="form-grid">
+              <div class="fg">
+                <label class="fl">Telefone</label>
+                <input class="fi" id="fTelefone" type="text" inputmode="tel" placeholder="(21) 99999-9999" maxlength="16" oninput="maskTelFiscal(this)">
+              </div>
+              <div class="fg">
+                <label class="fl">Tributos Aproximados (%)</label>
+                <input class="fi" id="fPercTributos" type="number" step="0.01" min="0" placeholder="8.50">
+                <span style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.4">Exigido pela Lei 12.741/2012. Consulte seu contador para obter o percentual correto.</span>
+              </div>
             </div>
           </div>
 
@@ -775,6 +799,11 @@ textarea.fi{resize:vertical;min-height:60px}
           <div class="card-box" style="padding:0;overflow:hidden">
             <div id="nfTabela"></div>
           </div>
+        </div>
+
+        <!-- ABA: Verificação Fiscal -->
+        <div id="fTabContent-verificacao" style="display:none">
+          <p style="color:var(--text2);font-size:13px;padding:20px">Carregando verificação...</p>
         </div>
 
       </div>
@@ -919,163 +948,241 @@ textarea.fi{resize:vertical;min-height:60px}
       <div class="panel-inner">
         <div class="panel-head"><h2>🤖 Robô WhatsApp</h2></div>
 
-        <!-- Status do bot -->
+        <!-- 1. Status do bot -->
         <div class="card-box">
-          <div class="section-lbl" style="margin-top:0">Status do Robô</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:1rem">
-            <div>
-              <div style="font-size:13px;font-weight:600;color:var(--text)" id="botAtivoLabel">Robô ativo</div>
-              <div style="font-size:11px;color:var(--text2);margin-top:2px">Responde automaticamente mensagens no WhatsApp</div>
+          <div class="robo-sec-hdr" onclick="toggleRoboSection('status')">
+            <span>Status do Robô</span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-status">▲</button>
+          </div>
+          <div id="robo-sec-body-status">
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text)" id="botAtivoLabel">Robô ativo</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px">Responde automaticamente mensagens no WhatsApp</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:46px;height:26px;cursor:pointer">
+                <input type="checkbox" id="cfgBotAtivo" style="opacity:0;width:0;height:0" onchange="salvarStatusBot(this)">
+                <span id="botAtivoTrack" style="position:absolute;inset:0;border-radius:13px;background:var(--bg3);border:1px solid var(--border2);transition:all .2s"></span>
+                <span id="botAtivoThumb" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text3);transition:all .2s"></span>
+              </label>
             </div>
-            <label style="position:relative;display:inline-block;width:46px;height:26px;cursor:pointer">
-              <input type="checkbox" id="cfgBotAtivo" style="opacity:0;width:0;height:0" onchange="salvarStatusBot(this)">
-              <span id="botAtivoTrack" style="position:absolute;inset:0;border-radius:13px;background:var(--bg3);border:1px solid var(--border2);transition:all .2s"></span>
-              <span id="botAtivoThumb" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text3);transition:all .2s"></span>
-            </label>
           </div>
         </div>
 
-        <!-- Notificações automáticas de pedido -->
+        <hr class="robo-divider">
+
+        <!-- 2. Notificações automáticas -->
         <div class="card-box">
-          <div class="section-lbl" style="margin-top:0">📱 Notificações Automáticas de Pedido</div>
-          <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Mensagens enviadas automaticamente ao cliente quando o status do pedido muda. Use <b>{nome}</b>, <b>{id}</b>, <b>{loja}</b> e <b>{itens}</b> como variáveis.</p>
-          <div style="display:flex;flex-direction:column;gap:10px" id="notifPedidoCards"></div>
-          <div style="margin-top:14px">
-            <button class="btn btn-primary" onclick="salvarNotifConfig()">✓ Salvar notificações</button>
+          <div class="robo-sec-hdr" onclick="toggleRoboSection('notif')">
+            <span>📱 Notificações Automáticas de Pedido</span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-notif">▲</button>
+          </div>
+          <div id="robo-sec-body-notif">
+            <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Mensagens enviadas automaticamente ao cliente quando o status do pedido muda. Use <b>{nome}</b>, <b>{id}</b>, <b>{loja}</b> e <b>{itens}</b> como variáveis.</p>
+            <div style="display:flex;flex-direction:column;gap:10px" id="notifPedidoCards"></div>
+            <div style="margin-top:14px">
+              <button class="btn btn-primary" onclick="salvarNotifConfig()">✓ Salvar notificações</button>
+            </div>
           </div>
         </div>
 
-        <!-- Cards de mensagens -->
+        <hr class="robo-divider">
+
+        <!-- 3. Mensagens do Robô -->
         <div class="card-box">
-          <div class="section-lbl" style="margin-top:0">Mensagens do Robô</div>
-          <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Configure as respostas automáticas. Use <b>{nome}</b> para o nome do cliente e <b>{saudacao}</b> para Bom dia/Boa tarde/Boa noite.</p>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+          <div class="robo-sec-hdr" onclick="toggleRoboSection('msgs')">
+            <span>Mensagens do Robô</span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-msgs">▲</button>
+          </div>
+          <div id="robo-sec-body-msgs">
+            <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Clique num card para editar. Use <b>{nome}</b> para o nome do cliente e <b>{saudacao}</b> para Bom dia/Boa tarde/Boa noite.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px">
 
-            <!-- Saudação -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">🙋 Saudação <span style="font-weight:400;color:var(--text2)">(mensagem de boas-vindas)</span></div>
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-saudacao" class="fi" rows="5" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">{saudacao}, {nome}! Bem-vindo ao Joey! 🍕
+              <!-- Saudação -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('saudacao')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">🙋 Saudação <span style="font-weight:400;color:var(--text2)">(boas-vindas)</span></div>
+                    <span id="botcard-arrow-saudacao" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-saudacao" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-saudacao" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Resposta</label>
+                  <textarea id="bot-resp-saudacao" class="fi" rows="5" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('saudacao')">✓ Salvar</button>
+                </div>
+              </div>
 
-Para fazer seu pedido acesse nosso cardápio:
-👉 https://hamburgueriajoey.com.br
+              <!-- Cardápio -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('cardapio')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">🍕 Cardápio</div>
+                    <span id="botcard-arrow-cardapio" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-cardapio" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-cardapio" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
+                  <input id="bot-kw-cardapio" class="fi" style="margin-bottom:8px" placeholder="cardápio, menu, pratos, pizza">
+                  <label class="fl" style="display:block;margin-bottom:4px">Resposta</label>
+                  <textarea id="bot-resp-cardapio" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('cardapio')">✓ Salvar</button>
+                </div>
+              </div>
 
-Escolha seus produtos, informe seu endereço e finalize o pedido direto pelo link!
+              <!-- Horário -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('horario')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">🕐 Horário</div>
+                    <span id="botcard-arrow-horario" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-horario" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-horario" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
+                  <input id="bot-kw-horario" class="fi" style="margin-bottom:8px" placeholder="horário, funciona, abre, fecha">
+                  <label class="fl" style="display:block;margin-bottom:4px">Resposta</label>
+                  <textarea id="bot-resp-horario" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('horario')">✓ Salvar</button>
+                </div>
+              </div>
 
-Dúvidas? Digite *atendente* para falar conosco.</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('saudacao')">✓ Salvar</button>
+              <!-- Entrega -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('entrega')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">🛵 Entrega</div>
+                    <span id="botcard-arrow-entrega" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-entrega" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-entrega" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
+                  <input id="bot-kw-entrega" class="fi" style="margin-bottom:8px" placeholder="entrega, deliver, motoboy, tempo">
+                  <label class="fl" style="display:block;margin-bottom:4px">Resposta</label>
+                  <textarea id="bot-resp-entrega" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('entrega')">✓ Salvar</button>
+                </div>
+              </div>
+
+              <!-- Bairros -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('bairros')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">📍 Bairros</div>
+                    <span id="botcard-arrow-bairros" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-bairros" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-bairros" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
+                  <input id="bot-kw-bairros" class="fi" style="margin-bottom:8px" placeholder="bairro, atende, região, entregam">
+                  <label class="fl" style="display:block;margin-bottom:4px">Resposta</label>
+                  <textarea id="bot-resp-bairros" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('bairros')">✓ Salvar</button>
+                </div>
+              </div>
+
+              <!-- Pagamento -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('pagamento')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">💳 Pagamento</div>
+                    <span id="botcard-arrow-pagamento" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-pagamento" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-pagamento" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
+                  <input id="bot-kw-pagamento" class="fi" style="margin-bottom:8px" placeholder="pagamento, pagar, cartão, pix, dinheiro">
+                  <label class="fl" style="display:block;margin-bottom:4px">Resposta</label>
+                  <textarea id="bot-resp-pagamento" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('pagamento')">✓ Salvar</button>
+                </div>
+              </div>
+
+              <!-- Pedido mínimo -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('minimo')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">💰 Pedido mínimo</div>
+                    <span id="botcard-arrow-minimo" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-minimo" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-minimo" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
+                  <input id="bot-kw-minimo" class="fi" style="margin-bottom:8px" placeholder="mínimo, valor mínimo, pedido mínimo">
+                  <label class="fl" style="display:block;margin-bottom:4px">Resposta</label>
+                  <textarea id="bot-resp-minimo" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('minimo')">✓ Salvar</button>
+                </div>
+              </div>
+
+              <!-- Mensagem padrão -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="padding:10px 12px;cursor:pointer" onclick="toggleBotCard('padrao')">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:12px;font-weight:700;color:var(--text)">💬 Mensagem padrão <span style="font-weight:400;color:var(--text2)">(fallback)</span></div>
+                    <span id="botcard-arrow-padrao" style="color:var(--text3);font-size:11px;flex-shrink:0;margin-left:6px">▼</span>
+                  </div>
+                  <div id="botcard-preview-padrao" class="bot-card-preview"></div>
+                </div>
+                <div id="botcard-edit-padrao" class="bot-card-edit">
+                  <label class="fl" style="display:block;margin:10px 0 4px">Resposta</label>
+                  <textarea id="bot-resp-padrao" class="fi" rows="5" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+                  <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('padrao')">✓ Salvar</button>
+                </div>
+              </div>
+
             </div>
-
-            <!-- Cardápio -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">🍕 Cardápio</div>
-              <label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
-              <input id="bot-kw-cardapio" class="fi" style="margin-bottom:8px" placeholder="cardápio, menu, pratos, pizza">
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-cardapio" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">Acesse nosso cardápio completo pelo link:
-👉 https://hamburgueriajoey.com.br
-
-Escolha seus produtos e finalize o pedido direto pelo site! 🍕</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('cardapio')">✓ Salvar</button>
-            </div>
-
-            <!-- Horário -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">🕐 Horário</div>
-              <label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
-              <input id="bot-kw-horario" class="fi" style="margin-bottom:8px" placeholder="horário, funciona, abre, fecha">
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-horario" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">Nosso horário de funcionamento é:
-🕐 Terça a Domingo: 18h às 23h
-
-Segunda-feira fechado.</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('horario')">✓ Salvar</button>
-            </div>
-
-            <!-- Entrega -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">🛵 Entrega</div>
-              <label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
-              <input id="bot-kw-entrega" class="fi" style="margin-bottom:8px" placeholder="entrega, deliver, motoboy, tempo">
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-entrega" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">Fazemos entrega! 🛵
-
-O tempo estimado é de 40 a 60 minutos.
-A taxa de entrega varia por bairro.
-
-Faça seu pedido: 👉 https://hamburgueriajoey.com.br</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('entrega')">✓ Salvar</button>
-            </div>
-
-            <!-- Bairros -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">📍 Bairros</div>
-              <label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
-              <input id="bot-kw-bairros" class="fi" style="margin-bottom:8px" placeholder="bairro, atende, região, entregam">
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-bairros" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">Atendemos os seguintes bairros:
-
-📍 Centro, Quitandinha, Alto da Serra...
-
-Para ver a taxa de cada bairro, acesse o cardápio e selecione seu bairro no checkout.</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('bairros')">✓ Salvar</button>
-            </div>
-
-            <!-- Pagamento -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">💳 Pagamento</div>
-              <label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
-              <input id="bot-kw-pagamento" class="fi" style="margin-bottom:8px" placeholder="pagamento, pagar, cartão, pix, dinheiro">
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-pagamento" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">Aceitamos as seguintes formas de pagamento:
-💳 Cartão de crédito e débito
-📱 Pix
-💵 Dinheiro (troco informado no pedido)</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('pagamento')">✓ Salvar</button>
-            </div>
-
-            <!-- Pedido mínimo -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">💰 Pedido mínimo</div>
-              <label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
-              <input id="bot-kw-minimo" class="fi" style="margin-bottom:8px" placeholder="mínimo, valor mínimo, pedido mínimo">
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-minimo" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">Nosso pedido mínimo para delivery é R$ 20,00.
-
-Faça seu pedido: 👉 https://hamburgueriajoey.com.br</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('minimo')">✓ Salvar</button>
-            </div>
-
-            <!-- Mensagem padrão -->
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px">
-              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">💬 Mensagem padrão <span style="font-weight:400;color:var(--text2)">(fallback)</span></div>
-              <label class="fl" style="margin-bottom:4px">Resposta</label>
-              <textarea id="bot-resp-padrao" class="fi" rows="5" style="width:100%;resize:vertical;font-family:inherit;font-size:12px">Olá, {nome}! 👋
-
-Para fazer seu pedido acesse:
-👉 https://hamburgueriajoey.com.br
-
-Dúvidas? Digite *atendente* para falar conosco.</textarea>
-              <button class="btn btn-primary" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="salvarGatilho('padrao')">✓ Salvar</button>
-            </div>
-
           </div>
         </div>
 
-        <!-- Gatilhos personalizados -->
+        <hr class="robo-divider">
+
+        <!-- 4. Gatilhos personalizados -->
         <div class="card-box">
-          <div class="section-lbl" style="margin-top:0">➕ Gatilhos Personalizados</div>
-          <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Crie respostas automáticas para palavras-chave específicas do seu negócio.</p>
-          <button class="btn btn-ghost" style="margin-bottom:1rem" onclick="adicionarGatilhoCustom()">+ Adicionar gatilho</button>
-          <div id="customGatilhosContainer" style="display:flex;flex-direction:column;gap:10px"></div>
+          <div class="robo-sec-hdr" onclick="toggleRoboSection('gatilhos')">
+            <span>➕ Gatilhos Personalizados</span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-gatilhos">▲</button>
+          </div>
+          <div id="robo-sec-body-gatilhos">
+            <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Crie respostas automáticas para palavras-chave específicas do seu negócio.</p>
+            <div id="customGatilhosContainer" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
+            <button id="btnAdicionarGatilho" class="btn btn-ghost" onclick="abrirNovoGatilhoForm()">+ Adicionar gatilho</button>
+            <div id="novoGatilhoFormWrap" style="display:none;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px">
+              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">✏️ Novo gatilho personalizado</div>
+              <label class="fl" style="margin-bottom:4px">Nome do gatilho</label>
+              <input id="novo-gatilho-nome" class="fi" style="margin-bottom:8px" placeholder="Ex: Promoção, WiFi, Estacionamento">
+              <label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>
+              <input id="novo-gatilho-kw" class="fi" style="margin-bottom:8px" placeholder="promo, desconto, promoção">
+              <label class="fl" style="margin-bottom:4px">Resposta</label>
+              <textarea id="novo-gatilho-resp" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="salvarNovoGatilhoCustom()">✓ Salvar</button>
+                <button class="btn btn-ghost" style="font-size:12px;padding:6px 14px" onclick="fecharNovoGatilhoForm()">✕ Cancelar</button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Mensagens programadas -->
+        <hr class="robo-divider">
+
+        <!-- 5. Mensagens programadas -->
         <div class="card-box">
-          <div class="section-lbl" style="margin-top:0">⏰ Mensagens Programadas</div>
-          <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Envie mensagens automáticas em horários específicos para seus clientes.</p>
-          <button class="btn btn-ghost" style="margin-bottom:1rem" onclick="adicionarMensagemProgramada()">+ Nova mensagem programada</button>
-          <div id="mensagensProgContainer" style="display:flex;flex-direction:column;gap:14px"></div>
+          <div class="robo-sec-hdr" onclick="toggleRoboSection('sched')">
+            <span>⏰ Mensagens Programadas</span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-sched">▲</button>
+          </div>
+          <div id="robo-sec-body-sched">
+            <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Envie mensagens automáticas em horários específicos para seus clientes.</p>
+            <button class="btn btn-ghost" style="margin-bottom:1rem" onclick="adicionarMensagemProgramada()">+ Nova mensagem programada</button>
+            <div id="mensagensProgContainer" style="display:flex;flex-direction:column;gap:14px"></div>
+          </div>
         </div>
 
       </div>
@@ -1250,7 +1357,8 @@ Dúvidas? Digite *atendente* para falar conosco.</textarea>
       </div>
       <div class="fg">
         <label class="fl">Telefone</label>
-        <input type="text" class="fi" id="npTelefone" placeholder="(00) 00000-0000 (opcional)">
+        <input type="text" class="fi" id="npTelefone" placeholder="(00) 00000-0000 (opcional)" oninput="npAutoBuscaCliente()">
+        <div id="npClienteIndicador" style="display:none;font-size:11px;color:#34d399;margin-top:4px;font-weight:500"></div>
       </div>
     </div>
     <div style="margin-bottom:14px">
@@ -1262,6 +1370,12 @@ Dúvidas? Digite *atendente* para falar conosco.</textarea>
       </div>
     </div>
     <div id="npDeliveryFields" style="display:none;margin-bottom:14px">
+      <div id="npEndAnteriorRow" class="fg" style="display:none;margin-bottom:8px">
+        <label class="fl">Endereços anteriores</label>
+        <select class="fi" id="npEndAnteriorSelect" onchange="npSelecionarEndAnterior()">
+          <option value="">📍 Selecionar endereço anterior...</option>
+        </select>
+      </div>
       <div class="form-grid" style="margin-bottom:8px">
         <div class="fg">
           <label class="fl">Endereço</label>
@@ -1302,16 +1416,78 @@ Dúvidas? Digite *atendente* para falar conosco.</textarea>
       <div class="fl" style="margin-bottom:6px">Itens adicionados</div>
       <div id="npCart"></div>
     </div>
-    <div class="fg" style="margin-bottom:16px">
+    <div class="fg" style="margin-bottom:14px">
       <label class="fl">Observações</label>
       <textarea class="fi" id="npObs" placeholder="Observações gerais (opcional)" rows="2"></textarea>
+    </div>
+    <div id="npPagamentoSection" style="margin-bottom:14px;display:none;padding:10px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3);border-radius:8px">
+      <div class="fl" style="margin-bottom:8px;color:var(--orange)">💳 Forma de pagamento <span style="color:#ef4444;font-size:13px">*</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <button class="np-tipo-btn" id="npPagPix"      onclick="npSelecionarPagamento('pix',this)">💰 PIX</button>
+        <button class="np-tipo-btn" id="npPagCredito"  onclick="npSelecionarPagamento('credito',this)">💳 Crédito</button>
+        <button class="np-tipo-btn" id="npPagDebito"   onclick="npSelecionarPagamento('debito',this)">💳 Débito</button>
+        <button class="np-tipo-btn" id="npPagDinheiro" onclick="npSelecionarPagamento('dinheiro',this)">💵 Dinheiro</button>
+      </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:14px">
       <div>
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Total</div>
         <div id="npTotal" style="font-size:22px;font-weight:700;color:var(--orange)">R$ 0,00</div>
       </div>
-      <button class="btn btn-primary" style="padding:10px 24px;font-size:14px" onclick="npConfirmar()">✓ Confirmar Pedido</button>
+      <button id="npConfirmarBtn" class="btn btn-primary" style="padding:10px 24px;font-size:14px" onclick="npConfirmar()">✓ Confirmar Pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITAR PEDIDO EM PRODUÇÃO -->
+<div class="modal-overlay" id="editarPedidoModal" style="z-index:810" onclick="if(event.target===this)fecharEditarPedido()">
+  <div class="modal-box" style="max-width:560px;width:95%">
+    <div class="modal-header">
+      <div class="modal-title" id="epModalTitle">Editar Pedido</div>
+      <button class="modal-close" onclick="fecharEditarPedido()">✕</button>
+    </div>
+    <div id="epTipoSection" style="margin-bottom:14px">
+      <div class="fl" style="margin-bottom:6px">Tipo de entrega</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <button class="np-tipo-btn" id="epTipoDelivery" onclick="epSetTipo('delivery',this)">🛵 Delivery</button>
+        <button class="np-tipo-btn" id="epTipoRetirada" onclick="epSetTipo('retirada',this)">🏠 Retirada</button>
+        <button class="np-tipo-btn" id="epTipoLocal"    onclick="epSetTipo('local',this)">🍽️ No Local</button>
+      </div>
+    </div>
+    <div id="epEnderecoFields" style="display:none;margin-bottom:14px">
+      <div class="fl" style="margin-bottom:6px">Endereço de entrega</div>
+      <div class="form-grid" style="margin-bottom:6px">
+        <div class="fg"><label class="fl">Rua / Número</label><input type="text" class="fi" id="epRua" placeholder="Rua, número, complemento"></div>
+        <div class="fg"><label class="fl">Bairro</label><select class="fi" id="epBairro" onchange="epAtualizarTaxa()"><option value="">Selecionar bairro...</option></select></div>
+      </div>
+      <div id="epTaxaRow" style="display:none;font-size:12px;color:var(--text2);padding:7px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:7px">
+        Taxa de entrega: <b id="epTaxaVal" style="color:var(--orange)">R$ 0,00</b>
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <div class="fl" style="margin-bottom:6px">Adicionar item</div>
+      <input type="text" class="fi" id="epBusca" placeholder="Buscar produto..." oninput="epRenderBusca()">
+      <div id="epResultados" style="margin-top:6px;max-height:160px;overflow-y:auto"></div>
+    </div>
+    <div id="epCartWrap" style="margin-bottom:12px;display:none">
+      <div class="fl" style="margin-bottom:6px">Itens do pedido</div>
+      <div id="epCart"></div>
+    </div>
+    <div id="epPagSection" style="margin-bottom:14px">
+      <div class="fl" style="margin-bottom:6px">Forma de pagamento</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <button class="np-tipo-btn" id="epPagPix"      onclick="epSelecionarPagamento('pix',this)">💰 PIX</button>
+        <button class="np-tipo-btn" id="epPagCredito"  onclick="epSelecionarPagamento('credito',this)">💳 Crédito</button>
+        <button class="np-tipo-btn" id="epPagDebito"   onclick="epSelecionarPagamento('debito',this)">💳 Débito</button>
+        <button class="np-tipo-btn" id="epPagDinheiro" onclick="epSelecionarPagamento('dinheiro',this)">💵 Dinheiro</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:14px">
+      <div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Total</div>
+        <div id="epTotal" style="font-size:22px;font-weight:700;color:var(--orange)">R$ 0,00</div>
+      </div>
+      <button class="btn btn-primary" style="padding:10px 24px;font-size:14px" onclick="epConfirmar()">💾 Salvar alterações</button>
     </div>
   </div>
 </div>
@@ -1393,6 +1569,8 @@ const KANBAN_COLS = [
 ];
 
 let pedidos=[], cardapio=[], config={}, recipes=[], catalogoStatusMap={}, adicionaisBiblioteca=[];
+let catOrdem = [];   // ['Cat1', 'Cat2', ...] — salvo em config/catOrdem
+let prodOrdem = {};  // { 'Cat1': ['id1', 'id2', ...] } — salvo em config/prodOrdem
 let filtroAtivo='todos', buscaTermo='', buscaEntregues='';
 let _bairroEditIdx = -1;
 
@@ -1814,103 +1992,161 @@ function gerarHtmlComanda(p) {
   const now  = new Date();
   const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
-  const S1   = '================================';
-  const S2   = '- - - - - - - - - - - - - - - -';
 
-  let tipoEntrega = 'CONSUMO NO LOCAL';
-  if (p.entrega === 'delivery') tipoEntrega = 'DELIVERY';
+  const W = 28; // largura útil em chars (Courier 13px @ 80mm)
+  const eq = '='.repeat(W);
+  const dash = '- '.repeat(Math.floor(W/2));
+
+  let tipoEntrega = 'NO LOCAL';
+  if (p.entrega === 'delivery')      tipoEntrega = 'PARA ENTREGA';
   else if (p.entrega === 'retirada') tipoEntrega = 'RETIRADA';
+
+  let previsaoHtml = '';
+  if (p.entrega === 'delivery')      previsaoHtml = `<div class="info">Previsao: 45 a 60 min</div>`;
+  else if (p.entrega === 'retirada') previsaoHtml = `<div class="info">Previsao: 20 a 30 min</div>`;
+
+  // Caixa de OBS em ASCII (largura fixa 28)
+  function obsBox(texto) {
+    const inner = W - 4; // largura do conteúdo (sem '+' e padding)
+    const titleBar = '+' + '-'.repeat(Math.floor((W-7)/2)) + ' OBS ' + '-'.repeat(W - 7 - Math.floor((W-7)/2)) + '+';
+    const sepBar   = '+' + '-'.repeat(W-2) + '+';
+    const linhas = [];
+    let resto = String(texto || '').trim();
+    if (!resto) return '';
+    while (resto.length > 0) {
+      let cut = inner;
+      if (resto.length > inner) {
+        const sp = resto.lastIndexOf(' ', inner);
+        if (sp > inner / 2) cut = sp;
+      }
+      linhas.push(resto.slice(0, cut).trim());
+      resto = resto.slice(cut).trim();
+    }
+    const body = linhas.map(l => '+ ' + l.padEnd(inner) + ' +').join('\n');
+    return `<pre class="obs-box">${titleBar}\n${body}\n${sepBar}</pre>`;
+  }
 
   const itensHtml = (p.itens||[]).map(i => {
     const val = 'R$ ' + (i.preco * i.qty).toFixed(2).replace('.', ',');
-    const obs = i.obs ? `<div class="adicional">   ${i.obs}</div>` : '';
     const adics = (i.adicionais||[]).map(a => {
-      const aVal = a.preco > 0 ? `<span class="item-val">R$ ${(a.preco * a.qty).toFixed(2).replace('.', ',')}</span>` : '';
-      return `<div class="row-item"><span class="item-desc">   (${a.qty}) ${a.nome}</span>${aVal}</div>`;
+      const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * a.qty).toFixed(2).replace('.', ',')}</span>` : '';
+      return `<div class="adic"><span>+ (${a.qty}) ${a.nome}</span>${aVal}</div>`;
     }).join('');
-    return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${obs}${adics}`;
+    const obs = i.obs ? obsBox(i.obs) : '';
+    return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
   }).join('');
 
+  // Endereço — só para delivery
   let enderecoHtml = '';
   if (p.entrega === 'delivery') {
-    const rua    = p.cliente?.rua    || '';
-    const bairro = p.cliente?.bairro || '';
-    const comp   = p.cliente?.comp   || '';
-    const ref    = p.cliente?.ref    || '';
-    enderecoHtml = `<div class="sep">${S2}</div>
-<div>Endere&ccedil;o: ${rua}${bairro ? ', ' + bairro : ''}</div>
-${comp ? '<div>' + comp + '</div>' : ''}
-${ref  ? '<div>Ref: ' + ref + '</div>' : ''}`;
+    const c = p.cliente || {};
+    const linhas = [];
+    const ruaNum = (c.rua || '') + (c.numero ? ', ' + c.numero : '');
+    if (ruaNum)   linhas.push('End: ' + ruaNum);
+    if (c.comp)   linhas.push('Comp: ' + c.comp);
+    if (c.ref)    linhas.push('Ref: ' + c.ref);
+    if (c.bairro) linhas.push('Bairro: ' + c.bairro);
+    if (c.cidade) linhas.push('Cidade: ' + c.cidade);
+    if (c.cep)    linhas.push('CEP: ' + c.cep);
+    enderecoHtml = linhas.map(l => `<div class="cli">${l}</div>`).join('');
   }
 
-  const formaPag = (p.pagamento||'').toUpperCase();
-  let pagamentoExtra = '';
-  if (p.pagamento === 'dinheiro' && p.troco > 0) {
-    pagamentoExtra = `<div>Troco para: R$ ${p.troco.toFixed(2).replace('.', ',')}</div>`;
-  } else if (p.pagamento === 'cartao' || p.pagamento === 'credito' || p.pagamento === 'debito') {
-    pagamentoExtra = '<div>* Cobrar do cliente *</div>';
+  // Pagamento
+  const formaPag = (p.pagamento || '').toUpperCase() || '-';
+  const jaPago   = p.pago === true || p.pixStatus === 'pago' || (p.pagamento === 'pix' && p.pixStatus === 'pago');
+  const trocoVal = (p.pagamento === 'dinheiro' && p.troco > 0) ? p.troco : 0;
+  const totalNum = p.total || 0;
+
+  let pagBlocoHtml = '';
+  if (jaPago) {
+    pagBlocoHtml = `
+      <div class="cli">${formaPag}</div>
+      <div class="cli">Pagamento ja realizado</div>
+      <div class="centro-bold">* Nao cobrar do cliente *</div>`;
+  } else if (p.pagamento === 'dinheiro') {
+    pagBlocoHtml = `
+      <div class="cli">${formaPag}</div>
+      <div class="cli">Receber: R$ ${totalNum.toFixed(2).replace('.', ',')}</div>
+      ${trocoVal > 0 ? `<div class="cli">Troco para: R$ ${trocoVal.toFixed(2).replace('.', ',')}</div>` : ''}`;
+  } else if (['cartao','credito','debito'].includes(p.pagamento)) {
+    pagBlocoHtml = `
+      <div class="cli">${formaPag}</div>
+      <div class="cli">Cobrar: R$ ${totalNum.toFixed(2).replace('.', ',')}</div>
+      <div class="centro-bold">* Cobrar do cliente *</div>`;
+  } else {
+    pagBlocoHtml = `<div class="cli">${formaPag}</div>`;
   }
 
   const subtotal = (p.subtotal || p.total || 0).toFixed(2).replace('.', ',');
   const taxaVal  = p.taxaEntrega || 0;
   const taxaStr  = 'R$ ' + taxaVal.toFixed(2).replace('.', ',');
   const total    = (p.total || 0).toFixed(2).replace('.', ',');
-  const nomeLoja = config.nome || 'JOEY';
+
+  const qtdPedidos = (typeof contarPedidosCliente === 'function')
+    ? contarPedidosCliente(p.cliente?.tel)
+    : 0;
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;color:#000!important;font-weight:900;-webkit-text-stroke:0.5px #000}
+*{margin:0;padding:0;box-sizing:border-box;color:#000;font-weight:bold}
 @page{margin:0;size:80mm auto}
 @media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-body{font-family:'Courier New',Courier,monospace;font-size:16px;width:80mm;padding:4mm;color:#000!important;background:#fff!important;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-filter:contrast(200%);filter:contrast(200%)}
-.sep{white-space:pre;line-height:1.4;color:#000!important}
-.tipo-entrega{font-size:16px;font-weight:900;text-align:center;color:#000!important;padding:2px 0}
-.loja-info{font-size:16px;color:#000!important;margin-top:2px}
-.pedido-bloco{text-align:center;margin:6px 0 4px}
-.pedido-num{font-size:32px;font-weight:900;color:#000!important}
-.secao-titulo{font-weight:900;font-size:16px;color:#000!important;margin-bottom:2px}
-.row-item{display:flex;justify-content:space-between;font-size:16px;font-weight:900;color:#000!important}
-.item-desc{flex:1;margin-right:4px}
+body{font-family:'Courier New',Courier,monospace;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.line{font-family:'Courier New',Courier,monospace;font-size:13px;text-align:center;letter-spacing:0;white-space:pre}
+.tipo-ent{font-size:18px;font-weight:900;text-align:center;letter-spacing:1px;margin:3px 0}
+.info{font-size:13px;text-align:center}
+.loja{font-size:15px;font-weight:900;text-align:center;letter-spacing:1px;margin-top:2px}
+.ped-label{font-size:12px;text-align:center}
+.ped-num{font-size:30px;font-weight:900;text-align:center;letter-spacing:2px;margin:2px 0}
+.itens-label{font-size:14px;font-weight:900;margin-bottom:3px}
+.row-item{display:flex;justify-content:space-between;font-size:14px;font-weight:bold;margin:2px 0}
+.item-desc{flex:1;margin-right:4px;word-break:break-word}
 .item-val{white-space:nowrap}
-.adicional{font-size:14px;color:#000!important;padding-left:12px}
-.row-val{display:flex;justify-content:space-between;font-size:16px;color:#000!important}
-.row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;color:#000!important}
-.rodape{text-align:center;font-size:14px;color:#000!important}
+.adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
+.obs-box{font-family:'Courier New',Courier,monospace;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
+.cli{font-size:13px;margin:1px 0}
+.row-val{display:flex;justify-content:space-between;font-size:14px;margin:1px 0}
+.row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;margin-top:4px}
+.pag-label{font-size:14px;font-weight:900;margin-bottom:2px}
+.centro-bold{font-size:14px;font-weight:900;text-align:center;margin-top:2px}
+.rodape{text-align:center;font-size:12px;margin-top:4px}
 </style></head><body>
 
-<div class="sep">${S1}</div>
-<div class="tipo-entrega">${tipoEntrega}</div>
-<div class="sep">${S1}</div>
+<div class="line">${eq}</div>
+<div class="line">${eq}</div>
+<div class="tipo-ent">${tipoEntrega}</div>
+<div class="line">${eq}</div>
+<div class="line">${eq}</div>
 
-<div class="loja-info">${data} ${hora}</div>
-<div class="loja-info">${nomeLoja}</div>
+<div class="info">${data} ${hora}</div>
+${previsaoHtml}
+<div class="loja">HAMBURGUERIA JOEY</div>
+<div class="line">${dash}</div>
 
-<div class="pedido-bloco"><span class="pedido-num">Pedido ${p.id}</span></div>
+<div class="ped-label">Pedido</div>
+<div class="ped-num">#${p.id}</div>
+<div class="line">${dash}</div>
 
-<div class="sep">${S2}</div>
-<div class="secao-titulo">Itens</div>
+<div class="itens-label">Itens</div>
 ${itensHtml}
-<div class="sep">${S2}</div>
+<div class="line">${dash}</div>
 
-<div>Nome: ${p.cliente?.nome||'-'}</div>
-<div>Telefone: ${p.cliente?.tel||'-'}</div>
-
+<div class="cli">Nome: ${p.cliente?.nome || '-'}</div>
+<div class="cli">Tel: ${p.cliente?.tel || '-'}</div>
+<div class="cli">Pedidos do cliente: ${qtdPedidos}</div>
 ${enderecoHtml}
+<div class="line">${dash}</div>
 
-<div class="sep">${S2}</div>
-<div class="secao-titulo">Pagamento:</div>
-<br>
-<div>Forma de Pagamento: ${formaPag}</div>
-${pagamentoExtra}
-<div class="sep">${S2}</div>
+<div class="pag-label">Pagamento:</div>
+${pagBlocoHtml}
+<div class="line">${dash}</div>
 
 <div class="row-val"><span>Subtotal:</span><span>R$ ${subtotal}</span></div>
-<div class="row-val"><span>Taxa entrega:</span><span>${taxaStr}</span></div>
-<div class="row-total"><span>Total:</span><span>R$ ${total}</span></div>
-<div class="sep">${S1}</div>
+${taxaVal > 0 ? `<div class="row-val"><span>Taxa de entrega:</span><span>${taxaStr}</span></div>` : ''}
+<div class="row-total"><span>TOTAL:</span><span>R$ ${total}</span></div>
+<div class="line">${dash}</div>
 
 <div class="rodape">hamburgueriajoey.com.br</div>
-<div class="sep">${S1}</div>
 
 </body></html>`;
 }
@@ -2003,12 +2239,13 @@ async function _dispararHtml(html) {
 // CSS base compartilhado entre todos os templates térmicos
 function _cssTermico() {
   return `<style>
-*{margin:0;padding:0;box-sizing:border-box;color:#000!important;font-weight:900;-webkit-text-stroke:0.4px #000}
+*{margin:0;padding:0;box-sizing:border-box;color:#000!important;font-weight:900}
 @page{margin:0;size:80mm auto}
 @media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-body{font-family:'Courier New',Courier,monospace;font-size:15px;width:80mm;padding:4mm;color:#000!important;background:#fff!important;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-filter:contrast(200%);filter:contrast(200%)}
+body{font-family:Verdana,Geneva,sans-serif;font-size:15px;width:80mm;padding:4mm;color:#000!important;background:#fff!important;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+hr.d{border:none;border-top:1px dashed #000;margin:4px 0}hr.s{border:none;border-top:2px solid #000;margin:4px 0}
 .sp{white-space:pre}.c{text-align:center}.g{font-size:20px;font-weight:900;text-align:center}
-.sub{padding-left:14px;font-size:13px}.tot{font-size:17px;font-weight:900}
+.sub{padding-left:12px;font-size:13px;font-weight:900}.tot{font-size:20px;font-weight:900}
 </style>`;
 }
 
@@ -2197,7 +2434,7 @@ function enviarWppProntoRetirada(p) {
   notify(`📱 WhatsApp "pronto para retirar" enviado para ${nome}!`);
 }
 
-function cancelarPedido(id) {
+async function cancelarPedido(id) {
   if (!confirm(`Cancelar pedido ${id}?`)) return;
   const p = pedidos.find(x => x.id === id);
   if (p) {
@@ -2205,6 +2442,26 @@ function cancelarPedido(id) {
     if (!isMesa) _dispararNotif('cancelado', p);
     p.status = 'cancelado';
     renderKanban();
+
+    if (isMesa && p.mesa) {
+      const mesaId = String(p.mesa);
+      const temOutroAtivo = pedidos.some(x =>
+        x.id !== id &&
+        String(x.mesa) === mesaId &&
+        x.status !== 'cancelado' &&
+        x.status !== 'finalizado'
+      );
+      if (!temOutroAtivo) {
+        try {
+          await db.collection('mesas').doc(mesaId).set(
+            { status: 'livre', pedidos: [], total: 0 },
+            { merge: false }
+          );
+        } catch (e) {
+          console.error('[Mesa] Erro ao liberar mesa:', e);
+        }
+      }
+    }
   }
   atualizarStatusFb(id, 'cancelado');
   notify('Pedido cancelado.', 'warning');
@@ -2260,17 +2517,43 @@ function openOrderModal(id) {
             ? `<button class="btn" style="flex:1;background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;border:1px solid rgba(100,100,100,.2)" disabled>🔒 Aguardando pagamento PIX</button>`
             : `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Confirmar → Produção</button>`)
         : p.status==='producao'
-        ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">🚀 Marcar pronto</button>`
+        ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">🚀 Marcar pronto</button>
+           <button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${p.id}')">✏️ Editar pedido</button>`
         : p.status==='pronto'
         ? ((p.tipo==='mesa'||p.origem==='salao')
             ? `<button class="btn btn-primary" style="flex:1;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3)" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Entregue na mesa</button>`
             : `<button class="btn btn-primary" style="flex:1;background:rgba(167,139,250,.2);color:#a78bfa;border:1px solid rgba(167,139,250,.3)" onclick="avancarStatus('${p.id}');closeOrderModal()">🛵 Enviar para entrega + avisar cliente</button>`)
         : ''}
       ${!['entregue','cancelado'].includes(p.status)?`<button class="btn btn-danger" onclick="cancelarPedido('${p.id}');closeOrderModal()">Cancelar</button>`:''}
+      ${['entregue','cancelado','finalizado'].includes(p.status)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${p.id}')">🔁 Pedir novamente</button>`:''}
     </div>`;
   document.getElementById('orderModal').classList.add('show');
 }
 function closeOrderModal(){document.getElementById('orderModal').classList.remove('show')}
+
+function pedirNovamente(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p) return;
+  closeOrderModal();
+  abrirNovoPedidoModal();
+  if (p.cliente?.nome) document.getElementById('npCliente').value  = p.cliente.nome;
+  if (p.cliente?.tel)  document.getElementById('npTelefone').value = p.cliente.tel;
+  _npCart = (p.itens || []).map(i => ({
+    id:         i.id,
+    nome:       i.nome      || '—',
+    preco:      i.preco     || 0,
+    qty:        i.qty       || 1,
+    obs:        i.obs       || '',
+    emoji:      i.emoji     || '🍽️',
+    adicionais: i.adicionais ? [...i.adicionais] : [],
+    ...(i.precoTotal != null ? { precoTotal: i.precoTotal } : {}),
+  }));
+  const tipoMap = { delivery: 'npTipoDelivery', local: 'npTipoLocal', retirada: 'npTipoParaLevar' };
+  const btnEl = document.getElementById(tipoMap[p.entrega] || 'npTipoParaLevar');
+  if (btnEl) npSetTipo(p.entrega || 'retirada', btnEl);
+  npRenderCart();
+}
+
 function enviarWppCliente(id) {
   const p=pedidos.find(x=>x.id===id); if (!p?.cliente?.tel) return;
   const tel=p.cliente.tel.replace(/\D/g,'');
@@ -2281,10 +2564,60 @@ function enviarWppCliente(id) {
 const EMOJI_CAT_PAINEL = {Pizza:'🍕',Burger:'🍔',Bebida:'🥤','Porção':'🍟',Sobremesa:'🍰',Outro:'🍽️',Outros:'🍽️'};
 let cardapioFiltroCategoria = 'Todos';
 
+function _sortCats(cats) {
+  return [...cats].sort((a, b) => {
+    const ia = catOrdem.indexOf(a), ib = catOrdem.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b, 'pt');
+    if (ia === -1) return 1; if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+function _sortProdsCat(itens, cat) {
+  const ord = (prodOrdem[cat] || []).map(String);
+  return [...itens].sort((a, b) => {
+    const ia = ord.indexOf(String(a.id)), ib = ord.indexOf(String(b.id));
+    if (ia === -1 && ib === -1) return (a.name||'').localeCompare(b.name||'', 'pt');
+    if (ia === -1) return 1; if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+function moverCategoria(cat, dir) {
+  const allCats = [...new Set(recipes.map(r => r.categoria || 'Outros'))];
+  const sorted = _sortCats(allCats);
+  const idx = sorted.indexOf(cat);
+  if (idx === -1) return;
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= sorted.length) return;
+  [sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]];
+  catOrdem = sorted;
+  renderCatFilters();
+  renderCardapioEditor();
+  db.doc('config/catOrdem').set({ ordem: sorted })
+    .catch(e => notify('Erro ao salvar ordem: ' + e.message, 'error'));
+}
+
+function moverProduto(id, cat, dir) {
+  // Usa TODOS os recipes da categoria (não só os filtrados na tela)
+  const itens = recipes.filter(r => (r.categoria || 'Outros') === cat);
+  const sorted = _sortProdsCat(itens, cat);
+  const ids = sorted.map(r => String(r.id));
+  const idx = ids.indexOf(String(id));
+  if (idx === -1) return;
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= ids.length) return;
+  [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
+  prodOrdem = { ...prodOrdem, [cat]: ids };
+  renderCardapioEditor();
+  db.doc('config/prodOrdem').set({ [cat]: ids }, { merge: true })
+    .catch(e => notify('Erro ao salvar ordem: ' + e.message, 'error'));
+}
+
 function renderCatFilters() {
   const row = document.getElementById('catFilterRow');
   if (!row) return;
-  const cats = [...new Set(recipes.map(r => r.categoria || 'Outros'))];
+  const cats = _sortCats([...new Set(recipes.map(r => r.categoria || 'Outros'))]);
   const todos = ['Todos', ...cats];
   row.innerHTML = todos.map(c => {
     const active = cardapioFiltroCategoria === c;
@@ -2298,6 +2631,8 @@ function setCatFilter(cat) {
   renderCatFilters();
   renderCardapioEditor();
 }
+
+const _btnMover = 'background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;display:block;width:100%;text-align:center;';
 
 function renderCardapioEditor() {
   const el = document.getElementById('cardapioEditor');
@@ -2314,12 +2649,21 @@ function renderCardapioEditor() {
     el.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text3)">Nenhum produto encontrado${q ? ` para "<strong style="color:var(--text2)">${q}</strong>"` : ''}.</div>`;
     return;
   }
-  const cats = [...new Set(recipesFiltrados.map(r => r.categoria || 'Outros'))];
+  const allSortedCats = _sortCats([...new Set(recipes.map(r => r.categoria || 'Outros'))]);
+  const cats = _sortCats([...new Set(recipesFiltrados.map(r => r.categoria || 'Outros'))]);
+  const showCatBtns = !q && cardapioFiltroCategoria === 'Todos';
   let html = '';
-  cats.forEach(cat => {
-    const itens = recipesFiltrados.filter(r => (r.categoria || 'Outros') === cat);
-    html += `<div class="section-lbl">${cat} <span style="font-weight:400;color:var(--text3)">(${itens.filter(r=>catalogoStatusMap[r.id]?.ativo).length}/${itens.length} ativos)</span></div>`;
-    itens.forEach(r => {
+  cats.forEach((cat, catIdx) => {
+    const isFirstCat = catIdx === 0, isLastCat = catIdx === cats.length - 1;
+    const allIdx = allSortedCats.indexOf(cat);
+    const itens = _sortProdsCat(recipesFiltrados.filter(r => (r.categoria || 'Outros') === cat), cat);
+    const catBtns = showCatBtns ? `
+      <span style="margin-left:auto;display:flex;gap:2px;align-items:center">
+        <button onclick="moverCategoria('${cat}',-1)" ${allIdx===0?'disabled':''} title="Mover categoria para cima" style="${_btnMover}opacity:${allIdx===0?.25:1}">⬆️</button>
+        <button onclick="moverCategoria('${cat}',1)" ${allIdx===allSortedCats.length-1?'disabled':''} title="Mover categoria para baixo" style="${_btnMover}opacity:${allIdx===allSortedCats.length-1?.25:1}">⬇️</button>
+      </span>` : '';
+    html += `<div class="section-lbl" style="display:flex;align-items:center">${cat} <span style="font-weight:400;color:var(--text3);margin-left:6px">(${itens.filter(r=>catalogoStatusMap[r.id]?.ativo).length}/${itens.length} ativos)</span>${catBtns}</div>`;
+    itens.forEach((r, pIdx) => {
       const ativo   = catalogoStatusMap[r.id]?.ativo === true;
       const fotoUrl = catalogoStatusMap[r.id]?.foto || null;
       const margem  = (r.price||0) - (r.cost||0);
@@ -2327,6 +2671,7 @@ function renderCardapioEditor() {
       const thumbHtml = fotoUrl
         ? `<img src="${fotoUrl}" alt="">`
         : `<span style="font-size:1.4rem">${r.emoji||'🍽️'}</span>`;
+      const catEsc = cat.replace(/'/g, "\\'");
       html += `
         <div class="prod-row" style="opacity:${ativo?1:.45};transition:opacity .2s">
           <div class="prod-thumb" onclick="_abrirUploadFoto('${r.id}')" title="${fotoUrl?'Trocar foto':'Adicionar foto'}">${thumbHtml}</div>
@@ -2348,6 +2693,10 @@ function renderCardapioEditor() {
               <input type="checkbox" ${ativo?'checked':''} onchange="toggleReceita('${r.id}',this.checked)">
               <span class="toggle-slider"></span>
             </label>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+            <button onclick="moverProduto('${r.id}','${catEsc}',-1)" ${pIdx===0?'disabled':''} title="Mover produto para cima" style="${_btnMover}opacity:${pIdx===0?.25:1}">⬆️</button>
+            <button onclick="moverProduto('${r.id}','${catEsc}',1)" ${pIdx===itens.length-1?'disabled':''} title="Mover produto para baixo" style="${_btnMover}opacity:${pIdx===itens.length-1?.25:1}">⬇️</button>
           </div>
         </div>`;
     });
@@ -2776,7 +3125,7 @@ const FISCAL_DEFAULTS = {
   'outro':  { ncm: '21069090', cest: '',        cfop: '5101', csosn: '102', cst_pis: '07', cst_cofins: '07', cclass_trib: '200047', ibs_estadual: 0.1, ibs_municipal: 0, cbs: 0.9 },
 };
 
-const CATS_FC = [
+const CATS_FC_FALLBACK = [
   { key: 'Pizza',  id: 'pizza'  },
   { key: 'Bebida', id: 'bebida' },
   { key: 'Burger', id: 'burger' },
@@ -2784,25 +3133,61 @@ const CATS_FC = [
   { key: 'Outro',  id: 'outro'  },
 ];
 
+let CATS_FC = [...CATS_FC_FALLBACK];
+
+function _slugCategoria(nome) {
+  return String(nome || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'cat';
+}
+
+async function carregarCategoriasGestao() {
+  try {
+    const snap = await dbJoey.collection('categorias').get();
+    const lista = [];
+    snap.forEach(d => {
+      const nome = ((d.data() || {}).nome || '').trim();
+      if (nome) lista.push({ key: nome, id: _slugCategoria(nome) });
+    });
+    if (!lista.length) { CATS_FC = [...CATS_FC_FALLBACK]; return; }
+    const seen = new Set();
+    const dedup = [];
+    lista.forEach(c => {
+      let id = c.id, n = 1;
+      while (seen.has(id)) { id = c.id + '_' + (++n); }
+      seen.add(id);
+      dedup.push({ key: c.key, id });
+    });
+    dedup.sort((a, b) => a.key.localeCompare(b.key, 'pt'));
+    CATS_FC = dedup;
+  } catch (e) {
+    console.warn('[carregarCategoriasGestao] falhou — usando fallback fixo:', e.message);
+    CATS_FC = [...CATS_FC_FALLBACK];
+  }
+}
+
 function fiscalDefaultPorCategoria(cat) {
   const key = (cat || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   if (FISCAL_DEFAULTS[key]) return { ...FISCAL_DEFAULTS[key] };
   for (const k of Object.keys(FISCAL_DEFAULTS)) {
     if (key.includes(k) || k.includes(key)) return { ...FISCAL_DEFAULTS[k] };
   }
-  return { ncm: '2106.90.90', cfop: '5102', csosn: '400' };
+  return { ncm: '21069090', cfop: '5101', csosn: '102', cst_pis: '07', cst_cofins: '07' };
 }
 
 function setFiscalTab(tab) {
   fiscalAba = tab;
-  ['config','categorias','notas'].forEach(t => {
+  ['config','categorias','notas','verificacao'].forEach(t => {
     const btn = document.getElementById('fTab-' + t);
     const cnt = document.getElementById('fTabContent-' + t);
     if (btn) btn.classList.toggle('active', t === tab);
     if (cnt) cnt.style.display = t === tab ? '' : 'none';
   });
-  if (tab === 'categorias') carregarFiscalCategorias();
+  if (tab === 'categorias') {
+    carregarCategoriasGestao().then(() => carregarFiscalCategorias());
+  }
   if (tab === 'notas') { initNfPeriodo(); carregarNotasFiscais(); renderRelatorioNotas(); }
+  if (tab === 'verificacao') carregarVerificacaoFiscal();
 }
 
 function _fselect(id, val, opts) {
@@ -2822,6 +3207,9 @@ function setFiscalCatSubTab(tab) {
     if (btn) btn.classList.toggle('active', t === tab);
     if (cnt) cnt.style.display = t === tab ? '' : 'none';
   });
+  if (tab === 'cats') {
+    carregarCategoriasGestao().then(() => carregarFiscalCategorias());
+  }
   if (tab === 'prods') renderFiscalProdutos();
 }
 
@@ -2864,7 +3252,8 @@ function hideFcatTip() {
 function renderFiscalCategorias() {
   const container = document.getElementById('fcatList');
   if (!container) return;
-  const COL = '90px 88px 74px 90px 74px 104px 104px 88px 64px 64px 64px';
+  const COL   = '160px 110px 110px 130px 130px 130px 130px 100px 70px 70px 70px';
+  const MIN_W = '1310px';
   const th = (label, tipKey) => {
     const q = tipKey
       ? ` <span onmouseenter="showFcatTip(this,'${tipKey}')" onmouseleave="hideFcatTip()" style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:rgba(255,107,53,.18);color:#ff6b35;font-size:9px;font-weight:900;cursor:default;flex-shrink:0;line-height:1">?</span>`
@@ -2872,10 +3261,11 @@ function renderFiscalCategorias() {
     return `<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;display:flex;align-items:center;gap:3px">${label}${q}</div>`;
   };
   let html = `<p style="font-size:13px;color:var(--text2);margin-bottom:14px">Valores aplicados automaticamente na emissão da NFCe por categoria.</p>
-  <div style="display:grid;grid-template-columns:${COL};gap:8px;align-items:center;padding-bottom:10px;margin-bottom:4px;border-bottom:1px solid var(--border);min-width:960px">
-    ${th('Categoria')}${th('NCM','ncm')}${th('CEST','cest')}${th('CFOP','cfop')}${th('CSOSN','csosn')}${th('CST PIS','cst_pis')}${th('CST COFINS','cst_cofins')}${th('CClass','cclass')}${th('IBS Est','ibs_est')}${th('IBS Mun','ibs_mun')}${th('CBS %','cbs')}
-  </div><div style="display:flex;flex-direction:column;gap:6px;min-width:960px">`;
-  CATS_FC.forEach(({ key, id }) => {
+  <div style="min-width:${MIN_W};border:1px solid var(--border);border-radius:10px;background:var(--bg3)">
+    <div style="display:grid;grid-template-columns:${COL};gap:10px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg3);z-index:2;border-radius:10px 10px 0 0">
+      ${th('Categoria')}${th('NCM','ncm')}${th('CEST','cest')}${th('CFOP','cfop')}${th('CSOSN','csosn')}${th('CST PIS','cst_pis')}${th('CST COFINS','cst_cofins')}${th('CClass','cclass')}${th('IBS Est','ibs_est')}${th('IBS Mun','ibs_mun')}${th('CBS %','cbs')}
+    </div>`;
+  CATS_FC.forEach(({ key, id }, idx) => {
     const def        = fiscalDefaultPorCategoria(key);
     const sv         = fiscalCategorias[key] || {};
     const ncm        = sv.ncm         !== undefined ? sv.ncm         : def.ncm;
@@ -2888,18 +3278,20 @@ function renderFiscalCategorias() {
     const ibs_est    = sv.ibs_estadual!== undefined ? sv.ibs_estadual: (sv.ibs     !== undefined ? sv.ibs     : (def.ibs_estadual ?? 0.1));
     const ibs_mun    = sv.ibs_municipal!==undefined ? sv.ibs_municipal:(def.ibs_municipal ?? 0);
     const cbs        = sv.cbs         !== undefined ? sv.cbs         : (def.cbs         ?? 0.9);
-    html += `<div style="display:grid;grid-template-columns:${COL};gap:8px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;transition:background .15s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='var(--bg3)'">
-      <div style="font-size:13px;color:var(--text);font-weight:600">${key}</div>
-      <input class="fi" style="padding:7px 6px;font-size:12px;width:100%;font-family:monospace" id="fcat-ncm-${id}"        value="${ncm}"        placeholder="21069090" maxlength="8" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,8)">
-      <input class="fi" style="padding:7px 6px;font-size:12px;width:100%;font-family:monospace" id="fcat-cest-${id}"       value="${cest}"        placeholder="—" maxlength="7" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,7)">
+    const isLast = idx === CATS_FC.length - 1;
+    const sep = isLast ? '' : 'border-bottom:1px solid var(--border);';
+    html += `<div style="display:grid;grid-template-columns:${COL};gap:10px;align-items:center;padding:18px 16px;${sep}transition:background .15s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='transparent'">
+      <div style="font-size:13px;color:var(--text);font-weight:600;line-height:1.35;overflow-wrap:break-word;word-break:break-word">${key}</div>
+      <input class="fi" style="padding:9px 8px;font-size:12px;width:100%;font-family:monospace" id="fcat-ncm-${id}"        value="${ncm}"        placeholder="21069090" maxlength="8" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,8)">
+      <input class="fi" style="padding:9px 8px;font-size:12px;width:100%;font-family:monospace" id="fcat-cest-${id}"       value="${cest}"        placeholder="—" maxlength="7" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,7)">
       ${_fselect('fcat-cfop-'     + id, cfop,       [['5101','5101 — Prod.'],['5102','5102 — Rev.'],['5405','5405 — ST']])}
-      ${_fselect('fcat-csosn-'    + id, csosn,      [['102','102'],['500','500']])}
+      ${_fselect('fcat-csosn-'    + id, csosn,      [['102','102 — Sem créd.'],['400','400 — Não trib.'],['500','500 — ST'],['101','101 — Com créd.'],['103','103 — Isento faixa'],['201','201 — ST c/ créd.'],['202','202 — ST s/ créd.'],['203','203 — ST isento faixa'],['300','300 — Imune'],['900','900 — Outros']])}
       ${_fselect('fcat-cst_pis-'  + id, cst_pis,    [['07','07 — Isenta'],['04','04 — Monof.']])}
       ${_fselect('fcat-cst_cofins-'+id, cst_cofins,  [['07','07 — Isenta'],['04','04 — Monof.']])}
-      <input class="fi" style="padding:7px 6px;font-size:12px;width:100%;font-family:monospace" id="fcat-cclass_trib-${id}" value="${cclass_trib}" placeholder="200047" maxlength="10">
-      <input class="fi" type="number" step="0.01" min="0" style="padding:7px 6px;font-size:12px;width:100%" id="fcat-ibs_estadual-${id}"  value="${ibs_est}">
-      <input class="fi" type="number" step="0.01" min="0" style="padding:7px 6px;font-size:12px;width:100%" id="fcat-ibs_municipal-${id}" value="${ibs_mun}">
-      <input class="fi" type="number" step="0.01" min="0" style="padding:7px 6px;font-size:12px;width:100%" id="fcat-cbs-${id}"           value="${cbs}">
+      <input class="fi" style="padding:9px 8px;font-size:12px;width:100%;font-family:monospace" id="fcat-cclass_trib-${id}" value="${cclass_trib}" placeholder="200047" maxlength="10">
+      <input class="fi" type="number" step="0.01" min="0" style="padding:9px 4px;font-size:12px;width:100%" id="fcat-ibs_estadual-${id}"  value="${ibs_est}">
+      <input class="fi" type="number" step="0.01" min="0" style="padding:9px 4px;font-size:12px;width:100%" id="fcat-ibs_municipal-${id}" value="${ibs_mun}">
+      <input class="fi" type="number" step="0.01" min="0" style="padding:9px 4px;font-size:12px;width:100%" id="fcat-cbs-${id}"           value="${cbs}">
     </div>`;
   });
   html += `</div>`;
@@ -2945,15 +3337,16 @@ function renderFiscalProdutos() {
   container.innerHTML = html;
 }
 
-function carregarFiscalCategorias() {
-  Promise.all([
-    db.doc('config/categoriasTributarias').get(),
-    db.doc('config/ncmProdutos').get(),
-  ]).then(([catSnap, ncmSnap]) => {
+async function carregarFiscalCategorias() {
+  try {
+    const [catSnap, ncmSnap] = await Promise.all([
+      db.doc('config/categoriasTributarias').get(),
+      db.doc('config/ncmProdutos').get(),
+    ]);
     fiscalCategorias  = catSnap.exists ? (catSnap.data() || {}) : {};
     fiscalNcmProdutos = ncmSnap.exists ? (ncmSnap.data() || {}) : {};
-    renderFiscalCategorias();
-  }).catch(() => renderFiscalCategorias());
+  } catch (e) { /* mantém valores anteriores */ }
+  renderFiscalCategorias();
 }
 
 function salvarFiscalCategorias() {
@@ -2981,6 +3374,160 @@ function salvarFiscalCategorias() {
   db.doc('config/categoriasTributarias').set(data)
     .then(() => notify('Categorias tributárias salvas!'))
     .catch(() => notify('Erro ao salvar.', 'error'));
+}
+
+// ── VERIFICAÇÃO FISCAL ──────────────────────────────────────────────────────
+
+function _classificarCategoriaFiscal(nome) {
+  const n = (nome || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/cerveja|vinho|vodka|gin|whisk|cachac|drink|alco/.test(n))                         return 'bebida_alcool';
+  if (/refrig|suco|agua|coca|guara|isoton|energet/.test(n))                              return 'bebida_naoalcool';
+  if (/pizza|burger|hambur|porcao|massa|refeic|lanche|sanduic|prato|comida|salgado|sobremesa|doce|acai/.test(n)) return 'alimento';
+  if (/bebida/.test(n))                                                                   return 'bebida_naoalcool';
+  return 'outro';
+}
+
+function _validarCategoriaFiscal(nome, cfg) {
+  const tipo   = _classificarCategoriaFiscal(nome);
+  const issues = [];
+
+  // NCM (8 dígitos)
+  const ncm = String(cfg.ncm || '').replace(/\D/g, '');
+  if (ncm.length !== 8) {
+    issues.push({ severity: 'erro', campo: 'NCM', msg: `Deve ter 8 dígitos (atual: ${ncm.length || 'vazio'})` });
+  } else if (tipo === 'alimento' && ncm !== '21069090') {
+    issues.push({ severity: 'aviso', campo: 'NCM', msg: `Esperado 21069090 para alimentos. Atual: ${ncm}` });
+  } else if (tipo === 'bebida_naoalcool' && !['22021000','22029000'].includes(ncm)) {
+    issues.push({ severity: 'aviso', campo: 'NCM', msg: `Esperado 22021000 ou 22029000 para bebidas não-alcoólicas. Atual: ${ncm}` });
+  } else if (tipo === 'bebida_alcool' && !['22030000','22089000'].includes(ncm)) {
+    issues.push({ severity: 'aviso', campo: 'NCM', msg: `Esperado 22030000 ou 22089000 para bebidas alcoólicas. Atual: ${ncm}` });
+  }
+
+  // CFOP
+  const cfop = String(cfg.cfop || '');
+  if (tipo === 'alimento' && !['5101','5102'].includes(cfop)) {
+    issues.push({ severity: 'aviso', campo: 'CFOP', msg: `Alimentos usam 5101 (produção própria) ou 5102 (revenda). Atual: ${cfop || 'vazio'}` });
+  } else if ((tipo === 'bebida_naoalcool' || tipo === 'bebida_alcool') && !['5405','5102'].includes(cfop)) {
+    issues.push({ severity: 'aviso', campo: 'CFOP', msg: `Bebidas industrializadas usam 5405 ou 5102. Atual: ${cfop || 'vazio'}` });
+  }
+
+  // CSOSN
+  const csosn = String(cfg.csosn || '');
+  const csosnValidos = ['101','102','103','201','202','203','300','400','500','900'];
+  if (!csosnValidos.includes(csosn)) {
+    issues.push({ severity: 'erro', campo: 'CSOSN', msg: `Valor inválido. Use ${csosnValidos.join(', ')}. Atual: ${csosn || 'vazio'}` });
+  }
+
+  // CST PIS / COFINS
+  const cstPis    = String(cfg.cst_pis    || cfg.pis    || '');
+  const cstCofins = String(cfg.cst_cofins || cfg.cofins || '');
+  if (tipo === 'alimento') {
+    if (cstPis    !== '07') issues.push({ severity: 'aviso', campo: 'CST PIS',    msg: `Alimentos devem usar 07 (isento). Atual: ${cstPis    || 'vazio'}` });
+    if (cstCofins !== '07') issues.push({ severity: 'aviso', campo: 'CST COFINS', msg: `Alimentos devem usar 07 (isento). Atual: ${cstCofins || 'vazio'}` });
+  } else if (tipo === 'bebida_naoalcool' || tipo === 'bebida_alcool') {
+    if (!['04','07'].includes(cstPis))    issues.push({ severity: 'aviso', campo: 'CST PIS',    msg: `Bebidas usam 04 (monofásico) ou 07 (isento). Atual: ${cstPis    || 'vazio'}` });
+    if (!['04','07'].includes(cstCofins)) issues.push({ severity: 'aviso', campo: 'CST COFINS', msg: `Bebidas usam 04 (monofásico) ou 07 (isento). Atual: ${cstCofins || 'vazio'}` });
+  }
+
+  return { tipo, issues };
+}
+
+async function carregarVerificacaoFiscal() {
+  await carregarCategoriasGestao();
+  try {
+    const catSnap = await db.doc('config/categoriasTributarias').get();
+    fiscalCategorias = catSnap.exists ? (catSnap.data() || {}) : {};
+  } catch (e) { /* mantém valores anteriores */ }
+  renderVerificacaoFiscal();
+}
+
+function renderVerificacaoFiscal() {
+  const container = document.getElementById('fTabContent-verificacao');
+  if (!container) return;
+
+  const cats = CATS_FC || [];
+  if (!cats.length) {
+    container.innerHTML = '<p style="color:var(--text2);font-size:13px;padding:20px">Nenhuma categoria carregada.</p>';
+    return;
+  }
+
+  const TIPO_LABEL = {
+    alimento:         '🍕 Alimento',
+    bebida_naoalcool: '🥤 Bebida não-alcoólica',
+    bebida_alcool:    '🍺 Bebida alcoólica',
+    outro:            '🍽️ Outro',
+  };
+
+  const resultados = cats.map(({ key }) => {
+    const cfg = fiscalCategorias[key] || fiscalDefaultPorCategoria(key);
+    const { tipo, issues } = _validarCategoriaFiscal(key, cfg);
+    let status = 'ok';
+    if (issues.some(i => i.severity === 'erro')) status = 'erro';
+    else if (issues.some(i => i.severity === 'aviso')) status = 'aviso';
+    return { key, tipo, issues, status };
+  });
+
+  const total      = resultados.length;
+  const okCount    = resultados.filter(r => r.status === 'ok').length;
+  const avisoCount = resultados.filter(r => r.status === 'aviso').length;
+  const erroCount  = resultados.filter(r => r.status === 'erro').length;
+
+  const metricCard = (val, label, cor) =>
+    `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+       <div style="font-size:24px;font-weight:700;color:${cor}">${val}</div>
+       <div style="font-size:11px;color:var(--text2);margin-top:2px">${label}</div>
+     </div>`;
+
+  const STATUS_BADGE = {
+    ok:    { label: '✓ Correto',  bg: 'rgba(52,211,153,.15)', border: 'rgba(52,211,153,.35)', color: '#34d399' },
+    aviso: { label: '⚠ Atenção',  bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', color: '#f59e0b' },
+    erro:  { label: '✕ Problema', bg: 'rgba(231,76,60,.15)',  border: 'rgba(231,76,60,.35)',  color: '#ff6b6b' },
+  };
+
+  // Ordena por gravidade (erro → aviso → ok)
+  const ordem = { erro: 0, aviso: 1, ok: 2 };
+  resultados.sort((a, b) => (ordem[a.status] - ordem[b.status]) || a.key.localeCompare(b.key, 'pt'));
+
+  const cardsHtml = resultados.map(r => {
+    const s = STATUS_BADGE[r.status];
+    const issuesHtml = r.issues.length
+      ? '<ul style="margin:10px 0 0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.6">'
+        + r.issues.map(i => {
+            const c = i.severity === 'erro' ? '#ff6b6b' : '#f59e0b';
+            return `<li style="margin-bottom:4px"><b style="color:${c}">${i.campo}:</b> ${i.msg}</li>`;
+          }).join('')
+        + '</ul>'
+      : '<div style="margin-top:10px;font-size:12px;color:#34d399">Todas as validações passaram ✓</div>';
+    return `
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.key}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${TIPO_LABEL[r.tipo] || TIPO_LABEL.outro}</div>
+          </div>
+          <div style="background:${s.bg};border:1px solid ${s.border};color:${s.color};font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0">${s.label}</div>
+        </div>
+        ${issuesHtml}
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Validação automática das configurações tributárias com base no tipo de cada categoria. Compare com o padrão da Receita e ajuste em "Categorias Tributárias" se necessário.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:18px">
+      ${metricCard(total,      'Total de categorias', 'var(--text)')}
+      ${metricCard(okCount,    'Corretas',            '#34d399')}
+      ${metricCard(avisoCount, 'Com atenção',         '#f59e0b')}
+      ${metricCard(erroCount,  'Com problema',        '#ff6b6b')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px">
+      ${cardsHtml}
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="btn btn-ghost" onclick="carregarVerificacaoFiscal()">↻ Atualizar verificação</button>
+      <button class="btn btn-primary" onclick="setFiscalTab('categorias')">🏷️ Ir para Categorias Tributárias</button>
+    </div>
+  `;
 }
 
 async function salvarNcmProduto(prodId, ncm) {
@@ -3017,6 +3564,15 @@ function maskCnpj(el) {
   el.value = v;
 }
 
+function maskTelFiscal(el) {
+  let v = el.value.replace(/\D/g,'').slice(0,11);
+  if (v.length > 6)      v = v.replace(/^(\d{2})(\d{5})(\d)/, '($1) $2-$3');
+  else if (v.length > 6) v = v.replace(/^(\d{2})(\d{4})(\d)/, '($1) $2-$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d)/, '($1) $2');
+  else if (v.length > 0) v = v.replace(/^(\d)/, '($1');
+  el.value = v;
+}
+
 function handleCertFile(input) {
   const nome = document.getElementById('fCertNome');
   if (nome && input.files[0]) nome.value = input.files[0].name;
@@ -3030,6 +3586,7 @@ function carregarFiscal() {
     set('fCnpj', f.cnpj); set('fRazaoSocial', f.razaoSocial); set('fNomeEstab', f.nomeEstab);
     set('fCep', f.cep); set('fRua', f.rua); set('fNumero', f.numero);
     set('fBairro', f.bairro); set('fCidade', f.cidade); set('fEstado', f.estado);
+    set('fTelefone', f.telefone); set('fPercTributos', f.percTributos);
     set('fRegime', f.regime); set('fIe', f.ie);
     set('fSerieNfce', f.serieNfce); set('fProxNfce', f.proxNfce); set('fIdCsc', f.idCsc);
     set('fCsc', f.csc); set('fMsgRodape', f.msgRodape);
@@ -3045,6 +3602,8 @@ function salvarFiscal() {
     cnpj: get('fCnpj'), razaoSocial: get('fRazaoSocial'), nomeEstab: get('fNomeEstab'),
     cep: get('fCep'), rua: get('fRua'), numero: get('fNumero'),
     bairro: get('fBairro'), cidade: get('fCidade'), estado: get('fEstado'),
+    telefone: get('fTelefone'),
+    percTributos: parseFloat(get('fPercTributos')) || 0,
     regime: get('fRegime'), ie: get('fIe'),
     serieNfce: parseInt(get('fSerieNfce')) || 1,
     proxNfce: parseInt(get('fProxNfce')) || 1,
@@ -3301,7 +3860,9 @@ async function emitirNfce(pedidoId) {
         total:     p.total     || 0,
         pagamento: p.pagamento || null,
         cpfCnpj,
-        cliente: (p.cliente && typeof p.cliente === 'object') ? p.cliente.nome : (p.cliente || null),
+        cliente:  (p.cliente && typeof p.cliente === 'object') ? p.cliente.nome : (p.cliente || null),
+        entrega:   p.entrega   || null,
+        troco:     p.troco     || 0,
       }),
     });
     const data = await resp.json();
@@ -3341,11 +3902,18 @@ function copiarLink(){
 let _npCart = [];
 let _npTipo = 'retirada';
 let _npTaxa = 0;
+let _npPagamento = '';
 
 function abrirNovoPedidoModal() {
   _npCart = [];
   _npTipo = 'retirada';
   _npTaxa = 0;
+  _npPagamento = '';
+  _npEnderecosAnteriores = [];
+  const ind = document.getElementById('npClienteIndicador');
+  if (ind) ind.style.display = 'none';
+  const endRow = document.getElementById('npEndAnteriorRow');
+  if (endRow) endRow.style.display = 'none';
   document.getElementById('npCliente').value  = '';
   document.getElementById('npTelefone').value = '';
   document.getElementById('npBusca').value    = '';
@@ -3357,6 +3925,9 @@ function abrirNovoPedidoModal() {
   document.getElementById('npMesa').value = '';
   document.querySelectorAll('.np-tipo-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('npTipoParaLevar').classList.add('active');
+  document.getElementById('npPagamentoSection').style.display = '';
+  document.querySelectorAll('#npPagamentoSection .np-tipo-btn').forEach(b => b.classList.remove('active'));
+  _npAtualizarBtnConfirmar();
   npRenderBusca();
   npRenderCart();
   document.getElementById('novoPedidoModal').classList.add('show');
@@ -3374,17 +3945,41 @@ function npSetTipo(tipo, btn) {
   document.getElementById('npMesaFields').style.display     = tipo === 'local'    ? '' : 'none';
   if (tipo === 'delivery') {
     npPopularBairros();
+    npRenderEnderecosAnt();
   } else {
     _npTaxa = 0;
     document.getElementById('npTaxaRow').style.display = 'none';
     npAtualizarTotalGlobal();
   }
   if (tipo !== 'local') document.getElementById('npMesa').value = '';
+  const precisaPag = tipo !== 'local';
+  document.getElementById('npPagamentoSection').style.display = precisaPag ? '' : 'none';
+  if (!precisaPag) {
+    _npPagamento = '';
+    document.querySelectorAll('#npPagamentoSection .np-tipo-btn').forEach(b => b.classList.remove('active'));
+  }
+  _npAtualizarBtnConfirmar();
+}
+
+function npSelecionarPagamento(pag, btn) {
+  _npPagamento = pag;
+  document.querySelectorAll('#npPagamentoSection .np-tipo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _npAtualizarBtnConfirmar();
+}
+
+function _npAtualizarBtnConfirmar() {
+  const btn = document.getElementById('npConfirmarBtn');
+  if (!btn) return;
+  const bloqueado = _npTipo !== 'local' && !_npPagamento;
+  btn.disabled       = bloqueado;
+  btn.style.opacity  = bloqueado ? '0.45' : '1';
+  btn.style.cursor   = bloqueado ? 'not-allowed' : 'pointer';
 }
 
 function npPopularBairros() {
   const sel    = document.getElementById('npBairro');
-  const bairros = config.bairros || [];
+  const bairros = (config.bairros || []).slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt'));
   sel.innerHTML = '<option value="">Selecionar bairro...</option>' +
     bairros.map(b =>
       `<option value="${b.nome}" data-taxa="${b.taxa}">${b.nome} — R$ ${(b.taxa||0).toFixed(2).replace('.',',')}</option>`
@@ -3475,7 +4070,7 @@ function npAdicionarItemDom(el) {
 }
 
 // ── sub-modal de detalhe do produto (adicionais + obs) ──
-let _npDetailProd = null, _npDetailQty = 1;
+let _npDetailProd = null, _npDetailQty = 1, _npAdics = [];
 
 function npAbrirDetalhe(el) {
   const row  = el.closest ? el.closest('[data-id]') : el;
@@ -3492,7 +4087,9 @@ function npAbrirDetalhe(el) {
     if (x && typeof x === 'object') return x;
     return adicionaisBiblioteca.find(a => String(a.id) === String(x));
   }).filter(Boolean);
+  _npAdics = adics;
 
+  const _npBtnSm = 'width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;line-height:1';
   document.getElementById('npDetalheTitle').textContent = nome;
   document.getElementById('npDetalheBody').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
@@ -3508,17 +4105,22 @@ function npAbrirDetalhe(el) {
     ${adics.length > 0 ? `
       <div class="fl" style="margin-bottom:8px">Adicionais</div>
       <div style="margin-bottom:18px">
-        ${adics.map(a => `
-          <label for="npadic-${a.id}"
-            style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--bg4);border:1px solid var(--border);border-radius:9px;margin-bottom:6px;cursor:pointer;transition:border-color .15s">
-            <input type="checkbox" id="npadic-${a.id}"
+        ${adics.map((a, ai) => `
+          <div id="npadic-row-${ai}"
+            style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--bg4);border:1px solid var(--border);border-radius:9px;margin-bottom:6px;transition:border-color .15s">
+            <input type="checkbox" id="npadic-${ai}"
               style="width:17px;height:17px;accent-color:var(--orange);cursor:pointer;flex-shrink:0"
-              onchange="this.closest('label').style.borderColor=this.checked?'rgba(255,107,53,.6)':'var(--border)';npAtualizarTotal()">
-            <span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">${a.nome}</span>
-            ${(a.preco||0) > 0
-              ? `<span style="font-size:12px;font-weight:700;color:var(--orange);flex-shrink:0">+R$ ${(a.preco||0).toFixed(2).replace('.',',')}</span>`
-              : `<span style="font-size:11px;color:var(--text3);flex-shrink:0">grátis</span>`}
-          </label>`).join('')}
+              onchange="npToggleAdic(${ai},this.checked)">
+            <span style="flex:1;font-size:13px;font-weight:500;color:var(--text);cursor:pointer" onclick="document.getElementById('npadic-${ai}').click()">${a.nome}</span>
+            <div id="npadic-qty-${ai}" style="display:none;align-items:center;gap:4px;flex-shrink:0">
+              <button onclick="npAdjAdic(${ai},-1)" style="${_npBtnSm}">−</button>
+              <span id="npadic-qtyval-${ai}" style="min-width:18px;text-align:center;font-size:12px;font-weight:700;color:var(--text)">1</span>
+              <button onclick="npAdjAdic(${ai},1)"  style="${_npBtnSm}">+</button>
+            </div>
+            <span id="npadic-price-${ai}" style="font-size:12px;font-weight:700;flex-shrink:0;color:${(a.preco||0)>0?'var(--orange)':'var(--text3)'}">
+              ${(a.preco||0)>0?'+R$ '+(a.preco||0).toFixed(2).replace('.',','):'grátis'}
+            </span>
+          </div>`).join('')}
       </div>` : ''}
     <div class="fg" style="margin-bottom:16px">
       <label class="fl" style="margin-bottom:5px">Observação <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">(opcional)</span></label>
@@ -3543,16 +4145,38 @@ function npAdjQty(delta) {
   npAtualizarTotal();
 }
 
+function npToggleAdic(ai, checked) {
+  const row    = document.getElementById('npadic-row-' + ai);
+  const qtyDiv = document.getElementById('npadic-qty-' + ai);
+  if (row)    row.style.borderColor = checked ? 'rgba(255,107,53,.6)' : 'var(--border)';
+  if (qtyDiv) qtyDiv.style.display  = checked ? 'flex' : 'none';
+  if (!checked) {
+    const qv = document.getElementById('npadic-qtyval-' + ai);
+    if (qv) qv.textContent = '1';
+  }
+  npAtualizarTotal();
+}
+
+function npAdjAdic(ai, delta) {
+  const qv = document.getElementById('npadic-qtyval-' + ai);
+  if (!qv) return;
+  const qty = Math.max(1, parseInt(qv.textContent || '1') + delta);
+  qv.textContent = qty;
+  const a = _npAdics[ai];
+  const priceEl = document.getElementById('npadic-price-' + ai);
+  if (priceEl && a && (a.preco || 0) > 0) priceEl.textContent = '+R$ ' + ((a.preco || 0) * qty).toFixed(2).replace('.', ',');
+  npAtualizarTotal();
+}
+
 function npAtualizarTotal() {
   if (!_npDetailProd) return;
   const preco = _npDetailProd.price || _npDetailProd.preco || 0;
-  const adics = (_npDetailProd.adicionais || []).map(x => {
-    if (x && typeof x === 'object') return x;
-    return adicionaisBiblioteca.find(a => String(a.id) === String(x));
-  }).filter(Boolean);
-  const extra = adics.reduce((s, a) => {
-    const c = document.getElementById('npadic-' + a.id);
-    return s + (c && c.checked ? (a.preco || 0) : 0);
+  const extra = _npAdics.reduce((s, a, ai) => {
+    const c  = document.getElementById('npadic-' + ai);
+    if (!c || !c.checked) return s;
+    const qv = document.getElementById('npadic-qtyval-' + ai);
+    const qty = qv ? parseInt(qv.textContent || '1') : 1;
+    return s + (a.preco || 0) * qty;
   }, 0);
   const el = document.getElementById('npDTotal');
   if (el) el.textContent = 'R$ ' + ((preco + extra) * _npDetailQty).toFixed(2).replace('.', ',');
@@ -3564,15 +4188,17 @@ function npConfirmarDetalhe() {
   const preco = prod.price || prod.preco || 0;
   const nome  = prod.name  || prod.nome  || '—';
   const emoji = EMOJI_CAT_PAINEL[prod.categoria || 'Outros'] || '🍽️';
-  const adics = (prod.adicionais || []).map(x => {
-    if (x && typeof x === 'object') return x;
-    return adicionaisBiblioteca.find(a => String(a.id) === String(x));
-  }).filter(Boolean);
-  const selectedAdics = adics
-    .filter(a => { const c = document.getElementById('npadic-' + a.id); return c && c.checked; })
-    .map(a => ({ id: a.id, nome: a.nome, preco: a.preco || 0 }));
+  const selectedAdics = _npAdics
+    .map((a, ai) => {
+      const c = document.getElementById('npadic-' + ai);
+      if (!c || !c.checked) return null;
+      const qv  = document.getElementById('npadic-qtyval-' + ai);
+      const qty = qv ? parseInt(qv.textContent || '1') : 1;
+      return { id: a.id, nome: a.nome, preco: a.preco || 0, qty };
+    })
+    .filter(Boolean);
   const obs      = (document.getElementById('npDObs')?.value || '').trim();
-  const adicsSum = selectedAdics.reduce((s, a) => s + a.preco, 0);
+  const adicsSum = selectedAdics.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
   const precoTotal = preco + adicsSum;
 
   const existente = _npCart.find(i =>
@@ -3618,7 +4244,7 @@ function npRenderCart() {
     const unitPrice = item.precoTotal != null ? item.precoTotal : item.preco;
     const sub = unitPrice * item.qty;
     const adicsHtml = (item.adicionais || []).length
-      ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${item.adicionais.map(a=>a.nome).join(', ')}</div>`
+      ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${item.adicionais.map(a=>(a.qty&&a.qty>1?a.qty+'x ':'')+a.nome).join(', ')}</div>`
       : '';
     const obsHtml = item.obs
       ? `<div style="font-size:11px;color:var(--text3);margin-top:1px;font-style:italic">📝 ${item.obs}</div>`
@@ -3641,8 +4267,119 @@ function npRenderCart() {
   npAtualizarTotalGlobal();
 }
 
+// =================== AUTO-BUSCA DE CLIENTE ===================
+let _npAutoBuscaTimer    = null;
+let _npEnderecosAnteriores = [];
+
+function _npNormTel(s) { return (s || '').replace(/\D/g, ''); }
+function _npNormTelCmp(s) { let d = _npNormTel(s); if (d.length === 13 && d.startsWith('55')) d = d.slice(2); return d; }
+
+function _npListarEnderecosAnteriores(tel) {
+  if (typeof pedidos === 'undefined' || !Array.isArray(pedidos)) return [];
+  const seen = new Set();
+  const out  = [];
+  const telCmp = _npNormTelCmp(tel);
+  const delivery = pedidos.filter(p => p.entrega === 'delivery' && (p.cliente?.rua || p.cliente?.bairro) && _npNormTelCmp(p.cliente?.tel) === telCmp);
+  console.log('[enderecos] tel:', telCmp, '| pedidos delivery com rua:', delivery.length);
+  delivery
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+    .forEach(p => {
+      const rua    = p.cliente.rua;
+      const bairro = p.cliente.bairro || '';
+      const key    = `${rua}|${bairro}`;
+      if (seen.has(key) || out.length >= 3) return;
+      seen.add(key);
+      out.push({ rua, bairro });
+    });
+  return out;
+}
+
+function _npAplicarEndereco(e) {
+  if (!e) return;
+  const inpRua = document.getElementById('npRua');
+  if (inpRua) inpRua.value = e.rua || '';
+  const bsel = document.getElementById('npBairro');
+  if (bsel && e.bairro) {
+    bsel.value = e.bairro;
+    if (bsel.value === e.bairro) npAtualizarTaxa();
+  }
+}
+
+function npRenderEnderecosAnt() {
+  const row = document.getElementById('npEndAnteriorRow');
+  const sel = document.getElementById('npEndAnteriorSelect');
+  if (!row || !sel) return;
+  if (!_npEnderecosAnteriores.length) { row.style.display = 'none'; return; }
+
+  // Único endereço → preenche direto, sem dropdown
+  if (_npEnderecosAnteriores.length === 1) {
+    _npAplicarEndereco(_npEnderecosAnteriores[0]);
+    row.style.display = 'none';
+    return;
+  }
+
+  // Múltiplos endereços → mostra dropdown para escolher
+  sel.innerHTML = '<option value="">📍 Selecionar endereço anterior...</option>' +
+    _npEnderecosAnteriores.map((e, i) =>
+      `<option value="${i}">${e.rua ? e.rua + (e.bairro ? ' — ' + e.bairro : '') : e.bairro}</option>`
+    ).join('');
+  sel.value = '';
+  row.style.display = '';
+}
+
+function npSelecionarEndAnterior() {
+  const sel = document.getElementById('npEndAnteriorSelect');
+  if (!sel || sel.value === '') return;
+  _npAplicarEndereco(_npEnderecosAnteriores[parseInt(sel.value, 10)]);
+}
+
+function npAutoBuscaCliente() {
+  clearTimeout(_npAutoBuscaTimer);
+  _npAutoBuscaTimer = setTimeout(_npFazerBuscaCliente, 350);
+}
+
+async function _npFazerBuscaCliente() {
+  const ind = document.getElementById('npClienteIndicador');
+  const tel = _npNormTel(document.getElementById('npTelefone').value);
+  if (tel.length < 8) { if (ind) ind.style.display = 'none'; return; }
+
+  try {
+    let data = null;
+    const id = tel.startsWith('55') ? tel : '55' + tel;
+    const snap = await db.collection('clientes').doc(id).get();
+    if (snap.exists) data = snap.data();
+
+    // Fallback: query por campo telefone (sem código país)
+    if (!data) {
+      const semCC = tel.startsWith('55') ? tel.slice(2) : tel;
+      const q = await db.collection('clientes').where('telefone', '==', semCC).limit(1).get();
+      if (!q.empty) data = q.docs[0].data();
+    }
+    if (!data) { if (ind) ind.style.display = 'none'; return; }
+
+    // Preenche nome se estiver vazio (não sobrescreve digitação do operador)
+    const inpNome = document.getElementById('npCliente');
+    if (inpNome && !inpNome.value.trim() && data.nome) inpNome.value = data.nome;
+
+    // Últimos 3 endereços únicos de delivery do cliente (operador escolhe no dropdown)
+    _npEnderecosAnteriores = _npListarEnderecosAnteriores(tel);
+    if (_npTipo === 'delivery') npRenderEnderecosAnt();
+
+    if (ind) {
+      const total = Number(data.totalPedidos || data.pedidosAnteriores) || 0;
+      const nome  = (data.nome || 'Cliente').split(' ')[0];
+      ind.textContent = `✅ Cliente encontrado — ${nome}${total ? `, ${total} pedidos` : ''}`;
+      ind.style.display = '';
+    }
+  } catch(e) {
+    console.warn('[npAutoBuscaCliente]', e);
+    if (ind) ind.style.display = 'none';
+  }
+}
+
 async function npConfirmar() {
   if (!_npCart.length) { notify('Adicione ao menos um item.', 'warning'); return; }
+  if (_npTipo !== 'local' && !_npPagamento) { notify('Selecione a forma de pagamento.', 'warning'); return; }
   const nome   = (document.getElementById('npCliente').value  || '').trim();
   const tel    = (document.getElementById('npTelefone').value || '').trim();
   const obs    = (document.getElementById('npObs').value      || '').trim();
@@ -3673,7 +4410,7 @@ async function npConfirmar() {
       subtotal, taxaEntrega: _npTaxa, total,
       entrega:   _npTipo,
       ...(mesaVal ? { mesa: mesaVal, mesaNome, tipo: 'mesa', origem: 'painel' } : { origem: 'painel' }),
-      pagamento: 'pendente',
+      pagamento: _npPagamento || 'pendente',
       status:    'producao',
       obs,
     };
@@ -3859,9 +4596,295 @@ function atualizarBtnNotificacao() {
 }
 
 // =================== AUTENTICAÇÃO ===================
+// ── EDITAR PEDIDO EM PRODUÇÃO ──
+let _epPedidoId = null, _epCart = [], _epTipo = '', _epTaxa = 0, _epPagamento = '';
+let _epAdicsDispCache = {}; // itemIdx → adicsDisp[]
+function _epAdicKey(a) { return (a && a.id != null) ? String(a.id) : (a?.nome || ''); }
+
+function abrirEditarPedido(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p) return;
+  closeOrderModal();
+  _epPedidoId  = id;
+  _epTipo      = p.entrega || 'local';
+  _epPagamento = (p.pagamento && p.pagamento !== 'pendente') ? p.pagamento : '';
+  _epCart      = (p.itens || []).map(i => ({ ...i, adicionais: (i.adicionais||[]).map(a=>({...a})) }));
+  document.getElementById('epModalTitle').textContent = `Editar Pedido #${id}`;
+
+  // Destaca o tipo de entrega correto
+  document.querySelectorAll('#epTipoSection .np-tipo-btn').forEach(b => b.classList.remove('active'));
+  const mapTipo = { delivery:'epTipoDelivery', retirada:'epTipoRetirada', local:'epTipoLocal' };
+  document.getElementById(mapTipo[_epTipo] || 'epTipoLocal')?.classList.add('active');
+
+  const endEl = document.getElementById('epEnderecoFields');
+  if (_epTipo === 'delivery') {
+    endEl.style.display = '';
+    document.getElementById('epRua').value = p.cliente?.rua || '';
+    epPopularBairros(p.cliente?.bairro || '');
+  } else {
+    endEl.style.display = 'none';
+    _epTaxa = 0;
+  }
+  document.querySelectorAll('#epPagSection .np-tipo-btn').forEach(b => b.classList.remove('active'));
+  const mapPag = { pix:'epPagPix', credito:'epPagCredito', debito:'epPagDebito', dinheiro:'epPagDinheiro' };
+  if (_epPagamento && mapPag[_epPagamento]) document.getElementById(mapPag[_epPagamento])?.classList.add('active');
+  document.getElementById('epBusca').value = '';
+  document.getElementById('epResultados').innerHTML = '';
+  epRenderCart();
+  document.getElementById('editarPedidoModal').classList.add('show');
+}
+
+function fecharEditarPedido() {
+  document.getElementById('editarPedidoModal').classList.remove('show');
+}
+
+function epSetTipo(tipo, btn) {
+  _epTipo = tipo;
+  document.querySelectorAll('#epTipoSection .np-tipo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const endEl = document.getElementById('epEnderecoFields');
+  if (tipo === 'delivery') {
+    endEl.style.display = '';
+    epPopularBairros(document.getElementById('epBairro').value || '');
+  } else {
+    endEl.style.display = 'none';
+    _epTaxa = 0;
+    epAtualizarTaxaRow();
+    epAtualizarTotal();
+  }
+}
+
+function epPopularBairros(bairroAtual) {
+  const sel = document.getElementById('epBairro');
+  sel.innerHTML = '<option value="">Selecionar bairro...</option>' +
+    (config.bairros || []).map(b =>
+      `<option value="${b.nome}" data-taxa="${b.taxa}"${b.nome === bairroAtual ? ' selected' : ''}>${b.nome} — R$ ${(b.taxa||0).toFixed(2).replace('.',',')}</option>`
+    ).join('');
+  const opt = sel.options[sel.selectedIndex];
+  _epTaxa = opt && opt.dataset.taxa && opt.value ? parseFloat(opt.dataset.taxa) || 0 : 0;
+  epAtualizarTaxaRow();
+  epAtualizarTotal();
+}
+
+function epAtualizarTaxa() {
+  const sel = document.getElementById('epBairro');
+  const opt = sel.options[sel.selectedIndex];
+  _epTaxa = opt && opt.dataset.taxa && opt.value ? parseFloat(opt.dataset.taxa) || 0 : 0;
+  epAtualizarTaxaRow();
+  epAtualizarTotal();
+}
+
+function epAtualizarTaxaRow() {
+  const row = document.getElementById('epTaxaRow');
+  if (_epTaxa > 0) {
+    row.style.display = '';
+    document.getElementById('epTaxaVal').textContent = 'R$ ' + _epTaxa.toFixed(2).replace('.', ',');
+  } else {
+    row.style.display = 'none';
+  }
+}
+
+function epSelecionarPagamento(pag, btn) {
+  _epPagamento = pag;
+  document.querySelectorAll('#epPagSection .np-tipo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function epRenderBusca() {
+  const termo = (document.getElementById('epBusca').value || '').toLowerCase().trim();
+  const wrap  = document.getElementById('epResultados');
+  if (!termo) { wrap.innerHTML = ''; return; }
+  const prods = recipes.filter(r => {
+    const ativo = catalogoStatusMap[r.id] !== undefined ? catalogoStatusMap[r.id].ativo : true;
+    return ativo && (r.name || r.nome || '').toLowerCase().includes(termo);
+  }).slice(0, 6);
+  if (!prods.length) { wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nenhum produto encontrado</div>'; return; }
+  wrap.innerHTML = prods.map(p => {
+    const nome  = p.name  || p.nome  || '—';
+    const preco = p.price || p.preco || 0;
+    const emoji = EMOJI_CAT_PAINEL[p.categoria || 'Outros'] || '🍽️';
+    return `<div onclick="epAdicionarItem('${p.id}')"
+      style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;cursor:pointer;transition:background .15s">
+      <span style="font-size:1.1rem;width:28px;text-align:center;flex-shrink:0">${emoji}</span>
+      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">${nome}</div></div>
+      <div style="font-size:13px;font-weight:700;color:var(--orange)">R$ ${preco.toFixed(2).replace('.',',')}</div>
+      <button style="width:28px;height:28px;border-radius:6px;border:none;background:var(--orange);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;pointer-events:none">+</button>
+    </div>`;
+  }).join('');
+}
+
+function epAdicionarItem(id) {
+  const p = recipes.find(r => String(r.id) === String(id));
+  if (!p) return;
+  const existente = _epCart.find(i => String(i.id) === String(id) && !i.adicionais?.length && !i.obs);
+  if (existente) { existente.qty++; }
+  else _epCart.push({ id: p.id, nome: p.name||p.nome||'—', preco: p.price||p.preco||0, precoTotal: p.price||p.preco||0, qty: 1, obs: '', adicionais: [], emoji: EMOJI_CAT_PAINEL[p.categoria||'Outros']||'🍽️' });
+  epRenderCart();
+}
+
+function epAjustarQty(idx, delta) {
+  _epCart[idx].qty += delta;
+  if (_epCart[idx].qty <= 0) _epCart.splice(idx, 1);
+  epRenderCart();
+}
+
+function epRenderCart() {
+  const wrap   = document.getElementById('epCartWrap');
+  const cartEl = document.getElementById('epCart');
+  if (!_epCart.length) { wrap.style.display = 'none'; epAtualizarTotal(); return; }
+  wrap.style.display = '';
+  _epAdicsDispCache = {};
+  cartEl.innerHTML = _epCart.map((item, idx) => {
+    const unit = item.precoTotal != null ? item.precoTotal : item.preco;
+    const sub  = unit * item.qty;
+
+    // Adicionais disponíveis para este produto
+    const recipe = recipes.find(r => String(r.id) === String(item.id));
+    const adicsDisp = recipe ? (recipe.adicionais || []).map(x => {
+      if (x && typeof x === 'object') return x;
+      return adicionaisBiblioteca.find(a => String(a.id) === String(x));
+    }).filter(Boolean) : [];
+    _epAdicsDispCache[idx] = adicsDisp;
+    const _btnAd = 'width:22px;height:22px;border-radius:5px;border:1px solid var(--border);background:var(--bg4);color:var(--text);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;font-family:inherit';
+
+    const adicsHtml = adicsDisp.length ? `
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Adicionais</div>
+        ${adicsDisp.map(a => {
+          const aKey    = _epAdicKey(a).replace(/'/g, "\\'");
+          const aAtivo  = item.adicionais.find(x => _epAdicKey(x) === _epAdicKey(a));
+          const qty     = aAtivo ? (aAtivo.qty || 1) : 0;
+          const pUnit   = a.preco || 0;
+          const checked = !!aAtivo;
+          const qtyHtml = checked ? `
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+              <button onclick="epAjustarAdic(${idx},'${aKey}',-1)" style="${_btnAd}">−</button>
+              <span style="min-width:18px;text-align:center;font-size:12px;font-weight:700;color:var(--text)">${qty}</span>
+              <button onclick="epAjustarAdic(${idx},'${aKey}',1)"  style="${_btnAd}">+</button>
+              <span style="font-size:11px;font-weight:700;color:var(--orange);min-width:60px;text-align:right">${pUnit>0?'+R$ '+(pUnit*qty).toFixed(2).replace('.',','):'grátis'}</span>
+            </div>` : `<span style="font-size:11px;font-weight:700;flex-shrink:0;color:${pUnit>0?'var(--orange)':'var(--text3)'}">${pUnit>0?'+R$ '+pUnit.toFixed(2).replace('.',','):'grátis'}</span>`;
+          return `
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;margin-bottom:2px;background:${checked?'rgba(255,107,53,.08)':'transparent'}">
+            <label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;min-width:0">
+              <input type="checkbox" ${checked?'checked':''}
+                style="width:15px;height:15px;accent-color:var(--orange);cursor:pointer;flex-shrink:0"
+                onchange="epToggleAdic(${idx},'${aKey}',this.checked)">
+              <span style="font-size:12px;color:var(--text)">${a.nome}</span>
+            </label>
+            ${qtyHtml}
+          </div>`;
+        }).join('')}
+      </div>` : '';
+
+    return `<div style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
+        <span style="font-size:1.1rem;flex-shrink:0;padding-top:1px">${item.emoji||'🍽️'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${item.nome}</div>
+          <div id="epItemSub_${idx}" style="font-size:11px;color:var(--text3);margin-top:2px">R$ ${unit.toFixed(2).replace('.',',')} × ${item.qty} = <b style="color:var(--orange)">R$ ${sub.toFixed(2).replace('.',',')}</b></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <button onclick="epAjustarQty(${idx},-1)" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg4);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">−</button>
+          <span style="min-width:20px;text-align:center;font-size:13px;font-weight:700;color:var(--text)">${item.qty}</span>
+          <button onclick="epAjustarQty(${idx},1)" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg4);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
+          <button onclick="_epCart.splice(${idx},1);epRenderCart()" style="width:26px;height:26px;border-radius:6px;border:none;background:rgba(231,76,60,.15);color:#ff6b6b;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-left:2px" title="Remover item">✕</button>
+        </div>
+      </div>
+      ${adicsHtml}
+      <div style="margin-top:8px">
+        <input class="fi" style="font-size:12px;padding:7px 10px" placeholder="📝 Observação (opcional)"
+          value="${(item.obs||'').replace(/"/g,'&quot;')}"
+          oninput="epUpdateObs(${idx},this.value)">
+      </div>
+    </div>`;
+  }).join('');
+  epAtualizarTotal();
+}
+
+function epUpdateObs(idx, value) {
+  if (_epCart[idx]) _epCart[idx].obs = value;
+}
+
+function epToggleAdic(itemIdx, adicKey, checked) {
+  const item = _epCart[itemIdx];
+  if (!item) return;
+  if (checked) {
+    if (!item.adicionais.find(a => _epAdicKey(a) === adicKey)) {
+      // Look up from the cached adicsDisp for this item (robust: handles id-less objects)
+      const adicsDisp = _epAdicsDispCache[itemIdx] || [];
+      const ad = adicsDisp.find(a => _epAdicKey(a) === adicKey)
+              || adicionaisBiblioteca.find(a => String(a.id) === adicKey);
+      if (ad) item.adicionais.push({ id: ad.id, nome: ad.nome, preco: ad.preco || 0, qty: 1 });
+    }
+  } else {
+    item.adicionais = item.adicionais.filter(a => _epAdicKey(a) !== adicKey);
+  }
+  const adicsSum  = item.adicionais.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
+  item.precoTotal = item.preco + adicsSum;
+  epRenderCart();
+  epAtualizarTotal();
+}
+
+function epAjustarAdic(itemIdx, adicKey, delta) {
+  const item = _epCart[itemIdx];
+  if (!item) return;
+  const adic = item.adicionais.find(a => _epAdicKey(a) === adicKey);
+  if (!adic) return;
+  adic.qty = (adic.qty || 1) + delta;
+  if (adic.qty <= 0) {
+    item.adicionais = item.adicionais.filter(a => _epAdicKey(a) !== adicKey);
+  }
+  const adicsSum  = item.adicionais.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
+  item.precoTotal = item.preco + adicsSum;
+  epRenderCart();
+  epAtualizarTotal();
+}
+
+function epAtualizarTotal() {
+  const sub = _epCart.reduce((s, i) => s + (i.precoTotal != null ? i.precoTotal : i.preco) * i.qty, 0);
+  const el  = document.getElementById('epTotal');
+  if (el) el.textContent = 'R$ ' + (sub + _epTaxa).toFixed(2).replace('.', ',');
+}
+
+async function epConfirmar() {
+  if (!_epCart.length) { notify('Adicione ao menos um item.', 'warning'); return; }
+  const p = pedidos.find(x => x.id === _epPedidoId);
+  if (!p) return;
+  if (_epTipo === 'delivery' && !document.getElementById('epBairro').value) { notify('Selecione o bairro para delivery.', 'warning'); return; }
+  const subtotal = _epCart.reduce((s, i) => s + (i.precoTotal != null ? i.precoTotal : i.preco) * i.qty, 0);
+  const total    = subtotal + _epTaxa;
+  const updates  = { itens: _epCart.map(i => ({ ...i })), subtotal, taxaEntrega: _epTaxa, total, entrega: _epTipo };
+  if (_epPagamento) updates.pagamento = _epPagamento;
+  if (_epTipo === 'delivery') {
+    updates.cliente = { ...(p.cliente || {}), rua: (document.getElementById('epRua').value||'').trim(), bairro: document.getElementById('epBairro').value };
+  }
+  try {
+    await db.collection('pedidos').doc(_epPedidoId).update(updates);
+    fecharEditarPedido();
+    notify('Pedido #' + _epPedidoId + ' atualizado!');
+  } catch(e) {
+    console.error('[epConfirmar]', e);
+    notify('Erro ao salvar: ' + e.message, 'error');
+  }
+}
+
+async function _migrarContador() {
+  const ref = db.doc('config/contador');
+  await db.runTransaction(async t => {
+    const doc = await t.get(ref);
+    const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
+    if (atual < 32302) t.set(ref, { ultimoPedido: 32302 }, { merge: true });
+  });
+}
+
 auth.onAuthStateChanged(user => {
   document.getElementById('loginScreen').style.display = user ? 'none' : 'flex';
-  if (user) atualizarBtnNotificacao();
+  if (user) {
+    atualizarBtnNotificacao();
+    _anivVerificado = ''; // reseta guard para rodar com auth
+    verificarAniversariantes();
+    _migrarContador().catch(e => console.warn('[migrarContador]', e));
+  }
 });
 
 function loginUser() {
@@ -3995,6 +5018,16 @@ db.collection('catalogoStatus').onSnapshot(snap => {
   if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioEditor();
   if (document.getElementById('panel-config').style.display !== 'none') renderDestaqueOpts();
   if (document.getElementById('panel-fiscal').style.display !== 'none' && fiscalAba === 'categorias') renderFiscalCategorias();
+});
+
+// Ordem de categorias e produtos
+db.doc('config/catOrdem').onSnapshot(snap => {
+  catOrdem = snap.exists ? (snap.data().ordem || []) : [];
+  if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
+});
+db.doc('config/prodOrdem').onSnapshot(snap => {
+  prodOrdem = snap.exists ? snap.data() : {};
+  if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioEditor();
 });
 
 // ── RELATÓRIOS ──────────────────────────────────────────────────────────────
@@ -4461,6 +5494,7 @@ function exportarRelatorioCSV() {
 // =================== RELATÓRIO DE CLIENTES ===================
 let clientesAba = 'ativos';
 let clientesBusca = '';
+let clientesOrdem = 'totalPedidos';
 let _cliPotencial = [], _cliAtivos = [], _cliInativos = [];
 let _cliMetricasOpen = true, _cliTop10Open = true, _cliTabelaOpen = true;
 let _cliCarregando = false;
@@ -4494,7 +5528,7 @@ async function renderRelatorioClientes() {
     const todos = snap.docs.map(d => {
       const data = d.data();
       const tel = _cliNormTel(data.whatsapp || data.telefone || d.id);
-      const pedidosAnota = Number(data.pedidosAnteriores) || 0;
+      const pedidosAnota = Number(data.pedidosAnteriores || data.totalPedidos) || 0;
       const pedidosJoey  = joeyMap[tel] || 0;
       const totalPedidos = pedidosAnota + pedidosJoey;
       const status = (data.status || 'potencial').toLowerCase();
@@ -4553,7 +5587,7 @@ async function renderRelatorioClientes() {
             : `<table class="hist-table" style="margin-top:8px">
                 <thead><tr>
                   <th>#</th><th>Nome</th><th>Telefone</th>
-                  <th title="Pedidos Anota AI + Joey">Total</th><th>Anota AI</th><th>Joey</th><th></th>
+                  <th title="Pedidos Anota AI + Joey">Total</th><th>Joey</th><th></th>
                 </tr></thead>
                 <tbody>${top10.map((c, i) => `
                   <tr>
@@ -4561,7 +5595,6 @@ async function renderRelatorioClientes() {
                     <td style="font-weight:600">${c.nome}</td>
                     <td style="color:var(--text2)">${cliTel(c.tel)}</td>
                     <td style="font-weight:700">${c.totalPedidos}</td>
-                    <td style="color:var(--text2)">${c.pedidosAnota}</td>
                     <td style="color:var(--text2)">${c.pedidosJoey}</td>
                     <td style="white-space:nowrap">${cliWppBtn(c.whatsapp || c.tel)}</td>
                   </tr>`).join('')}
@@ -4623,9 +5656,15 @@ function filtrarClientes(val) {
   renderCliTabela();
 }
 
+function setCliOrdem(ordem) {
+  clientesOrdem = ordem;
+  renderCliTabela();
+}
+
 function renderCliTabela() {
   const map = { potencial: _cliPotencial, inativos: _cliInativos, ativos: _cliAtivos };
-  let lista = map[clientesAba] || [];
+  let lista = [...(map[clientesAba] || [])];
+
   if (clientesBusca.trim()) {
     const q = clientesBusca.toLowerCase();
     const qd = q.replace(/\D/g, '');
@@ -4634,6 +5673,14 @@ function renderCliTabela() {
       (qd && c.tel.includes(qd))
     );
   }
+
+  // Ordenação dinâmica
+  if (clientesOrdem === 'diasInatividade') {
+    lista.sort((a, b) => b.diasInatividade - a.diasInatividade);
+  } else {
+    lista.sort((a, b) => b.totalPedidos - a.totalPedidos);
+  }
+
   const vazio = {
     potencial: 'Nenhum cliente em potencial.',
     inativos:  'Nenhum cliente inativo.',
@@ -4641,23 +5688,39 @@ function renderCliTabela() {
   };
   const el = document.getElementById('cliTabela');
   if (!el) return;
+
+  const ordenacaoHtml = `
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <span style="font-size:11px;color:var(--text3)">Ordenar por:</span>
+      <button class="filter-btn${clientesOrdem === 'totalPedidos' ? ' active' : ''}"
+        onclick="setCliOrdem('totalPedidos')">📦 Total pedidos ↓</button>
+      <button class="filter-btn${clientesOrdem === 'diasInatividade' ? ' active' : ''}"
+        onclick="setCliOrdem('diasInatividade')">📅 Dias sem pedir ↓</button>
+    </div>`;
+
   if (!lista.length) {
-    el.innerHTML = `<p style="color:var(--text2);font-size:13px;padding:.5rem 0">${vazio[clientesAba]}</p>`;
+    el.innerHTML = ordenacaoHtml +
+      `<p style="color:var(--text2);font-size:13px;padding:.5rem 0">${vazio[clientesAba]}</p>`;
     return;
   }
-  el.innerHTML = `
+
+  el.innerHTML = ordenacaoHtml + `
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">${lista.length} registro${lista.length !== 1 ? 's' : ''}</div>
     <table class="hist-table">
       <thead><tr>
-        <th>Nome</th><th>Telefone</th><th title="Anota AI + Joey">Total ped.</th><th>Anota AI</th><th>Joey</th><th></th>
+        <th>Nome</th><th>Telefone</th>
+        <th title="Anota AI + Joey" style="cursor:pointer" onclick="setCliOrdem('totalPedidos')">Total ped.${clientesOrdem === 'totalPedidos' ? ' ↓' : ''}</th>
+        <th>Joey</th>
+        <th title="Dias sem pedir" style="cursor:pointer" onclick="setCliOrdem('diasInatividade')">Inativo${clientesOrdem === 'diasInatividade' ? ' ↓' : ''}</th>
+        <th></th>
       </tr></thead>
       <tbody>${lista.map(c => `
         <tr>
           <td style="font-weight:600">${c.nome}</td>
           <td style="color:var(--text2)">${cliTel(c.tel)}</td>
           <td style="font-weight:700">${c.totalPedidos}</td>
-          <td style="color:var(--text2)">${c.pedidosAnota}</td>
-          <td style="color:var(--text2)">${c.pedidosJoey}</td>
+          <td style="color:var(--text2)">${c.pedidosJoey || '—'}</td>
+          <td style="color:var(--text2);font-size:12px">${c.diasInatividade ? c.diasInatividade + 'd' : '—'}</td>
           <td style="white-space:nowrap">${cliWppBtn(c.whatsapp || c.tel)}</td>
         </tr>`).join('')}
       </tbody>
@@ -4842,6 +5905,67 @@ function tocarSomPixPago() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// ── ANIVERSARIANTES DO DIA ────────────────────────────────────────────────
+let _anivVerificado = ''; // guarda "DD/MM" já verificado — evita re-fetch no mesmo dia
+
+async function verificarAniversariantes() {
+  const hoje = new Date();
+  const ddmm = String(hoje.getDate()).padStart(2,'0') + '/' + String(hoje.getMonth()+1).padStart(2,'0');
+  if (_anivVerificado === ddmm) return;
+  _anivVerificado = ddmm;
+  const bar = document.getElementById('aniversariantesBar');
+  if (!bar) return;
+  try {
+    const snap = await db.collection('clientes').get();
+    const aniv = snap.docs
+      .map(d => ({ _id: d.id, ...d.data() }))
+      .filter(c => (c.dataNascimento || '').startsWith(ddmm));
+    if (!aniv.length) { bar.style.display = 'none'; return; }
+    const msgParabens = (nome) =>
+      `🎂 *Feliz Aniversário, ${nome}!* 🎉\n\n` +
+      `A equipe ${config.nome||'Joey Pizza'} deseja a você um dia incrível cheio de alegria e delícias! 🍕\n\n` +
+      `Temos uma surpresa especial para você hoje — venha nos visitar! 😍`;
+    bar.style.display = 'block';
+    bar.innerHTML =
+      `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">` +
+      `<span style="font-size:13px;font-weight:700;color:#ec4899;white-space:nowrap">🎂 ${aniv.length === 1 ? '1 aniversariante' : aniv.length + ' aniversariantes'} hoje</span>` +
+      aniv.map(c => {
+        const tel = (c.whatsapp || c.telefone || c._id || '').replace(/\D/g,'');
+        const nome = (c.nome || tel || 'Cliente').split(' ')[0];
+        return `<span style="display:flex;align-items:center;gap:5px">` +
+          `<span class="aniv-nome">${c.nome||tel||'Cliente'}</span>` +
+          (tel ? `<button class="aniv-btn" onclick="enviarParabens('${tel}','${nome.replace(/'/g,"\\'")}')">🎉 Parabéns</button>` : '') +
+          `</span>`;
+      }).join('') +
+      `<button onclick="this.closest('#aniversariantesBar').style.display='none'" ` +
+      `style="margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:17px;padding:2px 6px;line-height:1">✕</button>` +
+      `</div>`;
+  } catch(e) {
+    console.warn('[ANIV] Erro ao carregar aniversariantes:', e.message);
+    _anivVerificado = ''; // retry on next check
+  }
+}
+
+async function enviarParabens(tel, nome) {
+  const full = tel.startsWith('55') ? tel : '55' + tel;
+  const msg =
+    `🎂 *Feliz Aniversário, ${nome}!* 🎉\n\n` +
+    `A equipe ${config.nome||'Joey Pizza'} deseja a você um dia incrível cheio de alegria e delícias! 🍕\n\n` +
+    `Temos uma surpresa especial para você hoje — venha nos visitar! 😍`;
+  try {
+    const r = await fetch(`${BOT_URL}/send`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ numero: full, mensagem: msg }),
+    });
+    const data = await r.json();
+    if (data.ok) { notify(`🎉 Parabéns enviado para ${nome}!`); }
+    else throw new Error(data.erro || 'erro na API');
+  } catch(e) {
+    window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 let _pedidosAnt = [];
 let _knownPedidoIds = null; // null = primeira carga, não dispara som
 db.collection('pedidos').onSnapshot(snap => {
@@ -4883,6 +6007,7 @@ db.collection('pedidos').onSnapshot(snap => {
   renderKanban();
   startPixTimers();
   if (!pixPollInterval) pixPollInterval = setInterval(verificarPixPendentes, 12000);
+  verificarAniversariantes();
 });
 
 if ('serviceWorker' in navigator) {
@@ -4934,7 +6059,10 @@ async function carregarRobo() {
     Object.keys(BOT_DEFAULTS).forEach(id => {
       const cfg  = saved[id] || BOT_DEFAULTS[id];
       const resp = document.getElementById('bot-resp-' + id);
-      if (resp) resp.value = cfg.resposta || BOT_DEFAULTS[id].resposta;
+      const texto = cfg.resposta || BOT_DEFAULTS[id].resposta || '';
+      if (resp) resp.value = texto;
+      const prev = document.getElementById('botcard-preview-' + id);
+      if (prev) prev.textContent = texto;
       if (IDS_COM_KW.includes(id)) {
         const kwEl = document.getElementById('bot-kw-' + id);
         if (kwEl) kwEl.value = (cfg.keywords || BOT_DEFAULTS[id].keywords || []).join(', ');
@@ -5097,6 +6225,24 @@ function _dispararNotif(key, p) {
   enviarWhatsAppBot(tel, msg);
 }
 
+function toggleRoboSection(id) {
+  const body = document.getElementById('robo-sec-body-' + id);
+  const btn  = document.getElementById('robo-sec-btn-' + id);
+  if (!body) return;
+  const visible = body.style.display !== 'none';
+  body.style.display = visible ? 'none' : '';
+  if (btn) btn.textContent = visible ? '▼' : '▲';
+}
+
+function toggleBotCard(id) {
+  const edit  = document.getElementById('botcard-edit-' + id);
+  const arrow = document.getElementById('botcard-arrow-' + id);
+  if (!edit) return;
+  const open = edit.style.display === 'block';
+  edit.style.display = open ? 'none' : 'block';
+  if (arrow) arrow.textContent = open ? '▼' : '▲';
+}
+
 async function salvarGatilho(id) {
   const respEl = document.getElementById('bot-resp-' + id);
   const kwEl   = document.getElementById('bot-kw-' + id);
@@ -5112,6 +6258,12 @@ async function salvarGatilho(id) {
 
   try {
     await db.doc('botConfig/' + id).set(data, { merge: true });
+    const edit  = document.getElementById('botcard-edit-' + id);
+    const arrow = document.getElementById('botcard-arrow-' + id);
+    const prev  = document.getElementById('botcard-preview-' + id);
+    if (edit)  edit.style.display = 'none';
+    if (arrow) arrow.textContent  = '▼';
+    if (prev)  prev.textContent   = resposta;
     notify('✓ Mensagem "' + id + '" salva');
   } catch (e) {
     console.error('[salvarGatilho]', e);
@@ -5122,28 +6274,90 @@ async function salvarGatilho(id) {
 // ── GATILHOS PERSONALIZADOS ───────────────────────────────────────────────────
 
 function adicionarGatilhoCustom(fsId, nome, keywords, resposta) {
-  const uid = fsId || ('custom_' + Date.now());
+  if (!fsId) { abrirNovoGatilhoForm(); return; }
+  const uid = fsId;
   const container = document.getElementById('customGatilhosContainer');
   if (!container) return;
   const card = document.createElement('div');
   card.id = 'custom-card-' + uid;
-  card.style.cssText = 'background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px';
+  card.style.cssText = 'background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px 14px';
+  const kwArr = Array.isArray(keywords) ? keywords : (keywords ? String(keywords).split(',').map(s => s.trim()) : []);
+  const kwStr = kwArr.join(', ');
+  const kwPrev = kwStr.length > 40 ? kwStr.slice(0, 40) + '…' : kwStr;
   card.innerHTML =
-    '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">✏️ Gatilho personalizado</div>' +
-    '<label class="fl" style="margin-bottom:4px">Nome do gatilho</label>' +
-    '<input id="custom-nome-' + uid + '" class="fi" style="margin-bottom:8px" placeholder="Ex: Promoção, WiFi, Estacionamento">' +
-    '<label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>' +
-    '<input id="custom-kw-' + uid + '" class="fi" style="margin-bottom:8px" placeholder="promo, desconto, promoção">' +
-    '<label class="fl" style="margin-bottom:4px">Resposta</label>' +
-    '<textarea id="custom-resp-' + uid + '" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>' +
-    '<div style="display:flex;gap:8px;margin-top:8px">' +
-      '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="salvarGatilhoCustom(\'' + uid + '\')">✓ Salvar</button>' +
-      '<button class="btn btn-ghost" style="font-size:12px;padding:6px 14px;color:#e55" onclick="excluirGatilhoCustom(\'' + uid + '\')">🗑️ Excluir</button>' +
+    '<div style="display:flex;align-items:center;gap:8px">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div id="custom-label-' + uid + '" style="font-size:13px;font-weight:600;color:var(--text)">✏️ ' + (nome || 'Gatilho') + '</div>' +
+        '<div id="custom-kw-preview-' + uid + '" style="font-size:11px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + kwPrev + '</div>' +
+      '</div>' +
+      '<button class="btn btn-ghost" style="font-size:12px;padding:4px 12px;flex-shrink:0" onclick="editarGatilhoCustom(\'' + uid + '\')">✏️ Editar</button>' +
+      '<button class="btn btn-ghost" style="font-size:12px;padding:4px 12px;color:#e55;flex-shrink:0" onclick="excluirGatilhoCustom(\'' + uid + '\')">🗑️ Excluir</button>' +
+    '</div>' +
+    '<div id="custom-form-' + uid + '" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">' +
+      '<label class="fl" style="margin-bottom:4px">Nome do gatilho</label>' +
+      '<input id="custom-nome-' + uid + '" class="fi" style="margin-bottom:8px" placeholder="Ex: Promoção, WiFi, Estacionamento">' +
+      '<label class="fl" style="margin-bottom:4px">Palavras-chave <span style="font-size:10px;color:var(--text2)">(separadas por vírgula)</span></label>' +
+      '<input id="custom-kw-' + uid + '" class="fi" style="margin-bottom:8px" placeholder="promo, desconto, promoção">' +
+      '<label class="fl" style="margin-bottom:4px">Resposta</label>' +
+      '<textarea id="custom-resp-' + uid + '" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:8px">' +
+        '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="salvarGatilhoCustom(\'' + uid + '\')">✓ Salvar</button>' +
+        '<button class="btn btn-ghost" style="font-size:12px;padding:6px 14px" onclick="cancelarEdicaoGatilho(\'' + uid + '\')">✕ Cancelar</button>' +
+      '</div>' +
     '</div>';
   container.appendChild(card);
   if (nome)     document.getElementById('custom-nome-' + uid).value = nome;
   if (keywords) document.getElementById('custom-kw-' + uid).value = Array.isArray(keywords) ? keywords.join(', ') : keywords;
   if (resposta) document.getElementById('custom-resp-' + uid).value = resposta;
+}
+
+function abrirNovoGatilhoForm() {
+  const wrap = document.getElementById('novoGatilhoFormWrap');
+  const btn  = document.getElementById('btnAdicionarGatilho');
+  if (!wrap) return;
+  wrap.style.display = '';
+  if (btn) btn.style.display = 'none';
+  document.getElementById('novo-gatilho-nome').value = '';
+  document.getElementById('novo-gatilho-kw').value   = '';
+  document.getElementById('novo-gatilho-resp').value = '';
+  document.getElementById('novo-gatilho-nome').focus();
+}
+
+function fecharNovoGatilhoForm() {
+  const wrap = document.getElementById('novoGatilhoFormWrap');
+  const btn  = document.getElementById('btnAdicionarGatilho');
+  if (wrap) wrap.style.display = 'none';
+  if (btn)  btn.style.display  = '';
+}
+
+async function salvarNovoGatilhoCustom() {
+  const nome     = document.getElementById('novo-gatilho-nome').value.trim();
+  const keywords = document.getElementById('novo-gatilho-kw').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const resposta = document.getElementById('novo-gatilho-resp').value.trim();
+  if (!nome)          { notify('Informe o nome do gatilho'); return; }
+  if (!keywords.length) { notify('Informe ao menos uma palavra-chave'); return; }
+  if (!resposta)      { notify('Informe a resposta do gatilho'); return; }
+  const uid = 'custom_' + Date.now();
+  try {
+    await db.doc('botConfig/' + uid).set({ nome, keywords, resposta }, { merge: true });
+    fecharNovoGatilhoForm();
+    adicionarGatilhoCustom(uid, nome, keywords, resposta);
+    notify('✓ Gatilho "' + nome + '" salvo');
+  } catch (e) {
+    console.error('[salvarNovoGatilhoCustom]', e);
+    notify('Erro ao salvar gatilho');
+  }
+}
+
+function editarGatilhoCustom(uid) {
+  const form = document.getElementById('custom-form-' + uid);
+  if (!form) return;
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+}
+
+function cancelarEdicaoGatilho(uid) {
+  const form = document.getElementById('custom-form-' + uid);
+  if (form) form.style.display = 'none';
 }
 
 async function salvarGatilhoCustom(uid) {
@@ -5154,11 +6368,19 @@ async function salvarGatilhoCustom(uid) {
   const nome     = nomeEl.value.trim();
   const keywords = kwEl.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   const resposta = respEl.value.trim();
-  if (!nome)     { notify('Informe o nome do gatilho'); return; }
+  if (!nome)          { notify('Informe o nome do gatilho'); return; }
   if (!keywords.length) { notify('Informe ao menos uma palavra-chave'); return; }
-  if (!resposta) { notify('Informe a resposta do gatilho'); return; }
+  if (!resposta)      { notify('Informe a resposta do gatilho'); return; }
   try {
     await db.doc('botConfig/' + uid).set({ nome, keywords, resposta }, { merge: true });
+    const label = document.getElementById('custom-label-' + uid);
+    if (label) label.textContent = '✏️ ' + nome;
+    const kwPrevEl = document.getElementById('custom-kw-preview-' + uid);
+    if (kwPrevEl) {
+      const s = keywords.join(', ');
+      kwPrevEl.textContent = s.length > 40 ? s.slice(0, 40) + '…' : s;
+    }
+    cancelarEdicaoGatilho(uid);
     notify('✓ Gatilho "' + nome + '" salvo');
   } catch (e) {
     console.error('[salvarGatilhoCustom]', e);
@@ -5793,7 +7015,7 @@ function renderPedidoMesaModal() {
 }
 
 // ---- Sub-modal: detalhe do produto ----
-let _pdId = null, _pdQty = 1;
+let _pdId = null, _pdQty = 1, _pdAdics = [];
 
 function abrirProdDetalhe(prodId) {
   const prod = recipes.find(r => String(r.id) === String(prodId));
@@ -5807,7 +7029,9 @@ function abrirProdDetalhe(prodId) {
     if (x && typeof x === 'object') return x;
     return adicionaisBiblioteca.find(a => String(a.id) === String(x));
   }).filter(Boolean);
+  _pdAdics = adics;
 
+  const _pdBtnSm = 'width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;line-height:1';
   document.getElementById('prodDetalheTitle').textContent = nome;
   document.getElementById('prodDetalheBody').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
@@ -5823,17 +7047,22 @@ function abrirProdDetalhe(prodId) {
     ${adics.length > 0 ? `
       <div class="fl" style="margin-bottom:8px">Adicionais</div>
       <div style="margin-bottom:18px">
-        ${adics.map(a => `
-          <label for="adic-${a.id}"
-            style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--bg4);border:1px solid var(--border);border-radius:9px;margin-bottom:6px;cursor:pointer;transition:border-color .15s">
-            <input type="checkbox" id="adic-${a.id}"
+        ${adics.map((a, ai) => `
+          <div id="adic-row-${ai}"
+            style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--bg4);border:1px solid var(--border);border-radius:9px;margin-bottom:6px;transition:border-color .15s">
+            <input type="checkbox" id="adic-${ai}"
               style="width:17px;height:17px;accent-color:var(--orange);cursor:pointer;flex-shrink:0"
-              onchange="this.closest('label').style.borderColor=this.checked?'rgba(255,107,53,.6)':'var(--border)';atualizarPdTotal()">
-            <span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">${a.nome}</span>
-            ${a.preco > 0
-              ? `<span style="font-size:12px;font-weight:700;color:var(--orange);flex-shrink:0">+R$ ${(a.preco||0).toFixed(2).replace('.',',')}</span>`
-              : `<span style="font-size:11px;color:var(--text3);flex-shrink:0">grátis</span>`}
-          </label>`).join('')}
+              onchange="pdToggleAdic(${ai},this.checked)">
+            <span style="flex:1;font-size:13px;font-weight:500;color:var(--text);cursor:pointer" onclick="document.getElementById('adic-${ai}').click()">${a.nome}</span>
+            <div id="adic-qty-${ai}" style="display:none;align-items:center;gap:4px;flex-shrink:0">
+              <button onclick="pdAdjAdic(${ai},-1)" style="${_pdBtnSm}">&#x2212;</button>
+              <span id="adic-qtyval-${ai}" style="min-width:18px;text-align:center;font-size:12px;font-weight:700;color:var(--text)">1</span>
+              <button onclick="pdAdjAdic(${ai},1)"  style="${_pdBtnSm}">+</button>
+            </div>
+            <span id="adic-price-${ai}" style="font-size:12px;font-weight:700;flex-shrink:0;color:${(a.preco||0)>0?'var(--orange)':'var(--text3)'}">
+              ${(a.preco||0)>0?'+R$ '+(a.preco||0).toFixed(2).replace('.',','):'grátis'}
+            </span>
+          </div>`).join('')}
       </div>` : ''}
     <div class="fg" style="margin-bottom:16px">
       <label class="fl" style="margin-bottom:5px">Observação <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">(opcional)</span></label>
@@ -5858,20 +7087,42 @@ function adjPdQty(delta) {
   atualizarPdTotal();
 }
 
+function pdToggleAdic(ai, checked) {
+  const row    = document.getElementById('adic-row-' + ai);
+  const qtyDiv = document.getElementById('adic-qty-' + ai);
+  if (row)    row.style.borderColor = checked ? 'rgba(255,107,53,.6)' : 'var(--border)';
+  if (qtyDiv) qtyDiv.style.display  = checked ? 'flex' : 'none';
+  if (!checked) {
+    const qv = document.getElementById('adic-qtyval-' + ai);
+    if (qv) qv.textContent = '1';
+  }
+  atualizarPdTotal();
+}
+
+function pdAdjAdic(ai, delta) {
+  const qv = document.getElementById('adic-qtyval-' + ai);
+  if (!qv) return;
+  const qty = Math.max(1, parseInt(qv.textContent || '1') + delta);
+  qv.textContent = qty;
+  const a = _pdAdics[ai];
+  const priceEl = document.getElementById('adic-price-' + ai);
+  if (priceEl && a && (a.preco || 0) > 0) priceEl.textContent = '+R$ ' + ((a.preco || 0) * qty).toFixed(2).replace('.', ',');
+  atualizarPdTotal();
+}
+
 function atualizarPdTotal() {
   const prod = recipes.find(r => String(r.id) === String(_pdId));
   if (!prod) return;
   const preco = prod.price || prod.preco || 0;
-  const adics = (prod.adicionais || []).map(x => {
-    if (x && typeof x === 'object') return x;
-    return adicionaisBiblioteca.find(a => String(a.id) === String(x));
-  }).filter(Boolean);
-  const extra    = adics.reduce((s, a) => {
-    const c = document.getElementById('adic-' + a.id);
-    return s + (c && c.checked ? (a.preco || 0) : 0);
+  const extra = _pdAdics.reduce((s, a, ai) => {
+    const c  = document.getElementById('adic-' + ai);
+    if (!c || !c.checked) return s;
+    const qv = document.getElementById('adic-qtyval-' + ai);
+    const qty = qv ? parseInt(qv.textContent || '1') : 1;
+    return s + (a.preco || 0) * qty;
   }, 0);
   const el = document.getElementById('pdTotalVal');
-  if (el) el.textContent = 'R$ ' + ((preco + extra) * _pdQty).toFixed(2).replace('.',',');
+  if (el) el.textContent = 'R$ ' + ((preco + extra) * _pdQty).toFixed(2).replace('.', ',');
 }
 
 function adicionarAoCarrinhoMesa() {
@@ -5880,23 +7131,26 @@ function adicionarAoCarrinhoMesa() {
 
   const preco = prod.price || prod.preco || 0;
   const nome  = prod.name  || prod.nome  || '—';
-  const adics = (prod.adicionais || []).map(x => {
-    if (x && typeof x === 'object') return x;
-    return adicionaisBiblioteca.find(a => String(a.id) === String(x));
-  }).filter(Boolean);
 
-  const selectedAdics = adics
-    .filter(a => { const c = document.getElementById('adic-' + a.id); return c && c.checked; })
-    .map(a => ({ id: a.id, nome: a.nome, preco: a.preco || 0, qty: 1 }));
+  const selectedAdics = _pdAdics
+    .map((a, ai) => {
+      const c = document.getElementById('adic-' + ai);
+      if (!c || !c.checked) return null;
+      const qv  = document.getElementById('adic-qtyval-' + ai);
+      const qty = qv ? parseInt(qv.textContent || '1') : 1;
+      return { id: a.id, nome: a.nome, preco: a.preco || 0, qty };
+    })
+    .filter(Boolean);
 
   const obs      = (document.getElementById('pdObsInput')?.value || '').trim();
-  const adicsSum = selectedAdics.reduce((s, a) => s + a.preco, 0);
+  const adicsSum = selectedAdics.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
   const total    = (preco + adicsSum) * _pdQty;
 
   _pedidoMesaCart.push({ id: prod.id, nome, preco, qty: _pdQty, adicionais: selectedAdics, obs, total });
   fecharProdDetalhe();
   renderPedidoMesaModal();
 }
+
 
 function removerItemCarrinhoMesa(idx) {
   _pedidoMesaCart.splice(idx, 1);
@@ -6237,15 +7491,19 @@ function carregarFechamentosHoje() {
     }, function(err) { console.warn('[fechamentosHoje]', err); });
 }
 
-function _pagChip(pag) {
+function _pagChip(pag, id) {
   var p = (pag || '').toLowerCase();
   var cls = 'pag-chip ';
-  if (p.indexOf('pix') >= 0) cls += 'pag-chip-pix';
+  if (p === 'cancelado') cls += 'pag-chip-cancel';
+  else if (p.indexOf('pix') >= 0) cls += 'pag-chip-pix';
   else if (p.indexOf('dinheiro') >= 0) cls += 'pag-chip-din';
   else if (p.indexOf('cr') >= 0) cls += 'pag-chip-cred';
   else if (p.indexOf('d') >= 0 && p.indexOf('b') >= 0) cls += 'pag-chip-deb';
   else cls += 'pag-chip-out';
-  return '<span class="' + cls + '">' + (pag || '&mdash;') + '</span>';
+  var extra = id
+    ? ' onclick="abrirPagEdit(event,\'' + id + '\')" style="cursor:pointer;user-select:none" title="Clique para alterar pagamento"'
+    : '';
+  return '<span class="' + cls + '"' + extra + '>' + (pag || '&mdash;') + '</span>';
 }
 
 function _nfBadge(srcId) {
@@ -6274,7 +7532,7 @@ function renderRelatorioDia() {
   var el = document.getElementById('rdContent'); if (!el) return;
   var agora = new Date(); agora.setHours(0,0,0,0);
   var pedidosPeriodo = pedidos.filter(function(p) {
-    if (!p.data || p.status === 'cancelado') return false;
+    if (!p.data) return false;
     var parts = p.data.split('/');
     if (parts.length !== 3) return false;
     var d = new Date(+parts[2], +parts[1]-1, +parts[0]);
@@ -6301,7 +7559,8 @@ function renderRelatorioDia() {
     }
     allItems.push({ tipo: 'pedido', id: p.id, srcId: p.id, ref: String(p.id),
       cliente: (p.cliente && p.cliente.nome) || (p.mesa ? 'Mesa ' + p.mesa : '&mdash;'),
-      itens: p.itens || [], pagamento: pag || '&mdash;', total: p.total || 0 });
+      itens: p.itens || [], pagamento: pag || '&mdash;', total: p.total || 0,
+      status: p.status || '' });
   });
   if (_rdPeriodo === 'hoje') {
     _fechamentosHoje.forEach(function(f) {
@@ -6316,13 +7575,15 @@ function renderRelatorioDia() {
   }
   var pgTotais = {};
   allItems.forEach(function(item) {
+    if (item.status === 'cancelado') return;
     var key = _pagKey(item.pagamento);
     if (!pgTotais[key]) pgTotais[key] = { val: 0, qtd: 0, pag: item.pagamento };
     pgTotais[key].val += item.total; pgTotais[key].qtd++;
   });
-  var totalGeral = allItems.reduce(function(s, x) { return s + x.total; }, 0);
+  var totalGeral = allItems.reduce(function(s, x) { return x.status === 'cancelado' ? s : s + x.total; }, 0);
   var freteTotal = 0, freteQtd = 0;
   pedidosPeriodo.forEach(function(p) {
+    if (p.status === 'cancelado') return;
     var f = p.taxaEntrega || p.frete || 0;
     if (f > 0) { freteTotal += f; freteQtd++; }
   });
@@ -6342,22 +7603,26 @@ function renderRelatorioDia() {
   var rows = allItems.map(function(item) {
     var itRes = item.itens.slice(0,2).map(function(i) { return (i.qty||1) + '\xD7 ' + (i.nome||''); }).join(', ')
       + (item.itens.length > 2 ? ' e ' + (item.itens.length - 2) + ' mais' : '');
+    var cancelado = item.status === 'cancelado';
     var nota = notasFiscais.find(function(n) { return n._docId === String(item.srcId) || n.pedidoId === String(item.srcId); });
     var emitida = nota && nota.status === 'emitida';
-    var checkbox = emitida
+    var checkbox = (emitida || cancelado)
       ? '<td style="width:32px"></td>'
       : '<td style="width:32px"><input type="checkbox" class="rd-check" data-srcid="' + item.srcId + '" data-tipo="' + item.tipo + '" style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer"></td>';
-    var btnNfce = emitida
-      ? '<td></td>'
-      : '<td><button onclick="openNfceModalRD(\'' + item.srcId + '\',\'' + item.tipo + '\')" style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--orange);white-space:nowrap">&#x1F9FE; Emitir</button></td>';
-    return '<tr>'
+    var btnEmitir = (emitida || cancelado)
+      ? ''
+      : '<button onclick="openNfceModalRD(\'' + item.srcId + '\',\'' + item.tipo + '\')" style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--orange);white-space:nowrap" title="Emitir NFCe">&#x1F9FE; Emitir</button>';
+    var btnReimp  = '<button onclick="reimprimirRD(\'' + item.srcId + '\',\'' + item.tipo + '\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--text2);white-space:nowrap" title="Reimprimir comanda" onmouseover="this.style.borderColor=\'var(--border2)\';this.style.color=\'var(--text)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--text2)\'">&#x1F5A8; Imprimir</button>';
+    var btnNfce   = '<td><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap">' + btnEmitir + btnReimp + '</div></td>';
+    var pagCell = cancelado ? _pagChip('cancelado') : _pagChip(item.pagamento, item.srcId);
+    return '<tr' + (cancelado ? ' style="opacity:0.55"' : '') + '>'
       + checkbox
-      + '<td style="font-weight:600;color:var(--orange)">' + item.ref + '</td>'
+      + '<td style="font-weight:600;color:' + (cancelado ? 'var(--text3)' : 'var(--orange)') + '">' + item.ref + '</td>'
       + '<td>' + item.cliente + '</td>'
       + '<td style="color:var(--text2);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + itRes + '</td>'
-      + '<td>' + _pagChip(item.pagamento) + '</td>'
+      + '<td>' + pagCell + '</td>'
       + '<td style="font-weight:700;white-space:nowrap">R$ ' + item.total.toFixed(2).replace('.',',') + '</td>'
-      + '<td>' + _nfBadge(item.srcId) + '</td>'
+      + '<td>' + (cancelado ? '' : _nfBadge(item.srcId)) + '</td>'
       + btnNfce
       + '</tr>';
   }).join('');
@@ -6415,6 +7680,25 @@ async function gerarNfceLote() {
     if (fill) fill.style.width = '100%';
     notify('Lote concluido: ' + total + ' nota' + (total !== 1 ? 's' : '') + '.');
     setTimeout(function() { if (bar) bar.style.display = 'none'; renderRelatorioDia(); }, 2500);
+  }
+}
+
+function reimprimirRD(srcId, tipo) {
+  if (tipo === 'pedido') {
+    var p = pedidos.find(function(x) { return x.id === String(srcId); });
+    if (!p) { notify('Pedido nao encontrado.', 'warning'); return; }
+    _executarImpressao(p);
+    return;
+  }
+  // tipo === 'fechamento' (mesa)
+  var f = (typeof _fechamentosHoje !== 'undefined')
+    ? _fechamentosHoje.find(function(x) { return 'fec-' + x._id === srcId; })
+    : null;
+  if (!f) { notify('Comanda nao encontrada.', 'warning'); return; }
+  if (typeof imprimirComandaMesa === 'function') {
+    imprimirComandaMesa(f, f.mesaNome || '');
+  } else {
+    notify('Funcao de impressao indisponivel.', 'error');
   }
 }
 
@@ -6711,9 +7995,12 @@ function _wppRenderChat(conv) {
       <div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${conv.nome || conv.id}</div>
       <div style="font-size:11px;color:var(--text2)">${conv.id}</div>
     </div>
-    ${isHumano
-      ? `<button class="tb-btn tb-btn-ghost" style="font-size:12px;white-space:nowrap" onclick="wppDevolverBot('${conv.id}')">🤖 Devolver ao bot</button>`
-      : `<button class="tb-btn tb-btn-primary" style="font-size:12px;white-space:nowrap" onclick="wppAssumirAtendimento('${conv.id}')">👤 Assumir</button>`}
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+      ${isHumano
+        ? `<button class="tb-btn tb-btn-ghost" style="font-size:12px;white-space:nowrap" onclick="wppDevolverBot('${conv.id}')">🤖 Devolver ao bot</button>`
+        : `<button class="tb-btn tb-btn-primary" style="font-size:12px;white-space:nowrap" onclick="wppAssumirAtendimento('${conv.id}')">👤 Assumir</button>`}
+      <button class="tb-btn tb-btn-ghost" style="font-size:12px;white-space:nowrap;color:#ef4444;border-color:#ef4444" onclick="wppApagarConversa('${conv.id}')">🗑️</button>
+    </div>
   `;
   document.getElementById('wppAviso').style.display = conv.status === 'humano' ? 'block' : 'none';
   const msgsEl = document.getElementById('wppMsgs');
@@ -6737,6 +8024,23 @@ async function wppAssumirAtendimento(numero) {
 async function wppDevolverBot(numero) {
   await db.collection('conversas').doc(numero).set({ status: 'bot' }, { merge: true });
   notify('🤖 Devolvido ao bot');
+}
+
+async function wppApagarConversa(id) {
+  const conv = _wppConversas.find(c => c.id === id);
+  const nome = conv?.nome || id;
+  if (!confirm(`Apagar a conversa de "${nome}"?\n\nEsta ação é irreversível e remove todo o histórico de mensagens.`)) return;
+  try {
+    await db.collection('conversas').doc(id).delete();
+    _wppConversas = _wppConversas.filter(c => c.id !== id);
+    _wppConvAtiva = null;
+    document.getElementById('wppChat').style.display = 'none';
+    document.getElementById('wpp-panel').classList.remove('com-chat');
+    _wppRenderLista();
+    notify('🗑️ Conversa apagada');
+  } catch (err) {
+    notify('Erro ao apagar: ' + err.message, 'error');
+  }
 }
 
 async function wppEnviar() {
@@ -6856,5 +8160,55 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
   </div>
 </div>
+
+<!-- POPUP: EDITAR PAGAMENTO (relatório) -->
+<div id="pagEditPopup" style="position:fixed;z-index:600;display:none;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:200px">
+  <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Alterar pagamento</div>
+  <div style="display:flex;flex-direction:column;gap:5px">
+    <button onclick="confirmarPagEdit('pix')"      style="display:block;width:100%;padding:7px 12px;border-radius:7px;border:none;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;text-align:left;background:rgba(167,139,250,.15);color:#a78bfa">💰 PIX</button>
+    <button onclick="confirmarPagEdit('credito')"  style="display:block;width:100%;padding:7px 12px;border-radius:7px;border:none;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;text-align:left;background:rgba(96,165,250,.15);color:#60a5fa">💳 Cartão de crédito</button>
+    <button onclick="confirmarPagEdit('debito')"   style="display:block;width:100%;padding:7px 12px;border-radius:7px;border:none;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;text-align:left;background:rgba(34,211,238,.15);color:#22d3ee">💳 Cartão de débito</button>
+    <button onclick="confirmarPagEdit('dinheiro')" style="display:block;width:100%;padding:7px 12px;border-radius:7px;border:none;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;text-align:left;background:rgba(52,211,153,.15);color:#34d399">💵 Dinheiro</button>
+    <button onclick="confirmarPagEdit('pendente')" style="display:block;width:100%;padding:7px 12px;border-radius:7px;border:none;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;text-align:left;background:rgba(255,107,53,.15);color:#ff6b35">⏳ Pendente</button>
+  </div>
+</div>
+<script>
+let _pagEditId = null;
+
+function abrirPagEdit(e, id) {
+  e.stopPropagation();
+  _pagEditId = id;
+  const pop = document.getElementById('pagEditPopup');
+  pop.style.display = 'block';
+  const pw = 210, ph = 220;
+  pop.style.left = Math.min(e.clientX, window.innerWidth  - pw - 12) + 'px';
+  pop.style.top  = Math.min(e.clientY + 10, window.innerHeight - ph - 12) + 'px';
+}
+
+function fecharPagEdit() {
+  document.getElementById('pagEditPopup').style.display = 'none';
+  _pagEditId = null;
+}
+
+async function confirmarPagEdit(pag) {
+  if (!_pagEditId) return;
+  const id = _pagEditId;
+  fecharPagEdit();
+  try {
+    await db.collection('pedidos').doc(id).update({ pagamento: pag });
+    const local = pedidos.find(p => p.id === id);
+    if (local) local.pagamento = pag;
+    if (typeof renderRelatorioDia === 'function') renderRelatorioDia();
+    notify('Pagamento atualizado');
+  } catch(e) {
+    notify('Erro ao atualizar: ' + e.message, 'error');
+  }
+}
+
+document.addEventListener('click', function(e) {
+  const pop = document.getElementById('pagEditPopup');
+  if (pop && pop.style.display !== 'none' && !pop.contains(e.target)) fecharPagEdit();
+});
+</script>
 </body>
 </html>

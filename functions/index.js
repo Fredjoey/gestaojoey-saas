@@ -73,7 +73,9 @@ exports.emitirNFCe = onRequest(
         });
       }
 
-      const baseUrl = 'https://api.focusnfe.com.br';
+      const baseUrl = (fiscal.ambiente || fiscal.fAmbiente) === 'homologacao'
+        ? 'https://homologacao.focusnfe.com.br'
+        : 'https://api.focusnfe.com.br';
 
       const ref = `joey-${pedidoId}-${Date.now()}`;
 
@@ -106,26 +108,36 @@ exports.emitirNFCe = onRequest(
         };
       });
 
+      const totalItens = parseFloat(items.reduce((s, i) => s + i.valor_bruto, 0).toFixed(2));
+      const formaPag = mapFormaPagamento(pagamento);
+      const pagObj = {
+        forma_pagamento: formaPag,
+        valor_pagamento: totalItens,
+      };
+      if (formaPag === '01' && req.body?.troco > 0) {
+        pagObj.troco = parseFloat(req.body.troco.toFixed(2));
+      }
+
       const nfcePayload = {
         natureza_operacao:           'Venda ao consumidor',
         data_emissao:                dataEmissao,
         tipo_documento:              1,
         finalidade_emissao:          1,
         consumidor_final:            1,
-        presenca_comprador:          1,
+        presenca_comprador:          (req.body?.entrega === 'delivery') ? 2 : 1,
         modalidade_frete:            9,
         valor_frete:                 0,
         cnpj_emitente:               (fiscal.cnpj || '').replace(/\D/g, '') || undefined,
         inscricao_estadual_emitente: (fiscal.ie || '').trim() || undefined,
-        regime_tributario_emitente:  fiscal.regime === 'simples' ? 1 : (parseInt(fiscal.regime) || 1),
+        telefone_emitente:           (fiscal.telefone || '').replace(/\D/g, '') || undefined,
+        regime_tributario_emitente:  fiscal.regime === 'simples' ? 1 : fiscal.regime === 'presumido' ? 2 : fiscal.regime === 'real' ? 3 : 1,
+        percentual_tributos_incidentes: fiscal.percTributos ? parseFloat(fiscal.percTributos) : undefined,
+        informacoes_adicionais_contribuinte: (fiscal.msgRodape || '').trim() || undefined,
         csc:                         (fiscal.csc || '').trim() || undefined,
         csc_id:                      String(fiscal.idCsc || '').trim() || undefined,
         serie:                       fiscal.serieNfce || fiscal.serieNFCe || 2,
         items,
-        formas_pagamento: [{
-          forma_pagamento: mapFormaPagamento(pagamento),
-          valor_pagamento: parseFloat((total || 0).toFixed(2)),
-        }],
+        formas_pagamento: [pagObj],
       };
 
       // Remove campos undefined para não poluir o JSON enviado
@@ -153,9 +165,10 @@ exports.emitirNFCe = onRequest(
       const focusData  = focusResp.data || {};
       const httpStatus = focusResp.status;
 
-      const statusNota = focusData.status === 'autorizado' ? 'emitida'
-                       : httpStatus >= 400               ? 'erro'
-                       :                                   'pendente';
+      const statusNota = focusData.status === 'autorizado'  ? 'emitida'
+                       : focusData.status === 'processando' ? 'pendente'
+                       : httpStatus >= 400                  ? 'erro'
+                       :                                      'pendente';
 
       // Salva resultado no Firestore
       const agora2 = new Date();
@@ -172,7 +185,9 @@ exports.emitirNFCe = onRequest(
         numeroNota:   focusData.numero         || null,
         chaveAcesso:  focusData.chave_nfe      || null,
         chaveNfe:     focusData.chave_nfe      || null,
-        danfeUrl:     focusData.caminho_danfe ? baseUrl + focusData.caminho_danfe : null,
+        danfeUrl:     focusData.caminho_danfe
+          ? `${baseUrl}${focusData.caminho_danfe}?token=${focusToken}`
+          : null,
         status:       statusNota,
         data: agora2.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
         hora: agora2.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
@@ -180,7 +195,9 @@ exports.emitirNFCe = onRequest(
       }, { merge: true });
 
       if (statusNota === 'emitida') {
-        const danfeUrl = focusData.caminho_danfe ? baseUrl + focusData.caminho_danfe : null;
+        const danfeUrl = focusData.caminho_danfe
+          ? `${baseUrl}${focusData.caminho_danfe}?token=${focusToken}`
+          : null;
         console.log('[emitirNFCe] autorizado — caminho_danfe:', focusData.caminho_danfe, '| danfeUrl:', danfeUrl);
         return res.json({
           ok:        true,

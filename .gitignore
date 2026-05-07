@@ -20,3 +20,7 @@ contatos*.json
 
 # Scripts locais com credenciais
 importar_clientes.js
+upload-splash.js
+
+# Claude Code (config local)
+.claude/

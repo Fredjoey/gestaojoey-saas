@@ -2,10 +2,17 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="facebook-domain-verification" content="o9pd15rgn40a8rvv117so7mz0flib7" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Joey Pizza – Cardápio Digital</title>
+<title>Joey</title>
+<meta property="og:title" content="Joey">
+<meta property="og:description" content="Faça seu pedido online 🍔">
+<meta property="og:image" content="https://pedidos-joey.web.app/joey_dog_refined.png">
+<meta property="og:url" content="https://hamburgueriajoey.com.br">
+<meta property="og:type" content="website">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 @import url('https://fonts.cdnfonts.com/css/abstante');
@@ -64,6 +71,7 @@ body{
   line-height:1;
   margin-bottom:1.5rem;
   text-shadow:0 2px 20px rgba(0,0,0,.9),0 0 40px rgba(255,107,53,.35);
+  animation: neonWhite 2.5s ease-in-out infinite alternate;
 }
 .hero-sub{display:none}
 .hero-info{
@@ -609,9 +617,146 @@ body{
   .form-row{grid-template-columns:1fr}
   .payment-grid{grid-template-columns:1fr 1fr}
 }
+
+/* MUSIC PLAYER */
+#musicBar{
+  position:fixed;
+  bottom:82px;right:16px;
+  z-index:9998;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+#musicBar button{
+  display:flex;
+  align-items:center;justify-content:center;
+  width:40px;height:40px;
+  border-radius:50%;
+  border:none;
+  background:rgba(20,20,20,.82);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  box-shadow:0 2px 12px rgba(0,0,0,.5);
+  cursor:pointer;
+  font-size:17px;
+  transition:opacity .2s,transform .15s;
+  opacity:.7;
+}
+#musicBar button:hover{opacity:1;transform:scale(1.1)}
+#musicBtn.playing{animation:musicPulse 2s ease-in-out infinite}
+@keyframes musicPulse{
+  0%,100%{opacity:.7;transform:scale(1)}
+  50%{opacity:1;transform:scale(1.1)}
+}
+
+/* SPLASH SCREEN */
+#splash{
+  display:none;
+  position:fixed;inset:0;z-index:99999;
+  background:#F5F5F5;
+  overflow:hidden;
+}
+.splash-on #splash{display:block}
+#splash-img{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  transform-origin:center center;
+  animation:splashImg 3s cubic-bezier(.4,0,.2,1) forwards;
+}
+#splash.splash-out{
+  animation:splashFadeOut .45s ease forwards;
+}
+@keyframes splashImg{
+  0%  {opacity:0;transform:scale(1)}
+  17% {opacity:1;transform:scale(1)}
+  30% {opacity:.08;transform:scale(1)}
+  43% {opacity:1;transform:scale(1)}
+  56% {opacity:.08;transform:scale(1)}
+  67% {opacity:1;transform:scale(1)}
+  80% {opacity:1;transform:scale(1)}
+  100%{opacity:1;transform:scale(2.5)}
+}
+@keyframes splashFadeOut{
+  from{opacity:1;pointer-events:all}
+  to  {opacity:0;pointer-events:none}
+}
+@keyframes ledPulse {
+  0% {
+    box-shadow:
+      0 0 4px #ff6b35,
+      0 0 10px #ff6b35,
+      0 0 20px rgba(255,107,53,0.6),
+      0 0 40px rgba(255,107,53,0.3);
+    opacity: 0.88;
+    filter: brightness(0.95);
+  }
+  40% {
+    opacity: 1;
+    filter: brightness(1.15);
+  }
+  42% {
+    opacity: 0.75;
+    filter: brightness(0.7);
+  }
+  44% {
+    opacity: 1;
+    filter: brightness(1.1);
+  }
+  100% {
+    box-shadow:
+      0 0 8px #ff6b35,
+      0 0 20px #ff6b35,
+      0 0 40px rgba(255,107,53,0.5),
+      0 0 80px rgba(255,107,53,0.2),
+      0 0 120px rgba(255,107,53,0.1);
+    opacity: 1;
+    filter: brightness(1.2);
+  }
+}
+.led-bar {
+  height: 4px;
+  width: 100%;
+  background: #ffaa77;
+  border-radius: 2px;
+  animation: ledPulse 2.5s ease-in-out infinite alternate;
+}
+@keyframes neonWhite {
+  0% {
+    text-shadow:
+      0 0 3px #fff,
+      0 0 8px rgba(255,255,255,0.4),
+      0 0 15px rgba(255,255,255,0.15);
+    opacity: 0.92;
+    filter: brightness(1);
+  }
+  40%  { opacity: 1; filter: brightness(1.05); }
+  42%  { opacity: 0.85; filter: brightness(0.92); }
+  44%  { opacity: 1; filter: brightness(1.05); }
+  100% {
+    text-shadow:
+      0 0 4px #fff,
+      0 0 12px rgba(255,255,255,0.3),
+      0 0 25px rgba(255,255,255,0.1);
+    opacity: 1;
+    filter: brightness(1.08);
+  }
+}
 </style>
 </head>
 <body>
+<script>
+if(!sessionStorage.getItem('splashShown')){
+  sessionStorage.setItem('splashShown','1');
+  document.documentElement.classList.add('splash-on');
+}
+</script>
+<div id="splash">
+  <img id="splash-img"
+    src="https://firebasestorage.googleapis.com/v0/b/pedidos-joey.firebasestorage.app/o/assets%2FFundo_de_entrada.png?alt=media"
+    alt="">
+</div>
+<div id="ytPlayerEl" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none"></div>
 
 <!-- HERO -->
 <div class="hero">
@@ -624,6 +769,7 @@ body{
   </div>
   <button class="hist-btn" onclick="openMeusPedidos()">📋 Meus pedidos</button>
 </div>
+<div class="led-bar"></div>
 
 <!-- BANNER FECHADO (oculto por padrão) -->
 <div id="bannerFechado" style="display:none;background:linear-gradient(90deg,#1a0800,#200a00);border-bottom:2px solid rgba(255,107,53,.4);padding:12px 1.5rem;text-align:center;align-items:center;justify-content:center;gap:8px">
@@ -690,6 +836,17 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+
+// Splash: dispara saída após 2.8s (animação dura 3s)
+(function(){
+  if(!document.documentElement.classList.contains('splash-on')) return;
+  var sp = document.getElementById('splash');
+  if(!sp) return;
+  setTimeout(function(){
+    sp.classList.add('splash-out');
+    setTimeout(function(){ sp.style.display='none'; }, 450);
+  }, 2800);
+})();
 
 // Captura mesa via ?mesa=X e persiste na sessão
 (function() {
@@ -768,9 +925,13 @@ function carregarDadosPainel() {
     });
     CATEGORIAS.length = 0;
     [...new Set(CARDAPIO.map(p => p.categoria))].forEach(c => CATEGORIAS.push(c));
+    // Ordena pelo array dinâmico do gestor; fallback para CAT_ORDER do Firestore
+    const _ord = _catOrdem.length ? _catOrdem : CAT_ORDER;
     CATEGORIAS.sort((a, b) => {
-      const ia = CAT_ORDER.indexOf(a), ib = CAT_ORDER.indexOf(b);
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      const ia = _ord.indexOf(a), ib = _ord.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b, 'pt');
+      if (ia === -1) return 1; if (ib === -1) return -1;
+      return ia - ib;
     });
     if (!CATEGORIAS.includes(catAtiva)) catAtiva = CATEGORIAS[0] || '';
     renderCats();
@@ -786,9 +947,12 @@ function carregarDadosPainel() {
     CARDAPIO_PADRAO.forEach(p => CARDAPIO.push(p));
     CATEGORIAS.length = 0;
     [...new Set(CARDAPIO.map(p => p.categoria))].forEach(c => CATEGORIAS.push(c));
+    const _ord = _catOrdem.length ? _catOrdem : CAT_ORDER;
     CATEGORIAS.sort((a, b) => {
-      const ia = CAT_ORDER.indexOf(a), ib = CAT_ORDER.indexOf(b);
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      const ia = _ord.indexOf(a), ib = _ord.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b, 'pt');
+      if (ia === -1) return 1; if (ib === -1) return -1;
+      return ia - ib;
     });
     catAtiva = CATEGORIAS[0] || '';
     renderCats();
@@ -801,17 +965,43 @@ function carregarDadosPainel() {
     buildCatalogo();
   });
 
+  // Ordem dinâmica definida pelo gestor
+  db.doc('config/catOrdem').onSnapshot(snap => {
+    _catOrdem = snap.exists ? (snap.data().ordem || []) : [];
+    buildCatalogo();
+  });
+  db.doc('config/prodOrdem').onSnapshot(snap => {
+    _prodOrdem = snap.exists ? snap.data() : {};
+    renderProducts();
+  });
+
   dbJoey.collection('adicionais').onSnapshot(snap => {
     _adicionaisCatalogo = {};
     snap.docs.forEach(d => { _adicionaisCatalogo[d.id] = { id: d.id, ...d.data() }; });
+  }, () => {});
+
+  dbJoey.collection('categorias').onSnapshot(snap => {
+    EMOJI_CAT = {};
+    CAT_ORDER = [];
+    snap.docs.forEach(d => {
+      const data = d.data();
+      if (data.nome) {
+        EMOJI_CAT[data.nome] = data.emoji || '🍽️';
+        CAT_ORDER.push(data.nome);
+      }
+    });
+    CAT_ORDER.sort((a, b) => a.localeCompare(b, 'pt'));
+    buildCatalogo();
   }, () => {});
 }
 
 const CARDAPIO   = [];
 const CATEGORIAS = [];
 const CONFIG     = { nome:'Joey Pizza', wpp:'', taxa:5, pedidoMinimo:0, horario:'', end:'', bairros:[], horarios:{}, aberto:true, tempo_delivery:'40-60 min', tempo_retirada:'20-30 min', tempo_local:'15-20 min', destaque:null };
-const EMOJI_CAT  = {Pizza:'🍕',Sobremesa:'🍰',Bebida:'🥤',Porção:'🍟',Burger:'🍔',Outro:'🍽️'};
-const CAT_ORDER  = ['Burger','Porção','Pizza','Outro','Bebida'];
+let EMOJI_CAT  = {};  // preenchido dinamicamente pela coleção 'categorias' do sistema-joey
+let CAT_ORDER  = [];  // preenchido dinamicamente pela coleção 'categorias' do sistema-joey
+let _catOrdem  = [];  // ordem dinâmica do Firestore (config/catOrdem)
+let _prodOrdem = {};  // ordem de produtos por categoria (config/prodOrdem)
 
 // =================== iOS COMPAT HELPERS ===================
 let _scrollLockY = 0;
@@ -1012,7 +1202,16 @@ function renderProducts() {
   }
 
   const catHtml = CATEGORIAS.map(cat => {
-    const prods = CARDAPIO.filter(p => p.categoria === cat);
+    let prods = CARDAPIO.filter(p => p.categoria === cat);
+    const ordCat = _prodOrdem[cat];
+    if (ordCat && ordCat.length) {
+      prods = [...prods].sort((a, b) => {
+        const ia = ordCat.indexOf(String(a.id)), ib = ordCat.indexOf(String(b.id));
+        if (ia === -1 && ib === -1) return 0;
+        if (ia === -1) return 1; if (ib === -1) return -1;
+        return ia - ib;
+      });
+    }
     return `
       <section class="section" id="cat-${cat}">
         <div class="section-title"><span>${EMOJI_CAT[cat]||'🍽️'}</span> ${cat}</div>
@@ -2034,6 +2233,87 @@ function bnavIr(tab) {
   if (tab === 'pedidos')  openMeusPedidos();
   if (tab === 'carrinho') openCart();
 }
+
+// =================== MUSIC PLAYER (YouTube) ===================
+var _ytPlayer     = null;
+var _ytReady      = false;
+var _ytPending    = false;
+var _ytUserPaused = sessionStorage.getItem('musicPaused') === '1';
+
+function _ytUpdateBtn(playing) {
+  var btn = document.getElementById('musicBtn');
+  if (!btn) return;
+  btn.textContent = playing ? '🎵' : '🔇';
+  btn.classList.toggle('playing', !!playing);
+}
+
+// Inicia numa posição aleatória 0-4 (playlist tem 5 músicas)
+function _ytStartRandom() {
+  _ytPlayer.playVideoAt(Math.floor(Math.random() * 5));
+}
+
+window.onYouTubeIframeAPIReady = function() {
+  _ytPlayer = new YT.Player('ytPlayerEl', {
+    playerVars: {
+      listType:       'playlist',
+      list:           'PLbvbU6hvzJqQksnHysbvR4GC1YyTbHy8k',
+      autoplay:       0,
+      controls:       0,
+      disablekb:      1,
+      fs:             0,
+      iv_load_policy: 3,
+      modestbranding: 1,
+      rel:            0,
+      playsinline:    1,
+      origin:         location.origin
+    },
+    events: {
+      onReady: function() {
+        _ytReady = true;
+        _ytPlayer.setShuffle(true);
+        _ytPlayer.setLoop(true);
+        if (_ytPending && !_ytUserPaused) {
+          _ytStartRandom();
+          _ytPending = false;
+        }
+      },
+      onStateChange: function(e) {
+        var playing = e.data === YT.PlayerState.PLAYING;
+        _ytUpdateBtn(playing);
+        if (playing) {
+          sessionStorage.removeItem('musicPaused');
+          _ytUserPaused = false;
+        } else if (e.data === YT.PlayerState.PAUSED) {
+          sessionStorage.setItem('musicPaused', '1');
+          _ytUserPaused = true;
+        }
+      }
+    }
+  });
+};
+
+function _ytToggle() {
+  if (!_ytPlayer || !_ytReady) return;
+  if (_ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
+    _ytPlayer.pauseVideo();
+  } else {
+    _ytPlayer.playVideo();
+  }
+}
+function _ytPrev() { if (_ytPlayer && _ytReady) _ytPlayer.previousVideo(); }
+function _ytNext() { if (_ytPlayer && _ytReady) _ytPlayer.nextVideo(); }
+
+(function() {
+  function _onFirstInteraction() {
+    document.removeEventListener('click',      _onFirstInteraction, true);
+    document.removeEventListener('touchstart', _onFirstInteraction, true);
+    if (_ytUserPaused) return;
+    if (_ytReady) { _ytStartRandom(); }
+    else          { _ytPending = true; }
+  }
+  document.addEventListener('click',      _onFirstInteraction, true);
+  document.addEventListener('touchstart', _onFirstInteraction, true);
+})();
 </script>
 
 <nav class="bottom-nav">
@@ -2051,5 +2331,11 @@ function bnavIr(tab) {
     <span class="bnav-label">Carrinho</span>
   </button>
 </nav>
+
+<div id="musicBar">
+  <button onclick="_ytPrev()" aria-label="Música anterior">⏮</button>
+  <button id="musicBtn" onclick="_ytToggle()" aria-label="Pausar/Tocar">🔇</button>
+  <button onclick="_ytNext()" aria-label="Próxima música">⏭</button>
+</div>
 </body>
 </html>

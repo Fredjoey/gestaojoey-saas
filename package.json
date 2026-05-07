@@ -1,0 +1,24 @@
+{
+  "name": "sistema-pedidos-joey",
+  "version": "1.0.0",
+  "description": "",
+  "main": "importar_clientes.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fredjoey/sistema-pedidos-joey.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Fredjoey/sistema-pedidos-joey/issues"
+  },
+  "homepage": "https://github.com/Fredjoey/sistema-pedidos-joey#readme",
+  "dependencies": {
+    "firebase-admin": "^13.8.0"
+  }
+}
