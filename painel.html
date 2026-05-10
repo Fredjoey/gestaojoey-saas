@@ -2478,16 +2478,14 @@ function finalizarPedido(id) {
 }
 
 function avancarTodosProntos() {
-  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  const lista = pedidos.filter(p => p.status === 'pronto' && p.data === hoje);
+  const lista = pedidos.filter(p => p.status === 'pronto');
   if (lista.length === 0) { notify('Nenhum pedido pronto para avançar.'); return; }
   if (!confirm(`Avançar ${lista.length} pedido(s) de "Prontos p/ entrega" para "Entregues"?`)) return;
   lista.forEach(p => avancarStatus(p.id));
 }
 
 function finalizarTodosEntregues() {
-  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  const lista = pedidos.filter(p => p.status === 'entregue' && p.data === hoje);
+  const lista = pedidos.filter(p => p.status === 'entregue');
   if (lista.length === 0) { notify('Nenhum pedido entregue para finalizar.'); return; }
   if (!confirm(`Finalizar ${lista.length} pedido(s) de "Entregues hoje"?`)) return;
   lista.forEach(p => finalizarPedido(p.id));
