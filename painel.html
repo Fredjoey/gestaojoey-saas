@@ -512,7 +512,7 @@ textarea.fi{resize:vertical;min-height:60px}
       <button class="tb-btn tb-btn-ghost" id="btnNotifPerm" onclick="ativarNotificacoes()" style="display:none;align-items:center;gap:6px;background:rgba(245,158,11,.15);color:#f59e0b;border-color:rgba(245,158,11,.3)">🔔 Ativar notificações</button>
       <button class="tb-btn tb-btn-primary" onclick="abrirNovoPedidoModal()">+ Novo Pedido</button>
       <button class="tb-btn tb-btn-ghost" onclick="copiarLink()">📋 Link cardápio</button>
-      <button class="tb-btn tb-btn-ghost" onclick="window.open('https://sistema-joey.web.app','_blank')" title="Gestão Joey">📊</button>
+      <button class="tb-btn tb-btn-ghost" onclick="if(GESTAO_URL){window.open(GESTAO_URL,'_blank')}else{alert('Gestão ainda não disponível para sua conta. Entre em contato com o suporte.')}" title="Gestão">📊</button>
     </div>
   </div>
 
@@ -1647,8 +1647,15 @@ function showPanel(panel, navEl) {
 }
 
 // ── Conexão WhatsApp ──────────────────────────────────────────────
-const WA_API  = slug === 'joey' ? 'https://joeyapi-production.up.railway.app' : `https://joeyapi-${slug}-production.up.railway.app`;
-const BOT_URL = WA_API;
+const WA_API     = slug === 'joey' ? 'https://joeyapi-production.up.railway.app' : `https://joeyapi-${slug}-production.up.railway.app`;
+const BOT_URL    = WA_API;
+// Mapeamento de URLs de gestão por slug.
+// Adicionar manualmente conforme cada cliente provisionar a gestão multi-tenant.
+const GESTAO_URLS = {
+  'joey': 'https://gestao.hamburgueriajoey.com.br'
+  // 'cliente-x': 'https://gestao.clientex.com.br'
+};
+const GESTAO_URL = GESTAO_URLS[slug] || null;
 
 async function enviarWhatsAppBot(numero, mensagem) {
   let tel = (numero || '').replace(/\D/g, '');
