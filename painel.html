@@ -1523,29 +1523,24 @@ textarea.fi{resize:vertical;min-height:60px}
 <script>
 // =================== FIREBASE ===================
 const firebaseConfig = {
-  apiKey: "AIzaSyA2iSOixWWIpQ9VERMOSpQsDQKQTk5TumU",
-  authDomain: "pedidos-joey.firebaseapp.com",
-  projectId: "pedidos-joey",
-  storageBucket: "pedidos-joey.firebasestorage.app",
-  messagingSenderId: "908000090595",
-  appId: "1:908000090595:web:aa4df2d9535bad6bf868d6"
+  apiKey: "AIzaSyA8yx0BXHDZee_RyLteJbSuQDzInj-GpFM",
+  authDomain: "gestaojoey.firebaseapp.com",
+  projectId: "gestaojoey",
+  storageBucket: "gestaojoey.firebasestorage.app",
+  messagingSenderId: "372331148907",
+  appId: "1:372331148907:web:aa5eb48d309a167ad1a32e"
 };
 firebase.initializeApp(firebaseConfig);
 const db      = firebase.firestore();
 const auth    = firebase.auth();
 const storage = firebase.storage();
-
-// =================== SISTEMA-JOEY (segundo Firebase — leitura de recipes) ===================
-const sistemaJoeyConfig = {
-  apiKey: "AIzaSyD1s__6XaGkpBr-7XcCmSwqZicnaiLhMMA",
-  authDomain: "sistema-joey.firebaseapp.com",
-  projectId: "sistema-joey",
-  storageBucket: "sistema-joey.firebasestorage.app",
-  messagingSenderId: "184324581927",
-  appId: "1:184324581927:web:2847ab94cb0cb39d227c02"
-};
-const sistemaJoeyApp = firebase.initializeApp(sistemaJoeyConfig, 'sistemaJoey');
-const dbJoey = sistemaJoeyApp.firestore();
+const hostname = window.location.hostname;
+const slug = (
+  hostname === 'pedidos.hamburgueriajoey.com.br' ||
+  hostname === 'pedidos-joey-painel.web.app' ||
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1'
+) ? 'joey' : hostname.split('.')[0];
 
 // =================== CONSTANTES ===================
 const STATUS_LABELS = {
@@ -1576,16 +1571,16 @@ let _bairroEditIdx = -1;
 
 // =================== PERSISTÊNCIA FIREBASE ===================
 function saveCardapio() {
-  db.doc('config/cardapio').set({ items: cardapio });
+  db.doc(`clientes/${slug}/config/cardapio`).set({ items: cardapio });
 }
 function saveConfig() {
-  db.doc('config/loja').set(config);
+  db.doc(`clientes/${slug}/config/loja`).set(config);
 }
 function salvarPedidoFb(pedido) {
-  return db.collection('pedidos').doc(pedido.id).set(pedido);
+  return db.collection(`clientes/${slug}/pedidos`).doc(pedido.id).set(pedido);
 }
 function atualizarStatusFb(id, status) {
-  return db.collection('pedidos').doc(id).update({ status });
+  return db.collection(`clientes/${slug}/pedidos`).doc(id).update({ status });
 }
 function _agoraBRT() {
   const brtStr = new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' });
@@ -1652,8 +1647,8 @@ function showPanel(panel, navEl) {
 }
 
 // ── Conexão WhatsApp ──────────────────────────────────────────────
-const WA_API = 'https://joeyapi-production.up.railway.app';
-const BOT_URL = 'https://joeyapi-production.up.railway.app';
+const WA_API  = slug === 'joey' ? 'https://joeyapi-production.up.railway.app' : `https://joeyapi-${slug}-production.up.railway.app`;
+const BOT_URL = WA_API;
 
 async function enviarWhatsAppBot(numero, mensagem) {
   let tel = (numero || '').replace(/\D/g, '');
@@ -1768,7 +1763,10 @@ function renderKanban() {
           <div class="col-header">
             <div class="col-header-top">
               <span class="col-title">${col.title}</span>
-              <span class="col-count">${cp.length}</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <button onclick="finalizarTodosEntregues()" style="background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">✓ Finalizar todos</button>
+                <span class="col-count">${cp.length}</span>
+              </div>
             </div>
             <div class="col-search">
               <input type="text" placeholder="🔍 Cliente ou #pedido..."
@@ -1787,7 +1785,10 @@ function renderKanban() {
       <div class="kanban-col ${col.cls}">
         <div class="col-header">
           <span class="col-title">${col.title}</span>
-          <span class="col-count">${cp.length}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${col.key === 'pronto' ? `<button onclick="avancarTodosProntos()" style="background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">🛵 Avançar todos</button>` : ''}
+            <span class="col-count">${cp.length}</span>
+          </div>
         </div>
         <div class="col-body">
           ${cp.length===0
@@ -1965,7 +1966,7 @@ function avancarStatus(id) {
 
 async function salvarNotaFiscalPedido(p) {
   try {
-    const docRef = db.collection('notasFiscais').doc(String(p.id));
+    const docRef = db.collection(`clientes/${slug}/notasFiscais`).doc(String(p.id));
     const snap = await docRef.get();
     if (snap.exists) return;
     const agora = new Date();
@@ -2453,7 +2454,7 @@ async function cancelarPedido(id) {
       );
       if (!temOutroAtivo) {
         try {
-          await db.collection('mesas').doc(mesaId).set(
+          await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
             { status: 'livre', pedidos: [], total: 0 },
             { merge: false }
           );
@@ -2474,6 +2475,22 @@ function finalizarPedido(id) {
   renderKanban();
   atualizarStatusFb(id, 'finalizado');
   notify(`Pedido ${id} finalizado.`);
+}
+
+function avancarTodosProntos() {
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const lista = pedidos.filter(p => p.status === 'pronto' && p.data === hoje);
+  if (lista.length === 0) { notify('Nenhum pedido pronto para avançar.'); return; }
+  if (!confirm(`Avançar ${lista.length} pedido(s) de "Prontos p/ entrega" para "Entregues"?`)) return;
+  lista.forEach(p => avancarStatus(p.id));
+}
+
+function finalizarTodosEntregues() {
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const lista = pedidos.filter(p => p.status === 'entregue' && p.data === hoje);
+  if (lista.length === 0) { notify('Nenhum pedido entregue para finalizar.'); return; }
+  if (!confirm(`Finalizar ${lista.length} pedido(s) de "Entregues hoje"?`)) return;
+  lista.forEach(p => finalizarPedido(p.id));
 }
 
 function openOrderModal(id) {
@@ -2594,7 +2611,7 @@ function moverCategoria(cat, dir) {
   catOrdem = sorted;
   renderCatFilters();
   renderCardapioEditor();
-  db.doc('config/catOrdem').set({ ordem: sorted })
+  db.doc(`clientes/${slug}/config/catOrdem`).set({ ordem: sorted })
     .catch(e => notify('Erro ao salvar ordem: ' + e.message, 'error'));
 }
 
@@ -2610,7 +2627,7 @@ function moverProduto(id, cat, dir) {
   [ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]];
   prodOrdem = { ...prodOrdem, [cat]: ids };
   renderCardapioEditor();
-  db.doc('config/prodOrdem').set({ [cat]: ids }, { merge: true })
+  db.doc(`clientes/${slug}/config/prodOrdem`).set({ [cat]: ids }, { merge: true })
     .catch(e => notify('Erro ao salvar ordem: ' + e.message, 'error'));
 }
 
@@ -2705,7 +2722,7 @@ function renderCardapioEditor() {
 }
 
 function toggleReceita(id, ativo) {
-  db.collection('catalogoStatus').doc(id).set({ ativo }, { merge: true });
+  db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ ativo }, { merge: true });
 }
 
 (function() {
@@ -2721,7 +2738,7 @@ function toggleReceita(id, ativo) {
       const ref = storage.ref('produtos/' + id + '/foto');
       await ref.put(file);
       const url = await ref.getDownloadURL();
-      await db.collection('catalogoStatus').doc(id).set({ foto: url }, { merge: true });
+      await db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ foto: url }, { merge: true });
       notify('Foto atualizada!');
     } catch(e) {
       notify('Erro ao enviar foto: ' + e.message, 'error');
@@ -2741,7 +2758,7 @@ function _abrirUploadFoto(id) {
 async function _removerFotoProduto(id) {
   if (!confirm('Remover a foto deste produto?')) return;
   try {
-    await db.collection('catalogoStatus').doc(id).set({ foto: null }, { merge: true });
+    await db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ foto: null }, { merge: true });
     try { await storage.ref('produtos/' + id + '/foto').delete(); } catch(_) {}
     notify('Foto removida.');
   } catch(e) {
@@ -2870,7 +2887,7 @@ async function uploadBanner(input) {
     const ref  = storage.ref('banners/cardapio-banner');
     await ref.put(file);
     const url  = await ref.getDownloadURL();
-    await db.doc('config/loja').set({ bannerUrl: url }, { merge: true });
+    await db.doc(`clientes/${slug}/config/loja`).set({ bannerUrl: url }, { merge: true });
     config.bannerUrl = url;
     _setBannerPreview(url);
     status.textContent = '✓ Foto atualizada com sucesso!';
@@ -2885,7 +2902,7 @@ async function uploadBanner(input) {
 async function removerBanner() {
   if (!confirm('Remover a foto do banner? O cardápio voltará a usar a imagem padrão.')) return;
   try {
-    await db.doc('config/loja').set({ bannerUrl: null }, { merge: true });
+    await db.doc(`clientes/${slug}/config/loja`).set({ bannerUrl: null }, { merge: true });
     config.bannerUrl = null;
     _setBannerPreview(null);
     try { await storage.ref('banners/cardapio-banner').delete(); } catch(_) {}
@@ -2948,7 +2965,7 @@ function salvarConfig() {
     bannerUrl:      config.bannerUrl || null
   };
   saveConfig();
-  db.doc('config/configuracoes').set({ valorMinimoPedido: config.pedidoMinimo || 0 }, { merge: true });
+  db.doc(`clientes/${slug}/config/configuracoes`).set({ valorMinimoPedido: config.pedidoMinimo || 0 }, { merge: true });
   atualizarSidebar();
   notify('Configurações salvas!');
 }
@@ -2982,7 +2999,7 @@ async function carregarHistoricoBackup() {
   const el = document.getElementById('backupStatus');
   if (!el) return;
   try {
-    const snap = await db.collection('backups').orderBy('iniciadoEm', 'desc').limit(5).get();
+    const snap = await db.collection(`clientes/${slug}/backups`).orderBy('iniciadoEm', 'desc').limit(5).get();
     if (snap.empty) {
       el.innerHTML = '<div style="font-size:12px;color:var(--text2)">Nenhum backup realizado ainda.</div>';
       return;
@@ -3143,7 +3160,7 @@ function _slugCategoria(nome) {
 
 async function carregarCategoriasGestao() {
   try {
-    const snap = await dbJoey.collection('categorias').get();
+    const snap = await db.collection(`clientes/${slug}/categorias`).get();
     const lista = [];
     snap.forEach(d => {
       const nome = ((d.data() || {}).nome || '').trim();
@@ -3340,8 +3357,8 @@ function renderFiscalProdutos() {
 async function carregarFiscalCategorias() {
   try {
     const [catSnap, ncmSnap] = await Promise.all([
-      db.doc('config/categoriasTributarias').get(),
-      db.doc('config/ncmProdutos').get(),
+      db.doc(`clientes/${slug}/config/categoriasTributarias`).get(),
+      db.doc(`clientes/${slug}/config/ncmProdutos`).get(),
     ]);
     fiscalCategorias  = catSnap.exists ? (catSnap.data() || {}) : {};
     fiscalNcmProdutos = ncmSnap.exists ? (ncmSnap.data() || {}) : {};
@@ -3371,7 +3388,7 @@ function salvarFiscalCategorias() {
       cbs:          parseFloat(get('cbs'))            || 0.9,
     };
   }
-  db.doc('config/categoriasTributarias').set(data)
+  db.doc(`clientes/${slug}/config/categoriasTributarias`).set(data)
     .then(() => notify('Categorias tributárias salvas!'))
     .catch(() => notify('Erro ao salvar.', 'error'));
 }
@@ -3435,7 +3452,7 @@ function _validarCategoriaFiscal(nome, cfg) {
 async function carregarVerificacaoFiscal() {
   await carregarCategoriasGestao();
   try {
-    const catSnap = await db.doc('config/categoriasTributarias').get();
+    const catSnap = await db.doc(`clientes/${slug}/config/categoriasTributarias`).get();
     fiscalCategorias = catSnap.exists ? (catSnap.data() || {}) : {};
   } catch (e) { /* mantém valores anteriores */ }
   renderVerificacaoFiscal();
@@ -3543,7 +3560,7 @@ async function salvarNcmProduto(prodId, ncm) {
   } else {
     delete fiscalNcmProdutos[String(prodId)];
   }
-  await db.doc('config/ncmProdutos').set(fiscalNcmProdutos)
+  await db.doc(`clientes/${slug}/config/ncmProdutos`).set(fiscalNcmProdutos)
     .then(() => notify('NCM individual salvo!'))
     .catch(() => notify('Erro ao salvar NCM.', 'error'));
 }
@@ -3579,7 +3596,7 @@ function handleCertFile(input) {
 }
 
 function carregarFiscal() {
-  db.doc('config/fiscal').get().then(snap => {
+  db.doc(`clientes/${slug}/config/fiscal`).get().then(snap => {
     if (!snap.exists) return;
     const f = snap.data();
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -3612,7 +3629,7 @@ function salvarFiscal() {
     apiKey: get('fApiKey'), fAmbiente: get('fAmbiente') || 'homologacao',
     certNome: get('fCertNome'), certSenha: get('fCertSenha')
   };
-  db.doc('config/fiscal').set(data)
+  db.doc(`clientes/${slug}/config/fiscal`).set(data)
     .then(() => notify('Configuração fiscal salva!'))
     .catch(() => notify('Erro ao salvar.', 'error'));
 }
@@ -3623,7 +3640,7 @@ let _nfListener = null;
 
 function carregarNotasFiscais() {
   if (_nfListener) { renderRelatorioNotas(); return; }
-  _nfListener = db.collection('notasFiscais').orderBy('criadoEm','desc').onSnapshot(snap => {
+  _nfListener = db.collection(`clientes/${slug}/notasFiscais`).orderBy('criadoEm','desc').onSnapshot(snap => {
     notasFiscais = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
     if (document.getElementById('panel-fiscal').style.display !== 'none' && fiscalAba === 'notas') renderRelatorioNotas(); if (_relTab === 'dia') renderRelatorioDia();
   }, err => console.warn('notasFiscais:', err));
@@ -4346,13 +4363,13 @@ async function _npFazerBuscaCliente() {
   try {
     let data = null;
     const id = tel.startsWith('55') ? tel : '55' + tel;
-    const snap = await db.collection('clientes').doc(id).get();
+    const snap = await db.collection(`clientes/${slug}/clientes`).doc(id).get();
     if (snap.exists) data = snap.data();
 
     // Fallback: query por campo telefone (sem código país)
     if (!data) {
       const semCC = tel.startsWith('55') ? tel.slice(2) : tel;
-      const q = await db.collection('clientes').where('telefone', '==', semCC).limit(1).get();
+      const q = await db.collection(`clientes/${slug}/clientes`).where('telefone', '==', semCC).limit(1).get();
       if (!q.empty) data = q.docs[0].data();
     }
     if (!data) { if (ind) ind.style.display = 'none'; return; }
@@ -4388,7 +4405,7 @@ async function npConfirmar() {
   if (_npTipo === 'delivery' && !bairro) { notify('Selecione o bairro para delivery.', 'warning'); return; }
   const subtotal = _npCart.reduce((s, i) => s + (i.precoTotal != null ? i.precoTotal : i.preco) * i.qty, 0);
   const total    = subtotal + _npTaxa;
-  const contadorRef = db.doc('config/contador');
+  const contadorRef = db.doc(`clientes/${slug}/config/contador`);
   try {
     const novoId = await db.runTransaction(t => t.get(contadorRef).then(doc => {
       const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
@@ -4433,7 +4450,7 @@ function addPedidoDemo(){
   const idx=Math.floor(Math.random()*nomes.length),itens=io[Math.floor(Math.random()*io.length)],tipo=tipos[Math.floor(Math.random()*tipos.length)];
   const sub=itens.reduce((s,i)=>s+i.preco*i.qty,0),taxa=tipo==='delivery'?(config.taxa||5):0;
 
-  const contadorRef = db.doc('config/contador');
+  const contadorRef = db.doc(`clientes/${slug}/config/contador`);
   db.runTransaction(t => {
     return t.get(contadorRef).then(doc => {
       const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
@@ -4460,7 +4477,7 @@ function addPedidoDemo(){
 
 window.deletarTodosPedidosTeste = async function() {
   if (!confirm('Deletar TODOS os pedidos da coleção? Isso não pode ser desfeito.')) return;
-  const snap = await db.collection('pedidos').get();
+  const snap = await db.collection(`clientes/${slug}/pedidos`).get();
   const batch = db.batch();
   snap.docs.forEach(d => batch.delete(d.ref));
   await batch.commit();
@@ -4859,7 +4876,7 @@ async function epConfirmar() {
     updates.cliente = { ...(p.cliente || {}), rua: (document.getElementById('epRua').value||'').trim(), bairro: document.getElementById('epBairro').value };
   }
   try {
-    await db.collection('pedidos').doc(_epPedidoId).update(updates);
+    await db.collection(`clientes/${slug}/pedidos`).doc(_epPedidoId).update(updates);
     fecharEditarPedido();
     notify('Pedido #' + _epPedidoId + ' atualizado!');
   } catch(e) {
@@ -4869,7 +4886,7 @@ async function epConfirmar() {
 }
 
 async function _migrarContador() {
-  const ref = db.doc('config/contador');
+  const ref = db.doc(`clientes/${slug}/config/contador`);
   await db.runTransaction(async t => {
     const doc = await t.get(ref);
     const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
@@ -4880,6 +4897,7 @@ async function _migrarContador() {
 auth.onAuthStateChanged(user => {
   document.getElementById('loginScreen').style.display = user ? 'none' : 'flex';
   if (user) {
+    if (!_listenersIniciados) { iniciarListenersFirestore(); _listenersIniciados = true; }
     atualizarBtnNotificacao();
     _anivVerificado = ''; // reseta guard para rodar com auth
     verificarAniversariantes();
@@ -4988,47 +5006,112 @@ function _pararTitleFlash() {
 _atualizarBtnSom();
 
 // =================== LISTENERS FIREBASE (TEMPO REAL) ===================
-db.doc('config/loja').onSnapshot(snap => {
-  const defaults = { nome:'Joey Pizza', wpp:'', taxa:5, end:'', aberto:true, horarios:{}, bairros:[], impressaoAtiva:true, viasImpressao:1, impressoraNome:'' };
-  config = snap.exists ? { ...defaults, ...snap.data() } : defaults;
-  atualizarSidebar();
-  atualizarTempoStrip();
-  if (!_qzInicializado) { _qzInicializado = true; _qzIniciar(); }
-  if (document.getElementById('panel-config').style.display !== 'none') { renderDestaqueOpts(); carregarConfig(); }
-});
+let _listenersIniciados = false;
+function iniciarListenersFirestore() {
+  db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
+    const defaults = { nome:'Joey Pizza', wpp:'', taxa:5, end:'', aberto:true, horarios:{}, bairros:[], impressaoAtiva:true, viasImpressao:1, impressoraNome:'' };
+    config = snap.exists ? { ...defaults, ...snap.data() } : defaults;
+    atualizarSidebar();
+    atualizarTempoStrip();
+    if (!_qzInicializado) { _qzInicializado = true; _qzIniciar(); }
+    if (document.getElementById('panel-config').style.display !== 'none') { renderDestaqueOpts(); carregarConfig(); }
+  });
 
-// Receitas do Sistema Joey (segundo Firebase — leitura apenas)
-dbJoey.collection('recipes').onSnapshot(snap => {
-  recipes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
-  if (document.getElementById('panel-config').style.display !== 'none') renderDestaqueOpts();
-  if (document.getElementById('panel-fiscal').style.display !== 'none' && fiscalAba === 'categorias') renderFiscalCategorias();
-}, err => console.warn('[sistema-joey] recipes:', err));
+  // Receitas do Sistema Joey (segundo Firebase — leitura apenas)
+  db.collection(`clientes/${slug}/recipes`).onSnapshot(snap => {
+    recipes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
+    if (document.getElementById('panel-config').style.display !== 'none') renderDestaqueOpts();
+    if (document.getElementById('panel-fiscal').style.display !== 'none' && fiscalAba === 'categorias') renderFiscalCategorias();
+  }, err => console.warn('[sistema-joey] recipes:', err));
 
-// Adicionais do Sistema Joey
-dbJoey.collection('adicionais').onSnapshot(snap => {
-  adicionaisBiblioteca = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
-}, err => console.warn('[sistema-joey] adicionais:', err));
+  // Adicionais do Sistema Joey
+  db.collection(`clientes/${slug}/adicionais`).onSnapshot(snap => {
+    adicionaisBiblioteca = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  }, err => console.warn('[sistema-joey] adicionais:', err));
 
-// Status de ativação por receita (pedidos-joey)
-db.collection('catalogoStatus').onSnapshot(snap => {
-  catalogoStatusMap = {};
-  snap.docs.forEach(d => { catalogoStatusMap[d.id] = d.data(); });
-  if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioEditor();
-  if (document.getElementById('panel-config').style.display !== 'none') renderDestaqueOpts();
-  if (document.getElementById('panel-fiscal').style.display !== 'none' && fiscalAba === 'categorias') renderFiscalCategorias();
-});
+  // Status de ativação por receita (pedidos-joey)
+  db.collection(`clientes/${slug}/catalogoStatus`).onSnapshot(snap => {
+    catalogoStatusMap = {};
+    snap.docs.forEach(d => { catalogoStatusMap[d.id] = d.data(); });
+    if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioEditor();
+    if (document.getElementById('panel-config').style.display !== 'none') renderDestaqueOpts();
+    if (document.getElementById('panel-fiscal').style.display !== 'none' && fiscalAba === 'categorias') renderFiscalCategorias();
+  });
 
-// Ordem de categorias e produtos
-db.doc('config/catOrdem').onSnapshot(snap => {
-  catOrdem = snap.exists ? (snap.data().ordem || []) : [];
-  if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
-});
-db.doc('config/prodOrdem').onSnapshot(snap => {
-  prodOrdem = snap.exists ? snap.data() : {};
-  if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioEditor();
-});
+  // Ordem de categorias e produtos
+  db.doc(`clientes/${slug}/config/catOrdem`).onSnapshot(snap => {
+    catOrdem = snap.exists ? (snap.data().ordem || []) : [];
+    if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
+  });
+  db.doc(`clientes/${slug}/config/prodOrdem`).onSnapshot(snap => {
+    prodOrdem = snap.exists ? snap.data() : {};
+    if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioEditor();
+  });
+
+  db.collection(`clientes/${slug}/pedidos`).onSnapshot(snap => {
+    _pedidosAnt = [...pedidos];
+    pedidos = snap.docs.map(d => d.data());
+    pedidos.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+    const novosIds = new Set(snap.docs.map(d => d.id));
+
+    if (_knownPedidoIds === null) {
+      // Primeira carga — apenas inicializa, sem disparar som
+      _knownPedidoIds = novosIds;
+    } else {
+      const chegaram = snap.docs.filter(d => !_knownPedidoIds.has(d.id) && d.data().status === 'novo');
+      if (chegaram.length > 0) {
+        const qtd = chegaram.length;
+        notify(`🆕 ${qtd > 1 ? qtd + ' novos pedidos!' : 'Novo pedido chegou!'}`);
+        if (_somAtivo) tocarSomPedido();
+        mostrarNotificacaoPush('🍕 Novo pedido!', 'Um novo pedido chegou no Joey Pizza');
+        _iniciarTitleFlash(qtd);
+      }
+      _knownPedidoIds = novosIds;
+    }
+
+    // PIX: gerar pagamento para pedidos novos aguardando
+    pedidos.filter(p => p.pagamento === 'pix' && p.pixStatus === 'aguardando_geracao').forEach(p => gerarPixMP(p));
+
+    // PIX: detectar pagamento confirmado (pixStatus mudou para 'pago')
+    pedidos.forEach(p => {
+      if (p.pagamento === 'pix' && p.pixStatus === 'pago') {
+        const ant = _pedidosAnt.find(x => x.id === p.id);
+        if (ant && ant.pixStatus !== 'pago') {
+          tocarSomPixPago();
+          notify('💚 PIX confirmado! Pedido ' + p.id + ' — clique Confirmar');
+        }
+      }
+    });
+
+    renderKanban();
+    startPixTimers();
+    if (!pixPollInterval) pixPollInterval = setInterval(verificarPixPendentes, 12000);
+    verificarAniversariantes();
+  });
+
+  db.collection(`clientes/${slug}/mesas`).onSnapshot(snap => {
+    mesasData = {};
+    snap.docs.forEach(d => { mesasData[d.id] = d.data(); });
+    if (document.getElementById('panel-salao').style.display !== 'none') renderSalao();
+    if (_mesaModalId && document.getElementById('orderModal').classList.contains('show')) refreshVerMesaModal();
+  });
+
+  db.collection(`clientes/${slug}/conversas`).orderBy('ultimaAtividade', 'desc').onSnapshot(snap => {
+    const novas = snap.docs.map(d => ({ ...d.data(), id: d.id })); // id vem por último — impede campo 'id' do documento sobrescrever o doc ID real
+    _wppDetectarNovas(novas);
+    _wppConversas = novas;
+    _wppAtualizarBadge();
+    _wppAtualizarTitulo();
+    _wppRenderLista();
+    if (_wppConvAtiva) {
+      const conv = _wppConversas.find(c => c.id === _wppConvAtiva);
+      if (conv) _wppRenderChat(conv);
+    }
+  }, err => console.error('[WPP]', err));
+}
 
 // ── RELATÓRIOS ──────────────────────────────────────────────────────────────
 let relPeriodo = 'hoje';
@@ -5515,7 +5598,7 @@ async function renderRelatorioClientes() {
 
   try {
     // Busca todos os clientes da coleção
-    const snap = await db.collection('clientes').get();
+    const snap = await db.collection(`clientes/${slug}/clientes`).get();
 
     // Monta mapa de pedidos Joey por telefone normalizado
     const joeyMap = {};
@@ -5802,7 +5885,7 @@ function startPixTimers() {
 async function gerarPixMP(p) {
   if (pixGerando.has(p.id)) return;
   pixGerando.add(p.id);
-  await db.collection('pedidos').doc(p.id).update({ pixStatus: 'gerando' });
+  await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ pixStatus: 'gerando' });
   try {
     const res = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
@@ -5828,7 +5911,7 @@ async function gerarPixMP(p) {
       const tx        = data.point_of_interaction?.transaction_data || {};
       const pixExpira = Date.now() + 5 * 60 * 1000;
       console.log('[PIX] pixExpira ms:', pixExpira, '| Date.now():', Date.now(), '| diff ms:', pixExpira - Date.now());
-      await db.collection('pedidos').doc(p.id).update({
+      await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({
         pixId:           String(data.id),
         pixStatus:       'pendente',
         pixExpira,
@@ -5840,12 +5923,12 @@ async function gerarPixMP(p) {
     } else {
       console.error('[PIX] Erro MP:', data);
       notify('Erro ao gerar PIX para pedido ' + p.id + ': ' + (data.message || ''), 'error');
-      await db.collection('pedidos').doc(p.id).update({ pixStatus: 'erro_geracao' });
+      await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ pixStatus: 'erro_geracao' });
       pixGerando.delete(p.id);
     }
   } catch(e) {
     console.error('[PIX] Erro API:', e);
-    await db.collection('pedidos').doc(p.id).update({ pixStatus: 'erro_geracao' });
+    await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ pixStatus: 'erro_geracao' });
     pixGerando.delete(p.id);
   }
 }
@@ -5872,7 +5955,7 @@ async function verificarPixPendentes() {
 }
 
 async function onPixPago(id) {
-  await db.collection('pedidos').doc(id).update({ pixStatus: 'pago' });
+  await db.collection(`clientes/${slug}/pedidos`).doc(id).update({ pixStatus: 'pago' });
   notify('💚 PIX confirmado! Pedido ' + id + ' — clique Confirmar para produção');
   tocarSomPixPago();
 }
@@ -5880,7 +5963,7 @@ async function onPixPago(id) {
 async function cancelarPedidoPix(id) {
   const p = pedidos.find(x => x.id === id);
   if (!p || !['pendente','aguardando_geracao','gerando'].includes(p.pixStatus)) return;
-  await db.collection('pedidos').doc(id).update({ status: 'cancelado', pixStatus: 'expirado' });
+  await db.collection(`clientes/${slug}/pedidos`).doc(id).update({ status: 'cancelado', pixStatus: 'expirado' });
   notify('Pedido ' + id + ' cancelado — PIX expirou', 'warning');
 }
 
@@ -5916,7 +5999,7 @@ async function verificarAniversariantes() {
   const bar = document.getElementById('aniversariantesBar');
   if (!bar) return;
   try {
-    const snap = await db.collection('clientes').get();
+    const snap = await db.collection(`clientes/${slug}/clientes`).get();
     const aniv = snap.docs
       .map(d => ({ _id: d.id, ...d.data() }))
       .filter(c => (c.dataNascimento || '').startsWith(ddmm));
@@ -5968,47 +6051,6 @@ async function enviarParabens(tel, nome) {
 // ────────────────────────────────────────────────────────────────────────────
 let _pedidosAnt = [];
 let _knownPedidoIds = null; // null = primeira carga, não dispara som
-db.collection('pedidos').onSnapshot(snap => {
-  _pedidosAnt = [...pedidos];
-  pedidos = snap.docs.map(d => d.data());
-  pedidos.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-
-  const novosIds = new Set(snap.docs.map(d => d.id));
-
-  if (_knownPedidoIds === null) {
-    // Primeira carga — apenas inicializa, sem disparar som
-    _knownPedidoIds = novosIds;
-  } else {
-    const chegaram = snap.docs.filter(d => !_knownPedidoIds.has(d.id) && d.data().status === 'novo');
-    if (chegaram.length > 0) {
-      const qtd = chegaram.length;
-      notify(`🆕 ${qtd > 1 ? qtd + ' novos pedidos!' : 'Novo pedido chegou!'}`);
-      if (_somAtivo) tocarSomPedido();
-      mostrarNotificacaoPush('🍕 Novo pedido!', 'Um novo pedido chegou no Joey Pizza');
-      _iniciarTitleFlash(qtd);
-    }
-    _knownPedidoIds = novosIds;
-  }
-
-  // PIX: gerar pagamento para pedidos novos aguardando
-  pedidos.filter(p => p.pagamento === 'pix' && p.pixStatus === 'aguardando_geracao').forEach(p => gerarPixMP(p));
-
-  // PIX: detectar pagamento confirmado (pixStatus mudou para 'pago')
-  pedidos.forEach(p => {
-    if (p.pagamento === 'pix' && p.pixStatus === 'pago') {
-      const ant = _pedidosAnt.find(x => x.id === p.id);
-      if (ant && ant.pixStatus !== 'pago') {
-        tocarSomPixPago();
-        notify('💚 PIX confirmado! Pedido ' + p.id + ' — clique Confirmar');
-      }
-    }
-  });
-
-  renderKanban();
-  startPixTimers();
-  if (!pixPollInterval) pixPollInterval = setInterval(verificarPixPendentes, 12000);
-  verificarAniversariantes();
-});
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
@@ -6042,9 +6084,9 @@ async function carregarRobo() {
   renderNotifConfig(); // não depende de Promises — roda imediatamente com config global
   try {
     const [lojaSnap, botSnap, schedSnap] = await Promise.all([
-      db.doc('config/loja').get(),
-      db.collection('botConfig').get(),
-      db.collection('mensagensProgramadas').get(),
+      db.doc(`clientes/${slug}/config/loja`).get(),
+      db.collection(`clientes/${slug}/botConfig`).get(),
+      db.collection(`clientes/${slug}/mensagensProgramadas`).get(),
     ]);
 
     const loja = lojaSnap.exists ? lojaSnap.data() : {};
@@ -6095,7 +6137,7 @@ async function salvarStatusBot(cb) {
   const ativo = cb.checked;
   setBotToggle(ativo);
   try {
-    await db.doc('config/loja').set({ botAtivo: ativo }, { merge: true });
+    await db.doc(`clientes/${slug}/config/loja`).set({ botAtivo: ativo }, { merge: true });
     notify(ativo ? '🤖 Robô ativado' : '🤖 Robô desativado');
   } catch (e) {
     console.error('[salvarStatusBot]', e);
@@ -6196,7 +6238,7 @@ async function salvarNotifConfig() {
     };
   });
   try {
-    await db.doc('config/loja').set({ wppNotifs }, { merge: true });
+    await db.doc(`clientes/${slug}/config/loja`).set({ wppNotifs }, { merge: true });
     config.wppNotifs = wppNotifs;
     notify('✅ Notificações salvas!');
   } catch (e) {
@@ -6257,7 +6299,7 @@ async function salvarGatilho(id) {
   if (kwEl) data.keywords = keywords;
 
   try {
-    await db.doc('botConfig/' + id).set(data, { merge: true });
+    await db.doc(`clientes/${slug}/botConfig/${id}`).set(data, { merge: true });
     const edit  = document.getElementById('botcard-edit-' + id);
     const arrow = document.getElementById('botcard-arrow-' + id);
     const prev  = document.getElementById('botcard-preview-' + id);
@@ -6339,7 +6381,7 @@ async function salvarNovoGatilhoCustom() {
   if (!resposta)      { notify('Informe a resposta do gatilho'); return; }
   const uid = 'custom_' + Date.now();
   try {
-    await db.doc('botConfig/' + uid).set({ nome, keywords, resposta }, { merge: true });
+    await db.doc(`clientes/${slug}/botConfig/${uid}`).set({ nome, keywords, resposta }, { merge: true });
     fecharNovoGatilhoForm();
     adicionarGatilhoCustom(uid, nome, keywords, resposta);
     notify('✓ Gatilho "' + nome + '" salvo');
@@ -6372,7 +6414,7 @@ async function salvarGatilhoCustom(uid) {
   if (!keywords.length) { notify('Informe ao menos uma palavra-chave'); return; }
   if (!resposta)      { notify('Informe a resposta do gatilho'); return; }
   try {
-    await db.doc('botConfig/' + uid).set({ nome, keywords, resposta }, { merge: true });
+    await db.doc(`clientes/${slug}/botConfig/${uid}`).set({ nome, keywords, resposta }, { merge: true });
     const label = document.getElementById('custom-label-' + uid);
     if (label) label.textContent = '✏️ ' + nome;
     const kwPrevEl = document.getElementById('custom-kw-preview-' + uid);
@@ -6391,7 +6433,7 @@ async function salvarGatilhoCustom(uid) {
 async function excluirGatilhoCustom(uid) {
   if (!confirm('Excluir este gatilho?')) return;
   try {
-    await db.doc('botConfig/' + uid).delete();
+    await db.doc(`clientes/${slug}/botConfig/${uid}`).delete();
     const card = document.getElementById('custom-card-' + uid);
     if (card) card.remove();
     notify('Gatilho excluído');
@@ -6505,7 +6547,7 @@ async function salvarMensagemProgramada(uid) {
   if (dest === 'numero') data.numero = numero;
 
   try {
-    await db.doc('mensagensProgramadas/' + uid).set(data, { merge: true });
+    await db.doc(`clientes/${slug}/mensagensProgramadas/${uid}`).set(data, { merge: true });
     notify('✓ Mensagem "' + nome + '" salva');
   } catch (e) {
     console.error('[salvarMensagemProgramada]', e);
@@ -6516,7 +6558,7 @@ async function salvarMensagemProgramada(uid) {
 async function excluirMensagemProgramada(uid) {
   if (!confirm('Excluir esta mensagem programada?')) return;
   try {
-    await db.doc('mensagensProgramadas/' + uid).delete();
+    await db.doc(`clientes/${slug}/mensagensProgramadas/${uid}`).delete();
     const card = document.getElementById('sched-card-' + uid);
     if (card) card.remove();
     notify('Mensagem excluída');
@@ -6529,13 +6571,6 @@ async function excluirMensagemProgramada(uid) {
 // =================== SALÃO ===================
 let mesasData = {};
 const MESAS = ['Mesa 1','Mesa 2','Mesa 3','Mesa 4','Mesa 5','Mesa 6','Mesa 7'];
-
-db.collection('mesas').onSnapshot(snap => {
-  mesasData = {};
-  snap.docs.forEach(d => { mesasData[d.id] = d.data(); });
-  if (document.getElementById('panel-salao').style.display !== 'none') renderSalao();
-  if (_mesaModalId && document.getElementById('orderModal').classList.contains('show')) refreshVerMesaModal();
-});
 
 function renderSalao() {
   const grid = document.getElementById('salaoGrid');
@@ -6664,7 +6699,7 @@ function renderModalMesaBody(mesaId, mesaNome, m) {
 async function alterarStatusMesa(mesaId, novoStatus, btn) {
   document.querySelectorAll('#modalBody .filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  await db.collection('mesas').doc(mesaId).set({ status: novoStatus }, { merge: true });
+  await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: novoStatus }, { merge: true });
   notify('Status da mesa atualizado');
 }
 
@@ -6674,14 +6709,14 @@ async function removerPedidoMesa(mesaId, idx) {
   pedidosMesa.splice(idx, 1);
   const total = pedidosMesa.reduce((s, p) => s + (p.subtotal || 0), 0);
   const status = pedidosMesa.length === 0 ? 'livre' : (m.status || 'ocupada');
-  await db.collection('mesas').doc(mesaId).set({ pedidos: pedidosMesa, total, status }, { merge: true });
+  await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ pedidos: pedidosMesa, total, status }, { merge: true });
   closeOrderModal();
   notify('Item removido da mesa');
 }
 
 async function fecharMesa(mesaId, mesaNome) {
   if (!confirm('Fechar ' + mesaNome + ' e zerar o consumo?')) return;
-  await db.collection('mesas').doc(mesaId).set({ status: 'livre', pedidos: [], total: 0 });
+  await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'livre', pedidos: [], total: 0 });
   closeOrderModal();
   notify(mesaNome + ' fechada!');
 }
@@ -6707,7 +6742,7 @@ let _fecharContaPagamento = '';
 
 function abrirFecharConta(mesaId, mesaNome) {
   _fecharContaPagamento = '';
-  db.collection('mesas').doc(mesaId).set({ status: 'fechando' }, { merge: true })
+  db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'fechando' }, { merge: true })
     .catch(e => console.warn('[mesa status fechando]', e));
   const m = mesasData[mesaId] || {};
   const total = m.total || 0;
@@ -6776,14 +6811,14 @@ async function confirmarFecharConta(mesaId, mesaNome, todosItens, total, pagamen
   fecharConfirmModal();
   try {
     const now = new Date();
-    await db.collection('fechamentos').add({
+    await db.collection(`clientes/${slug}/fechamentos`).add({
       mesa: mesaId, mesaNome, itens: todosItens, total, pagamento,
       data: now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       tipo: 'total',
       timestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
-    await db.collection('mesas').doc(mesaId).set({ status: 'livre', pedidos: [], comandas: {}, total: 0 });
+    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'livre', pedidos: [], comandas: {}, total: 0 });
     fecharFecharContaModal();
     closeOrderModal();
     notify('Conta fechada! R$ ' + totalFmt + ' — ' + pagamento);
@@ -6801,7 +6836,7 @@ function abrirDividirConta(mesaId, mesaNome) {
   _dividirMesaId = mesaId;
   _dividirMesaNome = mesaNome;
   _dividirPagamento = '';
-  db.collection('mesas').doc(mesaId).set({ status: 'fechando' }, { merge: true })
+  db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'fechando' }, { merge: true })
     .catch(e => console.warn('[mesa status fechando]', e));
   const m = mesasData[mesaId] || {};
 
@@ -6909,14 +6944,14 @@ async function confirmarPagamentoPessoa(mesaId, mesaNome, itensPagos, subtotal, 
   fecharConfirmModal();
   try {
     const now = new Date();
-    await db.collection('fechamentos').add({
+    await db.collection(`clientes/${slug}/fechamentos`).add({
       mesa: mesaId, mesaNome, itens: itensPagos, total: subtotal, pagamento,
       data: now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       tipo: 'parcial',
       timestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
-    await db.collection('mesas').doc(mesaId).set({ comandas: newComandas, total: novoTotal, status: novoStatus }, { merge: true });
+    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ comandas: newComandas, total: novoTotal, status: novoStatus }, { merge: true });
     fecharDividirContaModal();
     if (novoStatus === 'livre') closeOrderModal();
     notify('R$ ' + subtotalFmt + ' recebido — ' + pagamento);
@@ -7176,7 +7211,7 @@ async function confirmarPedidoMesa() {
   const allComandas = { ...(m.comandas || {}), [comandaId]: novaComanda };
   const newTotal    = Object.values(allComandas).reduce((s, c) => s + (c.total || 0), 0);
 
-  await db.collection('mesas').doc(_pedidoMesaId).set(
+  await db.collection(`clientes/${slug}/mesas`).doc(_pedidoMesaId).set(
     { status: 'ocupada', total: newTotal, comandas: allComandas },
     { merge: true }
   );
@@ -7184,7 +7219,7 @@ async function confirmarPedidoMesa() {
   if (!isEditing) {
     // Cria card direto em "Em Produção" no kanban
     try {
-      const contadorRef = db.doc('config/contador');
+      const contadorRef = db.doc(`clientes/${slug}/config/contador`);
       const novoId = await db.runTransaction(t => {
         return t.get(contadorRef).then(doc => {
           const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
@@ -7283,7 +7318,7 @@ async function cancelarComanda(mesaId, mesaNome, comandaId) {
       const hasMore   = Object.keys(newComandas).length > 0;
       const newStatus = hasMore ? (m.status === 'fechando' ? 'fechando' : 'ocupada') : 'livre';
       // Escreve no novo formato e apaga pedidos legados
-      await db.collection('mesas').doc(mesaId).set(
+      await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
         { comandas: newComandas, pedidos: [], total: newTotal, status: newStatus },
         { merge: true }
       );
@@ -7484,7 +7519,7 @@ function _hojeStr() {
 function carregarFechamentosHoje() {
   if (_rdFechListener) return;
   var hoje = _hojeStr();
-  _rdFechListener = db.collection('fechamentos').where('data', '==', hoje)
+  _rdFechListener = db.collection(`clientes/${slug}/fechamentos`).where('data', '==', hoje)
     .onSnapshot(function(snap) {
       _fechamentosHoje = snap.docs.map(function(d) { return Object.assign({ _id: d.id }, d.data()); });
       if (_relTab === 'dia') renderRelatorioDia();
@@ -7887,18 +7922,6 @@ function _wppDetectarNovas(novas) {
   });
 }
 
-db.collection('conversas').orderBy('ultimaAtividade', 'desc').onSnapshot(snap => {
-  const novas = snap.docs.map(d => ({ ...d.data(), id: d.id })); // id vem por último — impede campo 'id' do documento sobrescrever o doc ID real
-  _wppDetectarNovas(novas);
-  _wppConversas = novas;
-  _wppAtualizarBadge();
-  _wppAtualizarTitulo();
-  _wppRenderLista();
-  if (_wppConvAtiva) {
-    const conv = _wppConversas.find(c => c.id === _wppConvAtiva);
-    if (conv) _wppRenderChat(conv);
-  }
-}, err => console.error('[WPP]', err));
 
 function _wppAtualizarBadge() {
   const n = _wppConversas.filter(c => _wppTemNaoLida(c)).length;
@@ -8017,12 +8040,12 @@ function _wppRenderChat(conv) {
 }
 
 async function wppAssumirAtendimento(numero) {
-  await db.collection('conversas').doc(numero).set({ status: 'humano' }, { merge: true });
+  await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ status: 'humano' }, { merge: true });
   notify('👤 Atendimento assumido');
 }
 
 async function wppDevolverBot(numero) {
-  await db.collection('conversas').doc(numero).set({ status: 'bot' }, { merge: true });
+  await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ status: 'bot' }, { merge: true });
   notify('🤖 Devolvido ao bot');
 }
 
@@ -8031,7 +8054,7 @@ async function wppApagarConversa(id) {
   const nome = conv?.nome || id;
   if (!confirm(`Apagar a conversa de "${nome}"?\n\nEsta ação é irreversível e remove todo o histórico de mensagens.`)) return;
   try {
-    await db.collection('conversas').doc(id).delete();
+    await db.collection(`clientes/${slug}/conversas`).doc(id).delete();
     _wppConversas = _wppConversas.filter(c => c.id !== id);
     _wppConvAtiva = null;
     document.getElementById('wppChat').style.display = 'none';
@@ -8083,7 +8106,7 @@ async function wppEnviar() {
 
   // 1. Salva no Firestore (prioritário — garante histórico)
   try {
-    await db.collection('conversas').doc(_wppConvAtiva).set({
+    await db.collection(`clientes/${slug}/conversas`).doc(_wppConvAtiva).set({
       mensagens:       firebase.firestore.FieldValue.arrayUnion({ tipo: 'enviada', texto, ts: agora }),
       ultimaMensagem:  texto,
       ultimaAtividade: agora,
@@ -8095,7 +8118,7 @@ async function wppEnviar() {
 
   // 2. Envia via Railway (melhor esforço)
   try {
-    const res  = await fetch('https://joeyapi-production.up.railway.app/send', {
+    const res  = await fetch(BOT_URL + '/send', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ jid: jidEnvio, mensagem: texto }),
@@ -8195,7 +8218,7 @@ async function confirmarPagEdit(pag) {
   const id = _pagEditId;
   fecharPagEdit();
   try {
-    await db.collection('pedidos').doc(id).update({ pagamento: pag });
+    await db.collection(`clientes/${slug}/pedidos`).doc(id).update({ pagamento: pag });
     const local = pedidos.find(p => p.id === id);
     if (local) local.pagamento = pag;
     if (typeof renderRelatorioDia === 'function') renderRelatorioDia();
