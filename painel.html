@@ -5134,8 +5134,11 @@ function _getPeriodoAnterior() {
     fim = new Date(ini); fim.setHours(23,59,59,999);
     label = 'Ontem';
   } else if (relPeriodo === 'semana') {
-    const dom = new Date(hoje); dom.setDate(hoje.getDate() - hoje.getDay());
-    fim = new Date(dom); fim.setDate(dom.getDate() - 1); fim.setHours(23,59,59,999);
+    const inicioSemAtual = new Date(hoje);
+    const diaSemana = hoje.getDay();
+    const diasParaVoltar = diaSemana === 0 ? 6 : diaSemana - 1;
+    inicioSemAtual.setDate(hoje.getDate() - diasParaVoltar);
+    fim = new Date(inicioSemAtual); fim.setDate(inicioSemAtual.getDate() - 1); fim.setHours(23,59,59,999);
     ini = new Date(fim); ini.setDate(fim.getDate() - 6); ini.setHours(0,0,0,0);
     label = 'Semana passada';
   } else if (relPeriodo === 'mes') {
@@ -5237,7 +5240,10 @@ function pedidosDoPeriodo() {
     if (relPeriodo === 'hoje') {
       return d >= hoje;
     } else if (relPeriodo === 'semana') {
-      const ini = new Date(hoje); ini.setDate(hoje.getDate() - hoje.getDay());
+      const ini = new Date(hoje);
+      const diaSemana = hoje.getDay();
+      const diasParaVoltar = diaSemana === 0 ? 6 : diaSemana - 1;
+      ini.setDate(hoje.getDate() - diasParaVoltar);
       return d >= ini;
     } else if (relPeriodo === 'mes') {
       return d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
@@ -5383,7 +5389,10 @@ function renderRelatorios() {
     if (relPeriodo === 'hoje') {
       iniAtu = new Date(hoje); fimAtu = new Date(hoje);
     } else if (relPeriodo === 'semana') {
-      iniAtu = new Date(hoje); iniAtu.setDate(hoje.getDate() - hoje.getDay());
+      iniAtu = new Date(hoje);
+      const diaSemana = hoje.getDay();
+      const diasParaVoltar = diaSemana === 0 ? 6 : diaSemana - 1;
+      iniAtu.setDate(hoje.getDate() - diasParaVoltar);
       fimAtu = new Date(hoje);
     } else if (relPeriodo === 'mes') {
       iniAtu = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -7571,7 +7580,10 @@ function renderRelatorioDia() {
     var d = new Date(+parts[2], +parts[1]-1, +parts[0]);
     if (_rdPeriodo === 'hoje') return d >= agora;
     if (_rdPeriodo === 'semana') {
-      var ini = new Date(agora); ini.setDate(agora.getDate() - agora.getDay());
+      var ini = new Date(agora);
+      var diaSemana = agora.getDay();
+      var diasParaVoltar = diaSemana === 0 ? 6 : diaSemana - 1;
+      ini.setDate(agora.getDate() - diasParaVoltar);
       return d >= ini;
     }
     if (_rdPeriodo === 'mes') return d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear();
