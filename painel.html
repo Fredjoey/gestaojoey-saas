@@ -1542,6 +1542,11 @@ const slug = (
   hostname === '127.0.0.1'
 ) ? 'joey' : hostname.split('.')[0];
 
+// URLs absolutas das Cloud Functions de NFCe.
+// Functions vivem no projeto pedidos-joey (legado), mas o site pode rodar em qualquer projeto.
+const NFCE_EMITIR_URL    = 'https://emitirnfce-eb6kvzsxgq-uc.a.run.app';
+const NFCE_CANCELAR_URL  = 'https://cancelarnfce-eb6kvzsxgq-uc.a.run.app';
+
 // =================== CONSTANTES ===================
 const STATUS_LABELS = {
   novo:       {label:'🆕 Novo',        cls:'chip-novo'},
@@ -1649,13 +1654,9 @@ function showPanel(panel, navEl) {
 // ── Conexão WhatsApp ──────────────────────────────────────────────
 const WA_API     = slug === 'joey' ? 'https://joeyapi-production.up.railway.app' : `https://joeyapi-${slug}-production.up.railway.app`;
 const BOT_URL    = WA_API;
-// Mapeamento de URLs de gestão por slug.
-// Adicionar manualmente conforme cada cliente provisionar a gestão multi-tenant.
-const GESTAO_URLS = {
-  'joey': 'https://gestao.hamburgueriajoey.com.br'
-  // 'cliente-x': 'https://gestao.clientex.com.br'
-};
-const GESTAO_URL = GESTAO_URLS[slug] || null;
+const GESTAO_URL = slug === 'joey'
+  ? 'https://gestao.hamburgueriajoey.com.br'
+  : `https://${slug}.gestaojoey.com.br/gestao`;
 
 async function enviarWhatsAppBot(numero, mensagem) {
   let tel = (numero || '').replace(/\D/g, '');
@@ -3842,7 +3843,7 @@ async function confirmarCancelNfce() {
   const btn = document.getElementById('btnConfirmarCancel');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Cancelando...'; }
   try {
-    const resp = await fetch('/api/cancelarNFCe', {
+    const resp = await fetch(NFCE_CANCELAR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pedidoId: _cancelNfceData.pedidoId, ref: _cancelNfceData.ref, justificativa }),
@@ -3873,7 +3874,7 @@ async function emitirNfce(pedidoId) {
       const rec = recipes.find(r => String(r.id) === String(item.id));
       return Object.assign({}, item, { categoria: rec ? (rec.categoria || rec.category || 'Outro') : (item.categoria || 'Outro') });
     });
-    const resp = await fetch('/api/emitirNFCe', {
+    const resp = await fetch(NFCE_EMITIR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -7776,7 +7777,7 @@ async function emitirNfceSilent(srcId, tipo) {
         return Object.assign({}, item, { categoria: rec ? (rec.categoria || rec.category || 'Outro') : (item.categoria || 'Outro') });
       });
     }
-    var resp = await fetch('/api/emitirNFCe', {
+    var resp = await fetch(NFCE_EMITIR_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pedidoId: String(srcId), itens: itens, total: totalVal, pagamento: pagamento, cpfCnpj: '', cliente: cliente }),
@@ -7826,7 +7827,7 @@ async function emitirNfceFechamento(srcId, mesaNome, total) {
       var rec = recipes.find(function(r) { return String(r.id) === String(item.id); });
       return Object.assign({}, item, { categoria: rec ? (rec.categoria || rec.category || 'Outro') : (item.categoria || 'Outro') });
     });
-    var resp = await fetch('/api/emitirNFCe', {
+    var resp = await fetch(NFCE_EMITIR_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
