@@ -2798,34 +2798,10 @@
             if (!window._fb) return;
             const docs = await window._fb.fbGetAll('categorias').catch(() => []);
             console.log('[Categorias]', docs.length, 'docs encontrados');
-            if (docs.length === 0) {
-                await seedCategoriasDefault();
-                const docs2 = await window._fb.fbGetAll('categorias').catch(() => []);
-                console.log('[Categorias] após seed:', docs2.length, 'docs');
-                categoriasDB = docs2.sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
-            } else {
-                categoriasDB = docs.sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
-            }
+            categoriasDB = docs.sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
             popularSelectsCategorias();
             renderCategoriasManager();
             renderRecipesList();
-        }
-
-        async function seedCategoriasDefault() {
-            if (!window._fb) return;
-            const defaults = [
-                { emoji: '🍕', nome: 'Pizza'     },
-                { emoji: '🍔', nome: 'Burger'    },
-                { emoji: '🍟', nome: 'Porção'    },
-                { emoji: '🍝', nome: 'Massa'     },
-                { emoji: '🍰', nome: 'Sobremesa' },
-                { emoji: '🥤', nome: 'Bebida'    },
-            ];
-            const base = Date.now();
-            for (let i = 0; i < defaults.length; i++) {
-                const id = base + i;
-                await window._fb.fbSave('categorias', String(id), { id, ...defaults[i] });
-            }
         }
 
         function _getCatEmoji(nome) {
