@@ -481,7 +481,7 @@ textarea.fi{resize:vertical;min-height:60px}
   <div class="nav-item" onclick="showPanel('cardapio',this)"><span class="nav-icon">🍕</span> Gestor de cardápio</div>
   <div class="nav-item" onclick="showPanel('relatorios',this)"><span class="nav-icon">📊</span> Relatórios</div>
   <div class="nav-item" onclick="showPanel('clientes',this)"><span class="nav-icon">👥</span> Clientes</div>
-  <div class="nav-item" onclick="showPanel('fiscal',this)"><span class="nav-icon">🧾</span> Fiscal</div>
+  <div class="nav-item" id="nav-fiscal" onclick="showPanel('fiscal',this)"><span class="nav-icon">🧾</span> Fiscal</div>
   <div class="nav-item" onclick="showPanel('config',this)"><span class="nav-icon">⚙️</span> Configurações</div>
   <div class="nav-item" onclick="showPanel('robo',this)"><span class="nav-icon">🤖</span> Robô</div>
   <div class="nav-item" onclick="showPanel('whatsapp',this)"><span class="nav-icon">📱</span> Conexão WhatsApp</div>
@@ -1541,6 +1541,13 @@ const slug = (
   hostname === 'localhost' ||
   hostname === '127.0.0.1'
 ) ? 'joey' : hostname.split('.')[0];
+
+let CLIENTE_PLANO = 'essencial';
+db.doc('clientes/'+slug).onSnapshot(s => {
+  CLIENTE_PLANO = s.data()?.plano || 'essencial';
+  const navFiscal = document.getElementById('nav-fiscal');
+  if (navFiscal) navFiscal.style.display = CLIENTE_PLANO === 'pro' ? '' : 'none';
+});
 
 // URLs absolutas das Cloud Functions de NFCe.
 // Functions vivem no projeto pedidos-joey (legado), mas o site pode rodar em qualquer projeto.
