@@ -843,6 +843,15 @@ textarea.fi{resize:vertical;min-height:60px}
             </div>
           </div>
 
+          <div style="margin-top:20px;padding:16px;border:1px solid var(--border);border-radius:8px">
+            <h3 style="margin:0 0 12px 0">🖼️ Logo da Loja</h3>
+            <p style="font-size:13px;color:var(--muted);margin:0 0 12px 0">Aparece no header do sistema de Gestão. Recomendado: 200x200px PNG transparente.</p>
+            <div id="logoPreview" style="margin-bottom:12px"></div>
+            <input type="file" id="logoFileInput" accept="image/*" style="display:none">
+            <button onclick="document.getElementById('logoFileInput').click()" style="padding:8px 16px;background:var(--orange);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:8px">📤 Trocar logo</button>
+            <button onclick="removerLogo()" style="padding:8px 16px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer">🗑️ Remover</button>
+          </div>
+
           <div class="section-lbl">⭐ Produto em Destaque</div>
           <div style="margin-bottom:1rem">
             <label class="fl" style="margin-bottom:6px;display:block">Exibido em card de destaque no topo do cardápio</label>
@@ -2936,6 +2945,50 @@ async function removerBanner() {
   }
 }
 
+async function uploadLogo(file) {
+  if (!file) return;
+  try {
+    const ref = storage.ref(`clientes/${slug}/logos/logo`);
+    await ref.put(file);
+    const url = await ref.getDownloadURL();
+    await db.doc(`clientes/${slug}/config/loja`).set({ logoUrl: url }, { merge: true });
+    config.logoUrl = url;
+    renderLogoPreview(url);
+    notify('Logo atualizada!');
+  } catch (err) {
+    notify('Erro ao subir logo: ' + err.message, 'error');
+    console.error('[uploadLogo]', err);
+  }
+}
+
+async function removerLogo() {
+  if (!confirm('Remover a logo?')) return;
+  try {
+    try { await storage.ref(`clientes/${slug}/logos/logo`).delete(); } catch(_) {}
+    await db.doc(`clientes/${slug}/config/loja`).set({ logoUrl: null }, { merge: true });
+    config.logoUrl = null;
+    renderLogoPreview(null);
+    notify('Logo removida.');
+  } catch (err) {
+    notify('Erro: ' + err.message, 'error');
+  }
+}
+
+function renderLogoPreview(url) {
+  const div = document.getElementById('logoPreview');
+  if (!div) return;
+  if (url) {
+    div.innerHTML = `<img src="${url}" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid var(--border)">`;
+  } else {
+    div.innerHTML = '<div style="color:var(--muted);font-size:13px">Nenhuma logo cadastrada</div>';
+  }
+}
+
+(function() {
+  const inp = document.getElementById('logoFileInput');
+  if (inp) inp.addEventListener('change', e => uploadLogo(e.target.files[0]));
+})();
+
 function carregarConfig() {
   document.getElementById('cfgNome').value         = config.nome         || 'Joey Pizza';
   document.getElementById('cfgWpp').value          = config.wpp          || '';
@@ -2943,6 +2996,7 @@ function carregarConfig() {
   document.getElementById('cfgPedidoMinimo').value = config.pedidoMinimo > 0 ? config.pedidoMinimo : '';
   document.getElementById('cfgEnd').value          = config.end          || '';
   _setBannerPreview(config.bannerUrl || null);
+  renderLogoPreview(config.logoUrl || null);
 
   // Toggle aberto/fechado manual
   const aberto = config.aberto !== false;
