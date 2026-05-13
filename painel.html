@@ -5021,6 +5021,7 @@ async function _migrarContador() {
 auth.onAuthStateChanged(user => {
   document.getElementById('loginScreen').style.display = user ? 'none' : 'flex';
   if (user) {
+    if (user.isAnonymous) { auth.signOut(); return; }
     if (!_listenersIniciados) { iniciarListenersFirestore(); _listenersIniciados = true; }
     atualizarBtnNotificacao();
     _anivVerificado = ''; // reseta guard para rodar com auth
