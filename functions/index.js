@@ -724,11 +724,21 @@ exports.verificarCarrinhosAbandonados = onSchedule(
 
       if (carrinhosSnap.empty) continue;
 
-      const lojaSnap = await clienteRef.collection('config').doc('loja').get();
+      const [lojaSnap, botCfgSnap] = await Promise.all([
+        clienteRef.collection('config').doc('loja').get(),
+        clienteRef.collection('botConfig').doc('carrinhoAbandonado').get(),
+      ]);
       const loja = lojaSnap.exists ? lojaSnap.data() : {};
       const nomeLoja = loja.nome || slug;
       const cardapioUrl = cardapioUrlFor(slug);
       const apiBase = joeyApiBaseFor(slug);
+
+      // Template configurável: 1) botConfig/carrinhoAbandonado.resposta (gravado pelo painel),
+      // 2) loja.botMensagens?.carrinhoAbandonado (fallback alternativo), 3) hardcoded.
+      let template = botCfgSnap.exists ? String(botCfgSnap.data().resposta || '').trim() : '';
+      if (!template && loja.botMensagens && loja.botMensagens.carrinhoAbandonado) {
+        template = String(loja.botMensagens.carrinhoAbandonado).trim();
+      }
 
       for (const carrinhoDoc of carrinhosSnap.docs) {
         const carrinho = carrinhoDoc.data();
@@ -745,7 +755,12 @@ exports.verificarCarrinhosAbandonados = onSchedule(
         if (!tel) continue;
         const nome = (carrinho.nome || '').split(' ')[0] || 'cliente';
 
-        const mensagem = `Oi ${nome}! 👋 Você montou um pedido aqui na ${nomeLoja} mas não finalizou. Ainda quer? 🛒 Acesse: ${cardapioUrl}`;
+        const mensagem = template
+          ? template
+              .replace(/\{nome\}/gi, nome)
+              .replace(/\{loja\}/gi, nomeLoja)
+              .replace(/\{link\}/gi, cardapioUrl)
+          : `Oi ${nome}! 👋 Você montou um pedido aqui na ${nomeLoja} mas não finalizou. Ainda quer? 🛒 Acesse: ${cardapioUrl}`;
 
         try {
           await axios.post(`${apiBase}/send`, { numero: tel, mensagem }, { timeout: 10000 });

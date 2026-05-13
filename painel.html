@@ -1158,6 +1158,23 @@ textarea.fi{resize:vertical;min-height:60px}
                 </div>
               </div>
 
+              <!-- Carrinho Abandonado -->
+              <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div onclick="toggleBotCard('carrinhoAbandonado')" style="padding:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:18px">🛒</span>
+                    <span style="font-weight:600">Carrinho Abandonado</span>
+                  </div>
+                  <span id="botcard-arrow-carrinhoAbandonado">▼</span>
+                </div>
+                <div id="botcard-preview-carrinhoAbandonado" class="bot-card-preview" style="padding:0 12px 12px;color:var(--muted);font-size:13px"></div>
+                <div id="botcard-edit-carrinhoAbandonado" class="bot-card-edit" style="display:none;padding:0 12px 12px">
+                  <p style="font-size:12px;color:var(--muted);margin:4px 0">Enviado após 7min se cliente não finalizar pedido. Use {nome}, {loja}, {link}</p>
+                  <textarea id="bot-resp-carrinhoAbandonado" rows="4" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;resize:vertical"></textarea>
+                  <button onclick="salvarGatilho('carrinhoAbandonado')" style="margin-top:8px;padding:8px 16px;background:var(--orange);color:#fff;border:none;border-radius:6px;cursor:pointer">Salvar</button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -6215,6 +6232,7 @@ const BOT_DEFAULTS = {
   pagamento: { resposta: 'Aceitamos as seguintes formas de pagamento:\n💳 Cartão de crédito e débito\n📱 Pix\n💵 Dinheiro (troco informado no pedido)', keywords: ['pagamento','pagar','cartão','cartao','pix','dinheiro'] },
   minimo:    { resposta: `Nosso pedido mínimo para delivery é R$ 20,00.\n\nFaça seu pedido: 👉 ${CARDAPIO_URL}`, keywords: ['mínimo','minimo','valor mínimo','pedido mínimo'] },
   padrao:    { resposta: `Olá, {nome}! 👋\n\nPara fazer seu pedido acesse:\n👉 ${CARDAPIO_URL}\n\nDúvidas? Digite *atendente* para falar conosco.`, keywords: [] },
+  carrinhoAbandonado: { resposta: 'Oi {nome}! 👋 Você montou um pedido aqui na {loja} mas não finalizou. Ainda quer? 🛒 Acesse: {link}', keywords: [] },
 };
 
 function setBotToggle(ativo) {
