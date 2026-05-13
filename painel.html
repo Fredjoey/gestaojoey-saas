@@ -1684,6 +1684,20 @@ const BOT_URL    = WA_API;
 const GESTAO_URL = slug === 'joey'
   ? 'https://gestao.hamburgueriajoey.com.br'
   : `https://${slug}.gestaojoey.com.br/gestao`;
+const CARDAPIO_URL = slug === 'joey'
+  ? 'https://hamburgueriajoey.com.br'
+  : `https://${slug}.gestaojoey.com.br`;
+const CARDAPIO_URL_DISPLAY = CARDAPIO_URL.replace(/^https?:\/\//, '');
+
+(function() {
+  const apply = () => {
+    const linkEl = document.getElementById('linkCardapio');
+    if (linkEl) linkEl.textContent = CARDAPIO_URL_DISPLAY;
+    document.querySelectorAll('.qr-arte-url').forEach(el => { el.textContent = CARDAPIO_URL_DISPLAY; });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
 
 async function enviarWhatsAppBot(numero, mensagem) {
   let tel = (numero || '').replace(/\D/g, '');
@@ -2182,7 +2196,7 @@ ${taxaVal > 0 ? `<div class="row-val"><span>Taxa de entrega:</span><span>${taxaS
 <div class="row-total"><span>TOTAL:</span><span>R$ ${total}</span></div>
 <div class="line">${dash}</div>
 
-<div class="rodape">hamburgueriajoey.com.br</div>
+<div class="rodape">${CARDAPIO_URL_DISPLAY}</div>
 
 </body></html>`;
 }
@@ -4035,7 +4049,7 @@ function notify(msg,type='success'){
   setTimeout(()=>el.classList.remove('show'),3000);
 }
 function copiarLink(){
-  const link='https://hamburgueriajoey.com.br';
+  const link = CARDAPIO_URL;
   navigator.clipboard.writeText(link).then(()=>notify('Link copiado!'));
 }
 
@@ -6193,14 +6207,14 @@ if ('serviceWorker' in navigator) {
 // ── ROBÔ ──────────────────────────────────────────────────────────────────────
 
 const BOT_DEFAULTS = {
-  saudacao: { resposta: '{saudacao}, {nome}! Bem-vindo ao Joey! 🍕\n\nPara fazer seu pedido acesse nosso cardápio:\n👉 https://hamburgueriajoey.com.br\n\nEscolha seus produtos, informe seu endereço e finalize o pedido direto pelo link!\n\nDúvidas? Digite *atendente* para falar conosco.', keywords: [] },
-  cardapio:  { resposta: 'Acesse nosso cardápio completo pelo link:\n👉 https://hamburgueriajoey.com.br\n\nEscolha seus produtos e finalize o pedido direto pelo site! 🍕', keywords: ['cardápio','cardapio','menu','pratos','pizza'] },
+  saudacao: { resposta: `{saudacao}, {nome}! Bem-vindo ao Joey! 🍕\n\nPara fazer seu pedido acesse nosso cardápio:\n👉 ${CARDAPIO_URL}\n\nEscolha seus produtos, informe seu endereço e finalize o pedido direto pelo link!\n\nDúvidas? Digite *atendente* para falar conosco.`, keywords: [] },
+  cardapio:  { resposta: `Acesse nosso cardápio completo pelo link:\n👉 ${CARDAPIO_URL}\n\nEscolha seus produtos e finalize o pedido direto pelo site! 🍕`, keywords: ['cardápio','cardapio','menu','pratos','pizza'] },
   horario:   { resposta: 'Nosso horário de funcionamento é:\n🕐 Terça a Domingo: 18h às 23h\n\nSegunda-feira fechado.', keywords: ['horário','horario','funciona','abre','fecha'] },
-  entrega:   { resposta: 'Fazemos entrega! 🛵\n\nO tempo estimado é de 40 a 60 minutos.\nA taxa de entrega varia por bairro.\n\nFaça seu pedido: 👉 https://hamburgueriajoey.com.br', keywords: ['entrega','deliver','motoboy','tempo'] },
+  entrega:   { resposta: `Fazemos entrega! 🛵\n\nO tempo estimado é de 40 a 60 minutos.\nA taxa de entrega varia por bairro.\n\nFaça seu pedido: 👉 ${CARDAPIO_URL}`, keywords: ['entrega','deliver','motoboy','tempo'] },
   bairros:   { resposta: 'Atendemos os seguintes bairros:\n\n📍 Centro, Quitandinha, Alto da Serra...\n\nPara ver a taxa de cada bairro, acesse o cardápio e selecione seu bairro no checkout.', keywords: ['bairro','bairros','atende','região','região'] },
   pagamento: { resposta: 'Aceitamos as seguintes formas de pagamento:\n💳 Cartão de crédito e débito\n📱 Pix\n💵 Dinheiro (troco informado no pedido)', keywords: ['pagamento','pagar','cartão','cartao','pix','dinheiro'] },
-  minimo:    { resposta: 'Nosso pedido mínimo para delivery é R$ 20,00.\n\nFaça seu pedido: 👉 https://hamburgueriajoey.com.br', keywords: ['mínimo','minimo','valor mínimo','pedido mínimo'] },
-  padrao:    { resposta: 'Olá, {nome}! 👋\n\nPara fazer seu pedido acesse:\n👉 https://hamburgueriajoey.com.br\n\nDúvidas? Digite *atendente* para falar conosco.', keywords: [] },
+  minimo:    { resposta: `Nosso pedido mínimo para delivery é R$ 20,00.\n\nFaça seu pedido: 👉 ${CARDAPIO_URL}`, keywords: ['mínimo','minimo','valor mínimo','pedido mínimo'] },
+  padrao:    { resposta: `Olá, {nome}! 👋\n\nPara fazer seu pedido acesse:\n👉 ${CARDAPIO_URL}\n\nDúvidas? Digite *atendente* para falar conosco.`, keywords: [] },
 };
 
 function setBotToggle(ativo) {
@@ -7468,7 +7482,7 @@ let _qrMesaNum = null;
 function abrirQrMesa(num, nome) {
   console.log('QR clicado mesa:', num);
   _qrMesaNum = num;
-  const url = `https://hamburgueriajoey.com.br?mesa=${num}`;
+  const url = `${CARDAPIO_URL}?mesa=${num}`;
   document.getElementById('qrMesaNomeLabel').textContent = `🍽️ MESA ${num}`;
 
   const wrap = document.getElementById('qrCanvas');
@@ -7507,7 +7521,7 @@ function fecharQrMesa() {
 
 function imprimirQrMesa() {
   const num = _qrMesaNum;
-  const url = `https://hamburgueriajoey.com.br?mesa=${num}`;
+  const url = `${CARDAPIO_URL}?mesa=${num}`;
 
   // Extrai dataURL do canvas/img já gerado no modal
   const wrap = document.getElementById('qrCanvas');
@@ -7554,7 +7568,7 @@ img{width:170px;height:170px;border-radius:10px;margin-bottom:.8rem}
   <img src="${dataUrl}" alt="QR Code">
   <div class="mesa">🍽️ MESA ${num}</div>
   <div class="divider"></div>
-  <div class="url">hamburgueriajoey.com.br</div>
+  <div class="url">${CARDAPIO_URL_DISPLAY}</div>
 </div>
 <script>window.onload=()=>{ setTimeout(()=>window.print(),200); }<\/script>
 </body></html>`;
