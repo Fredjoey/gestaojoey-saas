@@ -1664,7 +1664,38 @@ function confirmarDados() {
     if (tipoEntrega === 'local') clienteData.mesa = sessionStorage.getItem('mesaAtiva') || document.getElementById('fMesa')?.value.trim() || '';
   }
   try{ localStorage.setItem('joey_cliente', JSON.stringify(clienteData)); }catch(e){}
+  salvarCarrinhoAbandonado(clienteData);
   goStep(3);
+}
+
+async function salvarCarrinhoAbandonado(clienteData) {
+  try {
+    const itens = cart.map(item => ({
+      nome: item.nome,
+      preco: item.preco,
+      qty: item.qty
+    }));
+    await db.collection(`clientes/${slug}/carrinhos`).doc('tel_' + clienteData.tel.replace(/\D/g, '')).set({
+      tel: clienteData.tel,
+      nome: clienteData.nome,
+      itens: itens,
+      total: cart.reduce((s, i) => s + i.preco * i.qty, 0),
+      tipoEntrega: tipoEntrega,
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      status: 'pendente',
+      slug: slug
+    });
+  } catch(e) {
+    console.warn('[Carrinho] Erro ao salvar:', e.message);
+  }
+}
+
+async function marcarCarrinhoConvertido(tel) {
+  if (!tel) return;
+  try {
+    const id = 'tel_' + tel.replace(/\D/g, '');
+    await db.collection(`clientes/${slug}/carrinhos`).doc(id).update({ status: 'convertido' });
+  } catch(e) {}
 }
 
 // STEP 3: PAGAMENTO
@@ -1780,6 +1811,7 @@ function finalizarPedido() {
     updateCartBtn();
     renderProducts();
     checkoutStep = 4;
+    marcarCarrinhoConvertido(clienteData?.tel);
     renderCartContent();
   }).catch(() => {
     btn.textContent = '✓ Finalizar Pedido';

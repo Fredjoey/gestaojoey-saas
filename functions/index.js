@@ -682,3 +682,82 @@ exports.backupFirestoreManual = onRequest(
     }
   }
 );
+
+// ── CARRINHO ABANDONADO (N1: WhatsApp após 7min) ─────────────────────────────
+// Roda a cada 2 minutos. Itera tenants em `clientes/` do projeto gestaojoey,
+// busca carrinhos com status='pendente' criados há mais de 7min, envia mensagem
+// via joeyapi e marca como 'mensagem_enviada'. Carrinhos com >24h sem conversão
+// viram 'expirado'. Carrinhos já 'mensagem_enviada' ou 'convertido' são ignorados
+// pelo where('status','==','pendente').
+
+const CARRINHO_RECOVERY_DELAY_MS = 7  * 60 * 1000;
+const CARRINHO_EXPIRA_MS         = 24 * 60 * 60 * 1000;
+
+function joeyApiBaseFor(slug) {
+  return slug === 'joey'
+    ? 'https://joeyapi-production.up.railway.app'
+    : `https://joeyapi-${slug}-production.up.railway.app`;
+}
+
+function cardapioUrlFor(slug) {
+  return slug === 'joey'
+    ? 'https://hamburgueriajoey.com.br'
+    : `https://${slug}.gestaojoey.com.br`;
+}
+
+exports.verificarCarrinhosAbandonados = onSchedule(
+  { schedule: 'every 2 minutes', timeZone: 'America/Sao_Paulo', region: 'us-central1' },
+  async () => {
+    const agora = Date.now();
+    const limiteRecovery = new Date(agora - CARRINHO_RECOVERY_DELAY_MS);
+    const limiteExpiraMs = agora - CARRINHO_EXPIRA_MS;
+
+    const clientesRefs = await dbGestao.collection('clientes').listDocuments();
+
+    for (const clienteRef of clientesRefs) {
+      const slug = clienteRef.id;
+
+      const carrinhosSnap = await clienteRef.collection('carrinhos')
+        .where('status', '==', 'pendente')
+        .where('criadoEm', '<', limiteRecovery)
+        .get();
+
+      if (carrinhosSnap.empty) continue;
+
+      const lojaSnap = await clienteRef.collection('config').doc('loja').get();
+      const loja = lojaSnap.exists ? lojaSnap.data() : {};
+      const nomeLoja = loja.nome || slug;
+      const cardapioUrl = cardapioUrlFor(slug);
+      const apiBase = joeyApiBaseFor(slug);
+
+      for (const carrinhoDoc of carrinhosSnap.docs) {
+        const carrinho = carrinhoDoc.data();
+        const criadoMs = carrinho.criadoEm?.toMillis?.() || 0;
+
+        // Expirou (>24h sem conversão)? marca e pula
+        if (criadoMs && criadoMs < limiteExpiraMs) {
+          await carrinhoDoc.ref.update({ status: 'expirado' });
+          console.log(`[CARRINHO N1] ${slug}/${carrinhoDoc.id} → expirado`);
+          continue;
+        }
+
+        const tel = (carrinho.tel || '').replace(/\D/g, '');
+        if (!tel) continue;
+        const nome = (carrinho.nome || '').split(' ')[0] || 'cliente';
+
+        const mensagem = `Oi ${nome}! 👋 Você montou um pedido aqui na ${nomeLoja} mas não finalizou. Ainda quer? 🛒 Acesse: ${cardapioUrl}`;
+
+        try {
+          await axios.post(`${apiBase}/send`, { numero: tel, mensagem }, { timeout: 10000 });
+          await carrinhoDoc.ref.update({
+            status: 'mensagem_enviada',
+            mensagemEnviadaEm: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log(`[CARRINHO N1] ${slug}/${carrinhoDoc.id} → enviado`);
+        } catch (err) {
+          console.warn(`[CARRINHO N1] ${slug}/${carrinhoDoc.id} erro:`, err.message);
+        }
+      }
+    }
+  }
+);
