@@ -2759,7 +2759,7 @@ function toggleReceita(id, ativo) {
     if (!file || !id) return;
     notify('Enviando foto...', '');
     try {
-      const ref = storage.ref('produtos/' + id + '/foto');
+      const ref = storage.ref(`clientes/${slug}/produtos/${id}/foto`);
       await ref.put(file);
       const url = await ref.getDownloadURL();
       await db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ foto: url }, { merge: true });
@@ -2783,7 +2783,7 @@ async function _removerFotoProduto(id) {
   if (!confirm('Remover a foto deste produto?')) return;
   try {
     await db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ foto: null }, { merge: true });
-    try { await storage.ref('produtos/' + id + '/foto').delete(); } catch(_) {}
+    try { await storage.ref(`clientes/${slug}/produtos/${id}/foto`).delete(); } catch(_) {}
     notify('Foto removida.');
   } catch(e) {
     notify('Erro: ' + e.message, 'error');
@@ -2908,7 +2908,7 @@ async function uploadBanner(input) {
   const status = document.getElementById('bannerUploadStatus');
   status.textContent = 'Enviando...';
   try {
-    const ref  = storage.ref('banners/cardapio-banner');
+    const ref  = storage.ref(`clientes/${slug}/banners/cardapio-banner`);
     await ref.put(file);
     const url  = await ref.getDownloadURL();
     await db.doc(`clientes/${slug}/config/loja`).set({ bannerUrl: url }, { merge: true });
@@ -2929,7 +2929,7 @@ async function removerBanner() {
     await db.doc(`clientes/${slug}/config/loja`).set({ bannerUrl: null }, { merge: true });
     config.bannerUrl = null;
     _setBannerPreview(null);
-    try { await storage.ref('banners/cardapio-banner').delete(); } catch(_) {}
+    try { await storage.ref(`clientes/${slug}/banners/cardapio-banner`).delete(); } catch(_) {}
     notify('Foto do banner removida.');
   } catch(e) {
     notify('Erro ao remover banner: ' + e.message, 'error');
