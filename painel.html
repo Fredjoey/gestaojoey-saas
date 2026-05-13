@@ -940,6 +940,17 @@ textarea.fi{resize:vertical;min-height:60px}
             <button class="btn btn-ghost" onclick="carregarHistoricoBackup()">↺ Atualizar</button>
           </div>
         </div>
+
+        <div style="margin-top:24px;padding:16px;border:1px solid var(--border);border-radius:8px">
+          <h3 style="margin:0 0 12px 0">🔒 Trocar senha</h3>
+          <div style="display:flex;flex-direction:column;gap:8px;max-width:400px">
+            <input type="password" id="senhaAtual" placeholder="Senha atual" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)">
+            <input type="password" id="senhaNova" placeholder="Nova senha (mín 6 caracteres)" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)">
+            <input type="password" id="senhaConfirmar" placeholder="Confirmar nova senha" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)">
+            <button onclick="trocarSenha()" style="padding:10px;background:var(--orange);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Trocar senha</button>
+            <div id="senhaMsg" style="font-size:13px;margin-top:4px"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3058,6 +3069,52 @@ async function dispararBackup() {
   } finally {
     btn.disabled = false;
     btn.textContent = '▶ Fazer backup agora';
+  }
+}
+
+async function trocarSenha() {
+  const atual = document.getElementById('senhaAtual').value;
+  const nova = document.getElementById('senhaNova').value;
+  const confirmar = document.getElementById('senhaConfirmar').value;
+  const msg = document.getElementById('senhaMsg');
+
+  msg.style.color = 'var(--text)';
+
+  if (!atual || !nova || !confirmar) {
+    msg.style.color = '#ff6b6b';
+    msg.textContent = 'Preencha todos os campos';
+    return;
+  }
+  if (nova.length < 6) {
+    msg.style.color = '#ff6b6b';
+    msg.textContent = 'Nova senha deve ter no mínimo 6 caracteres';
+    return;
+  }
+  if (nova !== confirmar) {
+    msg.style.color = '#ff6b6b';
+    msg.textContent = 'Nova senha e confirmação não conferem';
+    return;
+  }
+
+  try {
+    const user = firebase.auth().currentUser;
+    const credential = firebase.auth.EmailAuthProvider.credential(user.email, atual);
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(nova);
+    msg.style.color = '#4caf50';
+    msg.textContent = '✓ Senha trocada com sucesso!';
+    document.getElementById('senhaAtual').value = '';
+    document.getElementById('senhaNova').value = '';
+    document.getElementById('senhaConfirmar').value = '';
+  } catch (err) {
+    msg.style.color = '#ff6b6b';
+    if (err.code === 'auth/wrong-password') {
+      msg.textContent = 'Senha atual incorreta';
+    } else if (err.code === 'auth/weak-password') {
+      msg.textContent = 'Nova senha muito fraca';
+    } else {
+      msg.textContent = 'Erro: ' + err.message;
+    }
   }
 }
 
