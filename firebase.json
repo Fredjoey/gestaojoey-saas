@@ -1,7 +1,7 @@
 {
   "functions": {
     "source": "functions",
-    "runtime": "nodejs20"
+    "runtime": "nodejs22"
   },
   "firestore": {
     "rules": "firestore.rules"
@@ -93,6 +93,27 @@
           "source": "/",
           "destination": "/painel.html"
         }
+      ]
+    },
+    {
+      "site": "gestaojoey-painel",
+      "public": ".",
+      "ignore": [
+        "firebase.json", ".firebaserc", ".gitignore",
+        "firebase-debug.log", "**/node_modules/**",
+        "*.bat", "*.exe", "index.html",
+        "serviceAccount*.json", "migrar*.js", "atualizar*.js",
+        "trocar*.js", "limpar*.js", "gerar*.js"
+      ],
+      "headers": [
+        { "source": "/painel.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] }
+      ],
+      "rewrites": [
+        { "source": "/pedidos",          "destination": "/painel.html" },
+        { "source": "/pedidos/**",       "destination": "/painel.html" },
+        { "source": "/gestao",           "destination": "/gestao-joey.html" },
+        { "source": "/gestao/**",        "destination": "/gestao-joey.html" },
+        { "source": "**",                "destination": "/cardapio.html" }
       ]
     }
   ]
