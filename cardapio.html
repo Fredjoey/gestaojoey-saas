@@ -12,6 +12,7 @@
 <meta property="og:type" content="website">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -752,9 +753,7 @@ if(!sessionStorage.getItem('splashShown')){
 }
 </script>
 <div id="splash">
-  <img id="splash-img"
-    src="https://firebasestorage.googleapis.com/v0/b/pedidos-joey.firebasestorage.app/o/assets%2FFundo_de_entrada.png?alt=media"
-    alt="">
+  <img id="splash-img" src="" alt="">
 </div>
 <div id="ytPlayerEl" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none"></div>
 
@@ -827,15 +826,31 @@ if(!sessionStorage.getItem('splashShown')){
 <script>
 // =================== FIREBASE ===================
 const firebaseConfig = {
-  apiKey: "AIzaSyA2iSOixWWIpQ9VERMOSpQsDQKQTk5TumU",
-  authDomain: "pedidos-joey.firebaseapp.com",
-  projectId: "pedidos-joey",
-  storageBucket: "pedidos-joey.firebasestorage.app",
-  messagingSenderId: "908000090595",
-  appId: "1:908000090595:web:aa4df2d9535bad6bf868d6"
+  apiKey: "AIzaSyA8yx0BXHDZee_RyLteJbSuQDzInj-GpFM",
+  authDomain: "gestaojoey.firebaseapp.com",
+  projectId: "gestaojoey",
+  storageBucket: "gestaojoey.firebasestorage.app",
+  messagingSenderId: "372331148907",
+  appId: "1:372331148907:web:aa5eb48d309a167ad1a32e"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const hostname = window.location.hostname;
+const slug = (
+  hostname === 'pedidos.hamburgueriajoey.com.br' ||
+  hostname === 'hamburgueriajoey.com.br' ||
+  hostname === 'www.hamburgueriajoey.com.br' ||
+  hostname === 'pedidos-joey.web.app' ||
+  hostname === 'pedidos-joey-painel.web.app' ||
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1'
+) ? 'joey' : hostname.split('.')[0];
+firebase.auth().onAuthStateChanged(user => {
+  if (user) {
+    carregarDadosPainel();
+  }
+});
+firebase.auth().signInAnonymously().catch(e => console.error('Auth anônimo falhou:', e));
 
 // Splash: dispara saída após 2.8s (animação dura 3s)
 (function(){
@@ -854,18 +869,6 @@ const db = firebase.firestore();
   if (p) sessionStorage.setItem('mesaAtiva', p);
 })();
 
-// =================== SISTEMA-JOEY (segundo Firebase — leitura de recipes) ===================
-const sistemaJoeyConfig = {
-  apiKey: "AIzaSyD1s__6XaGkpBr-7XcCmSwqZicnaiLhMMA",
-  authDomain: "sistema-joey.firebaseapp.com",
-  projectId: "sistema-joey",
-  storageBucket: "sistema-joey.firebasestorage.app",
-  messagingSenderId: "184324581927",
-  appId: "1:184324581927:web:2847ab94cb0cb39d227c02"
-};
-const sistemaJoeyApp = firebase.initializeApp(sistemaJoeyConfig, 'sistemaJoey');
-const dbJoey = sistemaJoeyApp.firestore();
-
 // =================== CARDÁPIO PADRÃO (fallback) ===================
 const CARDAPIO_PADRAO = [
   {id:1,categoria:'Pizza',nome:'Margherita Clássica',desc:'Molho de tomate pelati, mussarela de búfala fresca e folhas de manjericão',preco:45.00,emoji:'🍕',foto:null},
@@ -878,11 +881,29 @@ const CARDAPIO_PADRAO = [
   {id:8,categoria:'Porção',nome:'Batata Frita Crocante',desc:'Porção generosa com sal grosso e molho especial da casa',preco:22.00,emoji:'🍟',foto:null}
 ];
 
+const JOEY_SPLASH_URL = 'https://firebasestorage.googleapis.com/v0/b/pedidos-joey.firebasestorage.app/o/assets%2FFundo_de_entrada.png?alt=media';
+
+function configurarSplash(loja) {
+  const splashImg = document.getElementById('splash-img');
+  if (!splashImg) return;
+
+  const url = loja?.splashUrl || (slug === 'joey' ? JOEY_SPLASH_URL : null) || loja?.logoUrl || null;
+
+  if (url) {
+    splashImg.src = url;
+  } else {
+    const splash = document.getElementById('splash');
+    if (splash) splash.style.display = 'none';
+    sessionStorage.setItem('splashShown', '1');
+  }
+}
+
 // =================== CARREGAR DADOS DO PAINEL (FIREBASE) ===================
 function carregarDadosPainel() {
   // Config em tempo real
-  db.doc('config/loja').onSnapshot(snap => {
+  db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
     const cfg = snap.exists ? snap.data() : {};
+    configurarSplash(cfg);
     CONFIG.nome     = cfg.nome     || 'Joey Pizza';
     CONFIG.wpp      = cfg.wpp      || '';
     CONFIG.taxa     = cfg.taxa     != null ? Number(cfg.taxa) : 5;
@@ -939,7 +960,7 @@ function carregarDadosPainel() {
     renderPecaDeNovo();
   }
 
-  dbJoey.collection('recipes').onSnapshot(snap => {
+  db.collection(`clientes/${slug}/recipes`).onSnapshot(snap => {
     _recipesRaw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     buildCatalogo();
   }, () => {
@@ -959,28 +980,28 @@ function carregarDadosPainel() {
     renderProducts();
   });
 
-  db.collection('catalogoStatus').onSnapshot(snap => {
+  db.collection(`clientes/${slug}/catalogoStatus`).onSnapshot(snap => {
     _catalogoStatusMap = {};
     snap.docs.forEach(d => { _catalogoStatusMap[d.id] = d.data(); });
     buildCatalogo();
   });
 
   // Ordem dinâmica definida pelo gestor
-  db.doc('config/catOrdem').onSnapshot(snap => {
+  db.doc(`clientes/${slug}/config/catOrdem`).onSnapshot(snap => {
     _catOrdem = snap.exists ? (snap.data().ordem || []) : [];
     buildCatalogo();
   });
-  db.doc('config/prodOrdem').onSnapshot(snap => {
+  db.doc(`clientes/${slug}/config/prodOrdem`).onSnapshot(snap => {
     _prodOrdem = snap.exists ? snap.data() : {};
     renderProducts();
   });
 
-  dbJoey.collection('adicionais').onSnapshot(snap => {
+  db.collection(`clientes/${slug}/adicionais`).onSnapshot(snap => {
     _adicionaisCatalogo = {};
     snap.docs.forEach(d => { _adicionaisCatalogo[d.id] = { id: d.id, ...d.data() }; });
   }, () => {});
 
-  dbJoey.collection('categorias').onSnapshot(snap => {
+  db.collection(`clientes/${slug}/categorias`).onSnapshot(snap => {
     EMOJI_CAT = {};
     CAT_ORDER = [];
     snap.docs.forEach(d => {
@@ -1723,7 +1744,7 @@ function finalizarPedido() {
   const troco = formaPag==='dinheiro' && document.getElementById('fTroco')
     ? parseFloat(document.getElementById('fTroco').value)||0 : 0;
 
-  const contadorRef = db.doc('config/contador');
+  const contadorRef = db.doc(`clientes/${slug}/config/contador`);
   db.runTransaction(t => {
     return t.get(contadorRef).then(doc => {
       const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
@@ -1750,7 +1771,7 @@ function finalizarPedido() {
       ...(formaPag === 'pix' ? { pixStatus: 'aguardando_geracao' } : {})
     };
     ultimoPedido = pedido;
-    return db.collection('pedidos').doc(pedido.id).set(pedido).then(() => pedido);
+    return db.collection(`clientes/${slug}/pedidos`).doc(pedido.id).set(pedido).then(() => pedido);
   }).then(pedido => {
     const _mesaAtiva = sessionStorage.getItem('mesaAtiva');
     if (_mesaAtiva) atualizarMesaComPedido(pedido, _mesaAtiva);
@@ -1768,7 +1789,7 @@ function finalizarPedido() {
 }
 
 function atualizarMesaComPedido(pedido, mesaNum) {
-  const mesaRef = db.doc('mesas/mesa-' + mesaNum);
+  const mesaRef = db.doc(`clientes/${slug}/mesas/mesa-${mesaNum}`);
   const itensMesa = (pedido.itens || []).map(i => ({
     id: i.id,
     nome: i.nome,
@@ -1990,7 +2011,7 @@ function iniciarHistListener(tel) {
 
   if (histListener) { histListener(); histListener = null; }
 
-  histListener = db.collection('pedidos')
+  histListener = db.collection(`clientes/${slug}/pedidos`)
     .where('cliente.tel', '==', tel)
     .onSnapshot(snap => {
       const lista = snap.docs.map(d => d.data()).sort((a, b) => (b.ts||0) - (a.ts||0));
@@ -2070,7 +2091,7 @@ function renderStepPix(el) {
     </div>`;
 
   if (pixScreenListener) pixScreenListener();
-  pixScreenListener = db.collection('pedidos').doc(id).onSnapshot(snap => {
+  pixScreenListener = db.collection(`clientes/${slug}/pedidos`).doc(id).onSnapshot(snap => {
     const d = snap.data();
     if (!d) return;
     const area = document.getElementById('pixAreaConteudo');
@@ -2173,7 +2194,7 @@ let _pecaDeNovoIds = []; // [{id, count}] ordenado por frequência
 
 function carregarPecaDeNovo() {
   if (!clienteData?.tel) return;
-  db.collection('pedidos')
+  db.collection(`clientes/${slug}/pedidos`)
     .where('tel', '==', clienteData.tel)
     .orderBy('criadoEm', 'desc')
     .limit(30)
@@ -2219,7 +2240,6 @@ function renderPecaDeNovo() {
 }
 
 // =================== INIT ===================
-carregarDadosPainel();
 carregarPecaDeNovo(); // configura listeners Firebase em tempo real
 
 // Atualiza status aberto/fechado a cada minuto
