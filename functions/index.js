@@ -4,6 +4,11 @@ const admin = require('firebase-admin');
 const axios = require('axios');
 admin.initializeApp();
 const db = admin.firestore();
+const gestaoApp = admin.initializeApp(
+  { credential: admin.credential.cert(require('./serviceAccount-gestaojoey.json')) },
+  'gestao'
+);
+const dbGestao = gestaoApp.firestore();
 
 // ── FOCUS NFe — EMISSÃO DE NFCe ──────────────────────────────────────────────
 
@@ -56,9 +61,9 @@ exports.emitirNFCe = onRequest(
 
       // Lê config fiscal, categorias tributárias e NCM individuais do Firestore
       const [fiscalSnap, catTribSnap, ncmProdSnap] = await Promise.all([
-        db.collection('config').doc('fiscal').get(),
-        db.collection('config').doc('categoriasTributarias').get(),
-        db.collection('config').doc('ncmProdutos').get(),
+        dbGestao.doc('clientes/joey/config/fiscal').get(),
+        dbGestao.doc('clientes/joey/config/categoriasTributarias').get(),
+        dbGestao.doc('clientes/joey/config/ncmProdutos').get(),
       ]);
       const fiscal    = fiscalSnap.exists    ? fiscalSnap.data()    : {};
       const catTrib   = catTribSnap.exists   ? catTribSnap.data()   : {};
@@ -124,7 +129,7 @@ exports.emitirNFCe = onRequest(
         tipo_documento:              1,
         finalidade_emissao:          1,
         consumidor_final:            1,
-        presenca_comprador:          (req.body?.entrega === 'delivery') ? 2 : 1,
+        presenca_comprador:          1,
         modalidade_frete:            9,
         valor_frete:                 0,
         cnpj_emitente:               (fiscal.cnpj || '').replace(/\D/g, '') || undefined,
@@ -172,7 +177,7 @@ exports.emitirNFCe = onRequest(
 
       // Salva resultado no Firestore
       const agora2 = new Date();
-      await db.collection('notasFiscais').doc(String(pedidoId)).set({
+      await dbGestao.collection('clientes/joey/notasFiscais').doc(String(pedidoId)).set({
         pedidoId:     String(pedidoId),
         cliente:      cliente || null,
         total:        total   || 0,
@@ -238,7 +243,7 @@ exports.cancelarNFCe = onRequest(
       if (!pedidoId || !ref || !justificativa || String(justificativa).trim().length < 15) {
         return res.status(400).json({ ok: false, erro: 'pedidoId, ref e justificativa (mín. 15 caracteres) são obrigatórios' });
       }
-      const fiscalSnap = await db.collection('config').doc('fiscal').get();
+      const fiscalSnap = await dbGestao.doc('clientes/joey/config/fiscal').get();
       const fiscal = fiscalSnap.exists ? fiscalSnap.data() : {};
       const focusToken = (fiscal.apiKey || fiscal.tokenProducao || '').trim();
       if (!focusToken) {
@@ -258,7 +263,7 @@ exports.cancelarNFCe = onRequest(
       const focusData  = focusResp.data || {};
       const httpStatus = focusResp.status;
       if (httpStatus >= 200 && httpStatus < 300) {
-        await db.collection('notasFiscais').doc(String(pedidoId)).set({
+        await dbGestao.collection('clientes/joey/notasFiscais').doc(String(pedidoId)).set({
           status: 'cancelada',
           canceladoEm: admin.firestore.FieldValue.serverTimestamp(),
           justificativaCancelamento: just,
@@ -505,6 +510,70 @@ exports.mensagensProgramadas = onSchedule(
 const BACKUP_PREFIX = 'firestore-backups';
 const BACKUP_RETAIN_LOG = 90;
 
+// Converte Timestamp do Firestore → ISO string para serialização JSON.
+function cleanData(data) {
+  return JSON.parse(JSON.stringify(data, (k, v) => {
+    if (v && typeof v === 'object' && typeof v.toDate === 'function') {
+      return v.toDate().toISOString();
+    }
+    return v;
+  }));
+}
+
+// Snapshot recursivo de uma coleção: cada doc traz { _data, _subcollections? }.
+// Processa docs em chunks paralelos de 50 para limitar concorrência mas acelerar
+// as chamadas de listCollections() (gargalo em coleções com milhares de docs).
+async function dumpCollection(colRef) {
+  const snap = await colRef.get();
+  const out = {};
+  const docs = snap.docs;
+  const CHUNK = 50;
+
+  for (let i = 0; i < docs.length; i += CHUNK) {
+    const chunk = docs.slice(i, i + CHUNK);
+    await Promise.all(chunk.map(async (doc) => {
+      const docOut = { _data: cleanData(doc.data()) };
+      const subs = await doc.ref.listCollections();
+      if (subs.length > 0) {
+        docOut._subcollections = {};
+        for (const sub of subs) {
+          docOut._subcollections[sub.id] = await dumpCollection(sub);
+        }
+      }
+      out[doc.id] = docOut;
+    }));
+  }
+
+  return out;
+}
+
+// Itera root collections de um Firestore (instância) e dump recursivo.
+async function snapshotProjeto(firestore) {
+  const collections = await firestore.listCollections();
+  const out = {};
+  for (const colRef of collections) {
+    out[colRef.id] = await dumpCollection(colRef);
+  }
+  return out;
+}
+
+// Conta documentos recursivamente no snapshot (entradas com chave _data).
+function countDocs(node) {
+  if (!node || typeof node !== 'object') return 0;
+  let count = 0;
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') {
+      if ('_data' in value) {
+        count++;
+        if (value._subcollections) count += countDocs(value._subcollections);
+      } else {
+        count += countDocs(value);
+      }
+    }
+  }
+  return count;
+}
+
 async function executarBackup(origem) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
@@ -516,35 +585,29 @@ async function executarBackup(origem) {
   });
 
   try {
-    const collections = await db.listCollections();
-    const backup = {};
+    const [legacy, gestao] = await Promise.all([
+      snapshotProjeto(db),
+      snapshotProjeto(dbGestao),
+    ]);
 
-    for (const colRef of collections) {
-      const snap = await colRef.get();
-      backup[colRef.id] = {};
-      snap.forEach(doc => {
-        // Converte Timestamp → ISO string para JSON serializable
-        const data = doc.data();
-        const clean = JSON.parse(JSON.stringify(data, (k, v) => {
-          if (v && typeof v === 'object' && typeof v.toDate === 'function') {
-            return v.toDate().toISOString();
-          }
-          return v;
-        }));
-        backup[colRef.id][doc.id] = clean;
-      });
-    }
+    const totalDocsLegacy = countDocs(legacy);
+    const totalDocsGestao = countDocs(gestao);
+    const totalDocs = totalDocsLegacy + totalDocsGestao;
 
-    const totalColecoes = Object.keys(backup).length;
-    const totalDocs = Object.values(backup).reduce((s, c) => s + Object.keys(c).length, 0);
-    console.log(`[BACKUP] (${origem}) ${totalColecoes} coleções, ${totalDocs} docs → gravando JSON`);
+    console.log(`[BACKUP] (${origem}) legacy=${totalDocsLegacy} docs, gestao=${totalDocsGestao} docs → gravando JSON`);
 
     const bucket = admin.storage().bucket();
     const fileName = `${BACKUP_PREFIX}/${stamp}/backup.json`;
     const file = bucket.file(fileName);
-    await file.save(JSON.stringify(backup, null, 2), {
+    await file.save(JSON.stringify({ legacy, gestao }, null, 2), {
       contentType: 'application/json',
-      metadata: { origem, stamp, totalDocs: String(totalDocs) },
+      metadata: {
+        origem,
+        stamp,
+        totalDocs: String(totalDocs),
+        totalDocsLegacy: String(totalDocsLegacy),
+        totalDocsGestao: String(totalDocsGestao),
+      },
     });
 
     const gcsPath = `gs://${bucket.name}/${fileName}`;
@@ -552,13 +615,14 @@ async function executarBackup(origem) {
 
     await logRef.update({
       gcsPath,
-      totalColecoes,
       totalDocs,
+      totalDocsLegacy,
+      totalDocsGestao,
       status: 'concluído',
       concluidoEm: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    return { ok: true, gcsPath, totalColecoes, totalDocs, logId: logRef.id };
+    return { ok: true, gcsPath, totalDocs, totalDocsLegacy, totalDocsGestao, logId: logRef.id };
   } catch (err) {
     console.error('[BACKUP] erro:', err.message);
     await logRef.update({ status: 'erro', erro: err.message });
@@ -573,7 +637,7 @@ exports.backupFirestoreDaily = onSchedule(
     timeZone: 'America/Sao_Paulo',
     region: 'us-central1',
     timeoutSeconds: 540,
-    memory: '256MiB',
+    memory: '2GiB',
   },
   async () => {
     try {
