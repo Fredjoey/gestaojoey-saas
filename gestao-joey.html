@@ -591,7 +591,7 @@
     </div>
 
     <div id="appHeader" class="header" style="display:none">
-        <a href="https://pedidos.hamburgueriajoey.com.br" target="_blank" title="Painel de Pedidos"
+        <a href="#" id="linkPedidos" target="_blank" title="Painel de Pedidos"
            style="position:absolute; top:50%; right:1.5rem; transform:translateY(-50%); text-decoration:none; font-size:22px; opacity:0.55; transition:opacity 0.15s;"
            onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">🛒</a>
         <button onclick="fazerLogout()" style="position:absolute; top:50%; left:1.5rem; transform:translateY(-50%); background:transparent; border:1px solid #444; color:#888; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;" onmouseover="this.style.borderColor='#e74c3c';this.style.color='#e74c3c'" onmouseout="this.style.borderColor='#444';this.style.color='#888'">Sair</button>
@@ -1720,6 +1720,13 @@
             hostname === 'localhost' ||
             hostname === '127.0.0.1'
         ) ? 'joey' : hostname.split('.')[0];
+
+        // Link do carrinho (painel de pedidos) — dinâmico por tenant
+        const PEDIDOS_URL = slug === 'joey'
+          ? 'https://pedidos.hamburgueriajoey.com.br'
+          : `https://${slug}.gestaojoey.com.br/pedidos`;
+        const linkPedidos = document.getElementById('linkPedidos');
+        if (linkPedidos) linkPedidos.href = PEDIDOS_URL;
 
         // ===== AUTENTICAÇÃO =====
         const auth = getAuth(app);
