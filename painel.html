@@ -852,6 +852,45 @@ textarea.fi{resize:vertical;min-height:60px}
             <button onclick="removerLogo()" style="padding:8px 16px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer">🗑️ Remover</button>
           </div>
 
+          <div style="margin-top:24px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+              <span style="font-size:18px">💳</span>
+              <span style="font-weight:600;font-size:15px">Pagamento PIX</span>
+            </div>
+
+            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden">
+              <div onclick="togglePixTutorial()" style="padding:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:13px;color:var(--muted)">📋 Como configurar o PIX? Clique para ver o passo a passo</span>
+                <span id="pixTutorialArrow">▼</span>
+              </div>
+              <div id="pixTutorialBody" style="display:none;padding:0 16px 16px;font-size:13px;line-height:1.8">
+                <p style="color:var(--orange);font-weight:600;margin:0 0 8px">Siga os passos abaixo:</p>
+                <p><b>1.</b> Crie sua conta gratuita em <a href="https://www.mercadopago.com.br" target="_blank" style="color:var(--orange)">mercadopago.com.br</a></p>
+                <p><b>2.</b> Acesse: <b>Integrações → Credenciais de produção</b></p>
+                <p><b>3.</b> Copie o <b>"Access Token"</b> (começa com APP_USR-...)</p>
+                <p><b>4.</b> Cole o token no campo abaixo e clique Salvar</p>
+                <p><b>5.</b> Acesse: <b>MP → Notificações → Webhooks → Modo de produção</b></p>
+                <p><b>6.</b> Cole esta URL e marque o evento <b>"Pagamentos"</b>:</p>
+                <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin:4px 0 8px">
+                  <span id="webhookUrlDisplay" style="font-size:12px;color:var(--muted);flex:1;word-break:break-all">https://southamerica-east1-gestaojoey.cloudfunctions.net/webhookPixMP</span>
+                  <button onclick="copiarWebhookUrl()" style="padding:4px 10px;background:var(--orange);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap">📋 Copiar</button>
+                </div>
+                <p><b>7.</b> Clique em <b>Salvar configurações</b> no MP</p>
+              </div>
+            </div>
+
+            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:16px">
+              <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:8px">Access Token Mercado Pago</label>
+              <input id="cfgMpToken" type="password" placeholder="APP_USR-..."
+                style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;box-sizing:border-box">
+              <div id="cfgMpTokenStatus" style="font-size:12px;margin-top:6px;color:var(--muted)">⚠️ Token não configurado</div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button onclick="salvarMpToken()" style="padding:8px 20px;background:var(--orange);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">💾 Salvar</button>
+                <button onclick="toggleMpTokenVisibility()" style="padding:8px 16px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer">👁 Mostrar</button>
+              </div>
+            </div>
+          </div>
+
           <div class="section-lbl">⭐ Produto em Destaque</div>
           <div style="margin-bottom:1rem">
             <label class="fl" style="margin-bottom:6px;display:block">Exibido em card de destaque no topo do cardápio</label>
@@ -3020,6 +3059,53 @@ function renderLogoPreview(url) {
   if (inp) inp.addEventListener('change', e => uploadLogo(e.target.files[0]));
 })();
 
+// ── PAGAMENTO PIX (Mercado Pago) ─────────────────────────────────────────────
+function togglePixTutorial() {
+  const body  = document.getElementById('pixTutorialBody');
+  const arrow = document.getElementById('pixTutorialArrow');
+  const aberto = body.style.display !== 'none';
+  body.style.display = aberto ? 'none' : 'block';
+  arrow.textContent  = aberto ? '▼' : '▲';
+}
+
+function copiarWebhookUrl() {
+  navigator.clipboard.writeText('https://southamerica-east1-gestaojoey.cloudfunctions.net/webhookPixMP');
+  notify('URL copiada!');
+}
+
+function toggleMpTokenVisibility() {
+  const input = document.getElementById('cfgMpToken');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+async function salvarMpToken() {
+  const token = document.getElementById('cfgMpToken').value.trim();
+  if (!token) { notify('Cole o token antes de salvar.', 'error'); return; }
+  if (!token.startsWith('APP_USR-')) { notify('Token inválido. Deve começar com APP_USR-', 'error'); return; }
+  try {
+    await db.doc(`clientes/${slug}/config/pagamento`).set({ mpAccessToken: token }, { merge: true });
+    const st = document.getElementById('cfgMpTokenStatus');
+    st.textContent = '✅ Token configurado';
+    st.style.color = '#4caf50';
+    notify('Token salvo com sucesso!');
+  } catch (e) {
+    notify('Erro ao salvar: ' + e.message, 'error');
+  }
+}
+
+async function carregarMpToken() {
+  try {
+    const snap  = await db.doc(`clientes/${slug}/config/pagamento`).get();
+    const token = snap.exists ? snap.data().mpAccessToken : null;
+    if (token) {
+      document.getElementById('cfgMpToken').value = token;
+      const st = document.getElementById('cfgMpTokenStatus');
+      st.textContent = '✅ Token configurado';
+      st.style.color = '#4caf50';
+    }
+  } catch (e) { /* silencioso */ }
+}
+
 function carregarConfig() {
   document.getElementById('cfgNome').value         = config.nome         || 'Joey Pizza';
   document.getElementById('cfgWpp').value          = config.wpp          || '';
@@ -3028,6 +3114,7 @@ function carregarConfig() {
   document.getElementById('cfgEnd').value          = config.end          || '';
   _setBannerPreview(config.bannerUrl || null);
   renderLogoPreview(config.logoUrl || null);
+  carregarMpToken();
 
   // Toggle aberto/fechado manual
   const aberto = config.aberto !== false;
@@ -5228,9 +5315,6 @@ function iniciarListenersFirestore() {
       _knownPedidoIds = novosIds;
     }
 
-    // PIX: gerar pagamento para pedidos novos aguardando
-    pedidos.filter(p => p.pagamento === 'pix' && p.pixStatus === 'aguardando_geracao').forEach(p => gerarPixMP(p));
-
     // PIX: detectar pagamento confirmado (pixStatus mudou para 'pago')
     pedidos.forEach(p => {
       if (p.pagamento === 'pix' && p.pixStatus === 'pago') {
@@ -5244,7 +5328,6 @@ function iniciarListenersFirestore() {
 
     renderKanban();
     startPixTimers();
-    if (!pixPollInterval) pixPollInterval = setInterval(verificarPixPendentes, 12000);
     verificarAniversariantes();
   });
 
@@ -5992,9 +6075,6 @@ function cliWppBtn(tel) {
 
 
 // =================== PIX / MERCADO PAGO ===================
-const MP_ACCESS_TOKEN = 'APP_USR-4793476357492878-042505-9ad05a89dbf86e9df72219e277191795-236082761';
-const pixGerando = new Set();
-let pixPollInterval = null;
 let pixTimerInterval = null;
 
 function pixTarjaHtml(p) {
@@ -6045,78 +6125,6 @@ function startPixTimers() {
       }
     });
   }, 1000);
-}
-
-async function gerarPixMP(p) {
-  if (pixGerando.has(p.id)) return;
-  pixGerando.add(p.id);
-  await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ pixStatus: 'gerando' });
-  try {
-    const res = await fetch('https://api.mercadopago.com/v1/payments', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + MP_ACCESS_TOKEN,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': 'joey-pix-' + p.id
-      },
-      body: JSON.stringify({
-        transaction_amount: p.total,
-        description: (config.nome || 'Joey') + ' Pedido ' + p.id,
-        payment_method_id: 'pix',
-        payer: {
-          email: 'pedido@joeypizza.com.br',
-          first_name: (p.cliente?.nome || 'Cliente').split(' ')[0],
-          last_name:  (p.cliente?.nome || '').split(' ').slice(1).join(' ') || 'Joey'
-        }
-      })
-    });
-    const data = await res.json();
-    console.log('[PIX] resposta MP status=' + data.status + ' id=' + data.id);
-    if (data.id && data.status !== 'rejected' && data.status !== 'cancelled') {
-      const tx        = data.point_of_interaction?.transaction_data || {};
-      const pixExpira = Date.now() + 5 * 60 * 1000;
-      console.log('[PIX] pixExpira ms:', pixExpira, '| Date.now():', Date.now(), '| diff ms:', pixExpira - Date.now());
-      await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({
-        pixId:           String(data.id),
-        pixStatus:       'pendente',
-        pixExpira,
-        pixQrCode:       tx.qr_code        || '',
-        pixQrCodeBase64: tx.qr_code_base64  || '',
-        pixCopiaECola:   tx.qr_code        || ''
-      });
-      notify('PIX gerado para pedido ' + p.id);
-    } else {
-      console.error('[PIX] Erro MP:', data);
-      notify('Erro ao gerar PIX para pedido ' + p.id + ': ' + (data.message || ''), 'error');
-      await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ pixStatus: 'erro_geracao' });
-      pixGerando.delete(p.id);
-    }
-  } catch(e) {
-    console.error('[PIX] Erro API:', e);
-    await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ pixStatus: 'erro_geracao' });
-    pixGerando.delete(p.id);
-  }
-}
-
-async function verificarPixPendentes() {
-  const pendentes = pedidos.filter(p => p.pagamento === 'pix' && p.pixStatus === 'pendente' && p.pixId);
-  for (const p of pendentes) {
-    if (p.pixExpira && Date.now() > p.pixExpira + 5000) {
-      await cancelarPedidoPix(p.id);
-      continue;
-    }
-    try {
-      const res  = await fetch('https://api.mercadopago.com/v1/payments/' + p.pixId, {
-        headers: { 'Authorization': 'Bearer ' + MP_ACCESS_TOKEN }
-      });
-      const data = await res.json();
-      if (data.status === 'approved') {
-        await onPixPago(p.id);
-      } else if (data.status === 'cancelled' || data.status === 'rejected') {
-        await cancelarPedidoPix(p.id);
-      }
-    } catch(e) { /* silencioso */ }
-  }
 }
 
 async function onPixPago(id) {
