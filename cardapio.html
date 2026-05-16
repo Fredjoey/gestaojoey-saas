@@ -1,7 +1,10 @@
 ﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<style>html{background:#0f0f0f}</style>
 <meta charset="UTF-8">
+<style>#splash{display:none;position:fixed;inset:0;z-index:99999;background:#0f0f0f;overflow:hidden}.splash-on #splash{display:block}</style>
+<link rel="preload" as="image" href="https://firebasestorage.googleapis.com/v0/b/pedidos-joey.firebasestorage.app/o/assets%2FFundo_de_entrada.png?alt=media">
 <meta name="facebook-domain-verification" content="o9pd15rgn40a8rvv117so7mz0flib7" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Joey</title>
@@ -650,33 +653,21 @@ body{
   50%{opacity:1;transform:scale(1.1)}
 }
 
-/* SPLASH SCREEN */
-#splash{
-  display:none;
-  position:fixed;inset:0;z-index:99999;
-  background:#F5F5F5;
-  overflow:hidden;
-}
-.splash-on #splash{display:block}
+/* SPLASH SCREEN — regras base de #splash movidas para <style> inline no <head> (evita FOUC) */
 #splash-img{
   position:absolute;inset:0;
   width:100%;height:100%;
   object-fit:cover;
   transform-origin:center center;
-  animation:splashImg 3s cubic-bezier(.4,0,.2,1) forwards;
+  animation:splashImg 2.6s cubic-bezier(.4,0,.2,1) forwards;
 }
 #splash.splash-out{
   animation:splashFadeOut .45s ease forwards;
 }
 @keyframes splashImg{
-  0%  {opacity:0;transform:scale(1)}
-  17% {opacity:1;transform:scale(1)}
-  30% {opacity:.08;transform:scale(1)}
-  43% {opacity:1;transform:scale(1)}
-  56% {opacity:.08;transform:scale(1)}
-  67% {opacity:1;transform:scale(1)}
-  80% {opacity:1;transform:scale(1)}
-  100%{opacity:1;transform:scale(2.5)}
+  0%   {opacity:0;transform:scale(1.05)}
+  18%  {opacity:1;transform:scale(1.05)}
+  100% {opacity:1;transform:scale(1.12)}
 }
 @keyframes splashFadeOut{
   from{opacity:1;pointer-events:all}
@@ -753,7 +744,7 @@ if(!sessionStorage.getItem('splashShown')){
 }
 </script>
 <div id="splash">
-  <img id="splash-img" src="" alt="">
+  <img id="splash-img" src="https://firebasestorage.googleapis.com/v0/b/pedidos-joey.firebasestorage.app/o/assets%2FFundo_de_entrada.png?alt=media" alt="">
 </div>
 <div id="ytPlayerEl" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none"></div>
 
@@ -852,15 +843,28 @@ firebase.auth().onAuthStateChanged(user => {
 });
 firebase.auth().signInAnonymously().catch(e => console.error('Auth anônimo falhou:', e));
 
-// Splash: dispara saída após 2.8s (animação dura 3s)
+// Splash: saída sincronizada com o load da imagem (não mais setTimeout cego)
 (function(){
   if(!document.documentElement.classList.contains('splash-on')) return;
   var sp = document.getElementById('splash');
+  var img = document.getElementById('splash-img');
   if(!sp) return;
-  setTimeout(function(){
+  var done = false;
+  function sair(){
+    if(done) return; done = true;
     sp.classList.add('splash-out');
     setTimeout(function(){ sp.style.display='none'; }, 450);
-  }, 2800);
+  }
+  function agendarSaida(){ setTimeout(sair, 2400); }
+  if(img && img.complete && img.naturalWidth){
+    agendarSaida();
+  } else if(img){
+    img.addEventListener('load', agendarSaida);
+    img.addEventListener('error', sair);
+  } else {
+    agendarSaida();
+  }
+  setTimeout(sair, 6000); // fallback de segurança
 })();
 
 // Captura mesa via ?mesa=X e persiste na sessão
