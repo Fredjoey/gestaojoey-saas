@@ -1,7 +1,8 @@
 ﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<style>html{background:#F5F5F5}</style>
+<style>html{background:#0f0f0f} html.splash-on{background:#F5F5F5}</style>
+<script>if(!sessionStorage.getItem('splashShown')){sessionStorage.setItem('splashShown','1');document.documentElement.classList.add('splash-on');}</script>
 <meta charset="UTF-8">
 <style>#splash{display:none;position:fixed;inset:0;z-index:99999;background:#F5F5F5;overflow:hidden}.splash-on #splash{display:block}</style>
 <link rel="preload" as="image" href="https://firebasestorage.googleapis.com/v0/b/pedidos-joey.firebasestorage.app/o/assets%2FFundo_de_entrada.png?alt=media">
@@ -737,12 +738,6 @@ body{
 </style>
 </head>
 <body>
-<script>
-if(!sessionStorage.getItem('splashShown')){
-  sessionStorage.setItem('splashShown','1');
-  document.documentElement.classList.add('splash-on');
-}
-</script>
 <div id="splash">
   <img id="splash-img" src="https://firebasestorage.googleapis.com/v0/b/pedidos-joey.firebasestorage.app/o/assets%2FFundo_de_entrada.png?alt=media" alt="">
 </div>
@@ -853,7 +848,10 @@ firebase.auth().signInAnonymously().catch(e => console.error('Auth anônimo falh
   function sair(){
     if(done) return; done = true;
     sp.classList.add('splash-out');
-    setTimeout(function(){ sp.style.display='none'; }, 450);
+    setTimeout(function(){
+      sp.style.display='none';
+      document.documentElement.classList.remove('splash-on');
+    }, 450);
   }
   function agendarSaida(){ setTimeout(sair, 2400); }
   if(img && img.complete && img.naturalWidth){
