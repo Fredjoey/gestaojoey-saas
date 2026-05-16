@@ -1,5 +1,6 @@
 const { onRequest }  = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const axios = require('axios');
 admin.initializeApp();
@@ -283,11 +284,11 @@ exports.cancelarNFCe = onRequest(
   }
 );
 
-const ZAPI_INSTANCE     = '3F23093AB48C02D2FF299E024201EAF7';
-const ZAPI_TOKEN        = 'F1844E4F81266A7B25882914';
-const ZAPI_CLIENT_TOKEN = 'F01b9a9a87d03458db9a16a29111a02e8S';
-const ZAPI_BASE         = `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}`;
-const ZAPI_HEADERS      = { 'Content-Type': 'application/json', 'Client-Token': ZAPI_CLIENT_TOKEN };
+// Credenciais Z-API — Firebase Secrets. Bind via `secrets: [...]` nas funções
+// que enviam mensagens; valores definidos com `firebase functions:secrets:set`.
+const zapiInstanceSecret    = defineSecret('ZAPI_INSTANCE');
+const zapiTokenSecret       = defineSecret('ZAPI_TOKEN');
+const zapiClientTokenSecret = defineSecret('ZAPI_CLIENT_TOKEN');
 
 const ATENDIMENTO_HUMANO_MS = 10 * 60 * 1000;
 const MSG_ATENDENTE = 'Aguarde um momento, em breve alguém irá te atender! 😊';
@@ -350,10 +351,12 @@ Dúvidas? Digite *atendente* para falar conosco.`;
 }
 
 async function enviarMensagem(phone, message) {
+  const base = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE}/token/${process.env.ZAPI_TOKEN}`;
+  const headers = { 'Content-Type': 'application/json', 'Client-Token': process.env.ZAPI_CLIENT_TOKEN };
   const resp = await axios.post(
-    `${ZAPI_BASE}/send-text`,
+    `${base}/send-text`,
     { phone, message },
-    { headers: ZAPI_HEADERS, timeout: 10000 }
+    { headers, timeout: 10000 }
   );
   return resp.data;
 }
@@ -361,7 +364,8 @@ async function enviarMensagem(phone, message) {
 // ── WEBHOOK ──────────────────────────────────────────────────────────────────
 
 exports.webhookWhatsApp = onRequest(
-  { invoker: 'public', minInstances: 1, region: 'us-central1' },
+  { invoker: 'public', minInstances: 1, region: 'us-central1',
+    secrets: [zapiInstanceSecret, zapiTokenSecret, zapiClientTokenSecret] },
   async (req, res) => {
     res.status(200).send('ok');
 
@@ -452,7 +456,8 @@ exports.webhookWhatsApp = onRequest(
 // ── MENSAGENS PROGRAMADAS ─────────────────────────────────────────────────────
 
 exports.mensagensProgramadas = onSchedule(
-  { schedule: 'every 1 minutes', timeZone: 'America/Sao_Paulo', region: 'us-central1' },
+  { schedule: 'every 1 minutes', timeZone: 'America/Sao_Paulo', region: 'us-central1',
+    secrets: [zapiInstanceSecret, zapiTokenSecret, zapiClientTokenSecret] },
   async () => {
     // Calcular hora atual em Brasília (UTC-3)
     const brasiliaMs = Date.now() - 3 * 60 * 60 * 1000;
