@@ -957,6 +957,7 @@ textarea.fi{resize:vertical;min-height:60px}
             </div>
             <input type="hidden" id="cfgViasImpressao" value="1">
           </div>
+          <div id="qzTrayBlock">
           <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px">
             <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Nome da impressora (QZ Tray)</div>
             <input type="text" id="cfgImpressoraNome" placeholder="EPSON TM-T20X" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:13px;color:var(--text);outline:none">
@@ -971,6 +972,8 @@ textarea.fi{resize:vertical;min-height:60px}
               <button onclick="_qzIniciar()" style="flex-shrink:0;padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">Reconectar</button>
             </div>
           </div>
+          </div>
+          <script>if(window.electronAPI){var _qz=document.getElementById('qzTrayBlock');if(_qz)_qz.style.display='none';}</script>
 
           <div class="section-lbl">🕐 Horários por Dia</div>
           <p style="font-size:11px;color:var(--text2);margin-bottom:10px">Configure o horário de cada dia. Dias sem horário são considerados fechados.</p>
@@ -1267,20 +1270,6 @@ textarea.fi{resize:vertical;min-height:60px}
           </div>
         </div>
 
-        <hr class="robo-divider">
-
-        <!-- 5. Mensagens programadas -->
-        <div class="card-box">
-          <div class="robo-sec-hdr" onclick="toggleRoboSection('sched')">
-            <span>⏰ Mensagens Programadas</span>
-            <button class="robo-sec-toggle" id="robo-sec-btn-sched">▲</button>
-          </div>
-          <div id="robo-sec-body-sched">
-            <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Envie mensagens automáticas em horários específicos para seus clientes.</p>
-            <button class="btn btn-ghost" style="margin-bottom:1rem" onclick="adicionarMensagemProgramada()">+ Nova mensagem programada</button>
-            <div id="mensagensProgContainer" style="display:flex;flex-direction:column;gap:14px"></div>
-          </div>
-        </div>
 
       </div>
     </div>
@@ -6454,10 +6443,9 @@ function setBotToggle(ativo) {
 async function carregarRobo() {
   renderNotifConfig(); // não depende de Promises — roda imediatamente com config global
   try {
-    const [lojaSnap, botSnap, schedSnap] = await Promise.all([
+    const [lojaSnap, botSnap] = await Promise.all([
       db.doc(`clientes/${slug}/config/loja`).get(),
       db.collection(`clientes/${slug}/botConfig`).get(),
-      db.collection(`clientes/${slug}/mensagensProgramadas`).get(),
     ]);
 
     const loja = lojaSnap.exists ? lojaSnap.data() : {};
@@ -6490,13 +6478,6 @@ async function carregarRobo() {
         if (FIXED_IDS.has(id)) return;
         adicionarGatilhoCustom(id, cfg.nome, cfg.keywords, cfg.resposta);
       });
-    }
-
-    // Scheduled messages
-    const schedContainer = document.getElementById('mensagensProgContainer');
-    if (schedContainer) {
-      schedContainer.innerHTML = '';
-      schedSnap.forEach(doc => adicionarMensagemProgramada(doc.id, doc.data()));
     }
 
   } catch (e) {
@@ -6815,129 +6796,6 @@ async function excluirGatilhoCustom(uid) {
 }
 
 // ── MENSAGENS PROGRAMADAS ─────────────────────────────────────────────────────
-
-const DIAS_SCHED       = ['seg','ter','qua','qui','sex','sab','dom'];
-const DIAS_SCHED_LABEL = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-
-function adicionarMensagemProgramada(fsId, dados) {
-  const uid = fsId || ('sched_' + Date.now());
-  const d = dados || {};
-  const container = document.getElementById('mensagensProgContainer');
-  if (!container) return;
-
-  const ativo       = d.ativo !== false;
-  const diasChecked = Array.isArray(d.dias) ? d.dias : [];
-  const diasHtml    = DIAS_SCHED.map((dia, i) =>
-    '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:4px 8px">' +
-      '<input type="checkbox" id="sched-' + dia + '-' + uid + '" ' + (diasChecked.includes(dia) ? 'checked' : '') + ' style="cursor:pointer">' +
-      DIAS_SCHED_LABEL[i] +
-    '</label>'
-  ).join('');
-
-  const card = document.createElement('div');
-  card.id = 'sched-card-' + uid;
-  card.style.cssText = 'background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px';
-  card.innerHTML =
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
-      '<input id="sched-nome-' + uid + '" class="fi" style="flex:1;margin:0" placeholder="Nome da mensagem (ex: Abertura, Fechamento)">' +
-      '<label style="position:relative;display:inline-block;width:46px;height:26px;cursor:pointer;flex-shrink:0">' +
-        '<input type="checkbox" id="sched-ativo-' + uid + '" style="opacity:0;width:0;height:0" ' + (ativo ? 'checked' : '') + ' onchange="toggleSchedAtivo(\'' + uid + '\',this.checked)">' +
-        '<span id="sched-track-' + uid + '" style="position:absolute;inset:0;border-radius:13px;border:1px solid var(--border2);transition:all .2s;background:' + (ativo ? 'var(--orange)' : 'var(--bg3)') + '"></span>' +
-        '<span id="sched-thumb-' + uid + '" style="position:absolute;top:3px;border-radius:50%;width:18px;height:18px;transition:all .2s;left:' + (ativo ? '25px' : '3px') + ';background:' + (ativo ? '#fff' : 'var(--text3)') + '"></span>' +
-      '</label>' +
-    '</div>' +
-    '<label class="fl" style="margin-bottom:6px">Dias da semana</label>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' + diasHtml + '</div>' +
-    '<label class="fl" style="margin-bottom:4px">Horário de envio</label>' +
-    '<input type="time" id="sched-hora-' + uid + '" class="fi" style="margin-bottom:8px;width:160px">' +
-    '<label class="fl" style="margin-bottom:4px">Mensagem</label>' +
-    '<textarea id="sched-msg-' + uid + '" class="fi" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:12px"></textarea>' +
-    '<label class="fl" style="margin-bottom:4px;margin-top:8px">Destinatários</label>' +
-    '<select id="sched-dest-' + uid + '" class="fi" style="margin-bottom:8px" onchange="toggleSchedNumero(\'' + uid + '\',this.value)">' +
-      '<option value="todos">Todos os clientes cadastrados</option>' +
-      '<option value="numero">Número específico</option>' +
-    '</select>' +
-    '<div id="sched-numero-wrap-' + uid + '" style="display:none">' +
-      '<input id="sched-numero-' + uid + '" class="fi" style="margin-bottom:8px" placeholder="Ex: 5524999999999">' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;margin-top:8px">' +
-      '<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="salvarMensagemProgramada(\'' + uid + '\')">✓ Salvar</button>' +
-      '<button class="btn btn-ghost" style="font-size:12px;padding:6px 14px;color:#e55" onclick="excluirMensagemProgramada(\'' + uid + '\')">🗑️ Excluir</button>' +
-    '</div>';
-  container.appendChild(card);
-
-  if (d.nome)     document.getElementById('sched-nome-' + uid).value = d.nome;
-  if (d.horario)  document.getElementById('sched-hora-' + uid).value = d.horario;
-  if (d.mensagem) document.getElementById('sched-msg-' + uid).value = d.mensagem;
-  if (d.destinatarios === 'numero') {
-    document.getElementById('sched-dest-' + uid).value = 'numero';
-    document.getElementById('sched-numero-wrap-' + uid).style.display = 'block';
-    if (d.numero) document.getElementById('sched-numero-' + uid).value = d.numero;
-  }
-}
-
-function toggleSchedAtivo(uid, ativo) {
-  const track = document.getElementById('sched-track-' + uid);
-  const thumb = document.getElementById('sched-thumb-' + uid);
-  if (track) track.style.background = ativo ? 'var(--orange)' : 'var(--bg3)';
-  if (thumb) { thumb.style.left = ativo ? '25px' : '3px'; thumb.style.background = ativo ? '#fff' : 'var(--text3)'; }
-}
-
-function toggleSchedNumero(uid, val) {
-  const wrap = document.getElementById('sched-numero-wrap-' + uid);
-  if (wrap) wrap.style.display = val === 'numero' ? 'block' : 'none';
-}
-
-async function salvarMensagemProgramada(uid) {
-  const nomeEl  = document.getElementById('sched-nome-' + uid);
-  const horaEl  = document.getElementById('sched-hora-' + uid);
-  const msgEl   = document.getElementById('sched-msg-' + uid);
-  const destEl  = document.getElementById('sched-dest-' + uid);
-  const numEl   = document.getElementById('sched-numero-' + uid);
-  const ativoEl = document.getElementById('sched-ativo-' + uid);
-  if (!nomeEl || !horaEl || !msgEl) return;
-
-  const nome     = nomeEl.value.trim();
-  const horario  = horaEl.value;
-  const mensagem = msgEl.value.trim();
-  const dest     = destEl ? destEl.value : 'todos';
-  const numero   = numEl  ? numEl.value.trim()  : '';
-  const ativo    = ativoEl ? ativoEl.checked : true;
-  const dias     = DIAS_SCHED.filter(dia => {
-    const el = document.getElementById('sched-' + dia + '-' + uid);
-    return el && el.checked;
-  });
-
-  if (!nome)     { notify('Informe o nome da mensagem'); return; }
-  if (!horario)  { notify('Informe o horário de envio'); return; }
-  if (!mensagem) { notify('Informe a mensagem a enviar'); return; }
-  if (!dias.length) { notify('Selecione ao menos um dia da semana'); return; }
-  if (dest === 'numero' && !numero) { notify('Informe o número destinatário'); return; }
-
-  const data = { nome, horario, mensagem, dias, destinatarios: dest, ativo };
-  if (dest === 'numero') data.numero = numero;
-
-  try {
-    await db.doc(`clientes/${slug}/mensagensProgramadas/${uid}`).set(data, { merge: true });
-    notify('✓ Mensagem "' + nome + '" salva');
-  } catch (e) {
-    console.error('[salvarMensagemProgramada]', e);
-    notify('Erro ao salvar mensagem');
-  }
-}
-
-async function excluirMensagemProgramada(uid) {
-  if (!confirm('Excluir esta mensagem programada?')) return;
-  try {
-    await db.doc(`clientes/${slug}/mensagensProgramadas/${uid}`).delete();
-    const card = document.getElementById('sched-card-' + uid);
-    if (card) card.remove();
-    notify('Mensagem excluída');
-  } catch (e) {
-    console.error('[excluirMensagemProgramada]', e);
-    notify('Erro ao excluir mensagem');
-  }
-}
 
 // =================== SALÃO ===================
 let mesasData = {};
