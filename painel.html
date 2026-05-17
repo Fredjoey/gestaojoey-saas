@@ -278,6 +278,20 @@ textarea.fi{resize:vertical;min-height:60px}
 .bot-item{flex:1;background:var(--bg3);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-left:1px solid var(--border);}
 .bot-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
 .bot-toggle{padding:5px 14px;border-radius:999px;border:1px solid;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .2s;}
+.auto-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+.auto-switch input{opacity:0;width:0;height:0}
+.auto-switch .slider{position:absolute;inset:0;background:#3a3a3a;border-radius:24px;cursor:pointer;transition:.25s}
+.auto-switch .slider::before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s}
+.auto-switch input:checked + .slider{background:#E87722}
+.auto-switch input:checked + .slider::before{transform:translateX(20px)}
+.auto-label-on{color:#34d399;animation:autoPulse 1.6s ease-in-out infinite}
+.auto-label-off{color:var(--text3)}
+@keyframes autoPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.card-aguardando-pix{border:2px solid #f59e0b!important;animation:pixGlow 1.8s ease-in-out infinite}
+@keyframes pixGlow{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}50%{box-shadow:0 0 0 4px rgba(245,158,11,.1)}}
+.badge-aguardando-pix{display:inline-block;background:rgba(245,158,11,.18);color:#f59e0b;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:6px}
+.badge-pix-expirado{display:inline-block;background:rgba(239,68,68,.15);color:#f87171;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:6px}
+.badge-auto{display:inline-block;background:rgba(232,119,34,.18);color:#E87722;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;letter-spacing:.4px}
 
 /* MODAL TEMPO DE ENTREGA */
 .tm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:600;align-items:center;justify-content:center;padding:1rem;}
@@ -539,6 +553,13 @@ textarea.fi{resize:vertical;min-height:60px}
     <div class="bot-item">
       <div><div class="bot-label">🤖 Bot WhatsApp</div></div>
       <button class="bot-toggle" id="btnBot" onclick="toggleBot()">Ativo</button>
+    </div>
+    <div class="bot-item">
+      <div><div id="autoAceitarLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🤖 Auto-aceitar: OFF</div></div>
+      <label class="auto-switch">
+        <input type="checkbox" id="autoAceitarInput" onchange="toggleAutoAceitar(this)">
+        <span class="slider"></span>
+      </label>
     </div>
   </div>
   <div class="content">
@@ -1774,6 +1795,7 @@ async function enviarWhatsAppBot(numero, mensagem) {
 }
 
 function _aplicarStatusBot(connected) {
+  _botConectado = connected;
   const banner = document.getElementById('botAlertBanner');
   const btn    = document.getElementById('btnBot');
   if (banner) banner.style.display = connected ? 'none' : 'block';
@@ -1917,6 +1939,18 @@ function contarPedidosCliente(tel) {
 function orderCardHtml(p) {
   const itensStr = (p.itens||[]).map(i => `${i.qty}× ${i.nome}`).join(', ');
 
+  // Auto-aceitar — estado visual do card
+  const _pixAguard = p.pagamento === 'pix' && p.status === 'novo'
+    && p.pixStatus !== 'pago' && p.pixStatus !== 'expirado';
+  const _pixExp30  = _pixAguard && p.ts && (Date.now() - p.ts > 30 * 60 * 1000);
+  const _cardCls   = (_autoAceitar && _pixAguard && !_pixExp30) ? ' card-aguardando-pix' : '';
+  const _badgePix  = _pixExp30
+    ? '<div class="badge-pix-expirado">⏰ PIX expirado — fluxo manual</div>'
+    : ((_autoAceitar && _pixAguard) ? '<div class="badge-aguardando-pix">⏳ AGUARDANDO PIX</div>' : '');
+  const _badgeAuto = (p.autoAceito && p.status === 'producao')
+    ? `<span class="badge-auto">${p.pagamento === 'pix' ? 'AUTO + PIX OK' : 'AUTO'}</span>`
+    : '';
+
   // Botões específicos por status
   let botoes = '';
   if (p.status === 'novo') {
@@ -1956,13 +1990,14 @@ function orderCardHtml(p) {
     : '';
 
   return `
-    <div class="order-card" onclick="openOrderModal('${p.id}')">
-      <div class="oc-top"><span class="oc-id">${p.id}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${p.id}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${p.hora}</span></span></div>
+    <div class="order-card${_cardCls}" onclick="openOrderModal('${p.id}')">
+      <div class="oc-top"><span style="display:flex;align-items:center;gap:6px"><span class="oc-id">${p.id}</span>${_badgeAuto}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${p.id}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${p.hora}</span></span></div>
       <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
       ${p.mesa ? `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--orange);color:#fff;border-radius:6px;padding:4px 10px;margin-bottom:8px;font-size:12px;font-weight:700;letter-spacing:.2px">🍽️ ${p.mesaNome || ('Mesa ' + p.mesa)}</div>` : ''}
       ${pixTarjaHtml(p)}
+      ${_badgePix}
       <div class="oc-itens">${itensStr}</div>
       <div class="oc-footer">
         <span class="oc-pag">${p.pagamento?.toUpperCase()||'—'}</span>
@@ -1970,6 +2005,147 @@ function orderCardHtml(p) {
       </div>
       <div class="oc-actions" onclick="event.stopPropagation()">${botoes}</div>
     </div>`;
+}
+
+// ── AUTO-ACEITAR PEDIDOS ─────────────────────────────────────────────────────
+let _autoAceitar  = false;
+let _botConectado = true;            // último estado conhecido do bot WhatsApp
+const _autoProcessados = new Set();  // ids já auto-aceitos (idempotência)
+const _autoPixVistos   = new Set();  // ids PIX já logados como "aguardando"
+
+function _setAutoAceitarUI(ativo) {
+  const input = document.getElementById('autoAceitarInput');
+  const label = document.getElementById('autoAceitarLabel');
+  if (input) input.checked = ativo;
+  if (label) {
+    label.textContent = ativo ? '🤖 Auto-aceitar: ATIVO' : '🤖 Auto-aceitar: OFF';
+    label.className   = ativo ? 'auto-label-on' : 'auto-label-off';
+  }
+}
+
+async function carregarAutoAceitar() {
+  try {
+    const snap = await db.doc(`clientes/${slug}/config/painel`).get();
+    _autoAceitar = snap.exists ? !!snap.data().autoAceitar : false;
+  } catch (e) {
+    _autoAceitar = false;
+    console.error('[AUTO] erro ao carregar estado:', e);
+  }
+  _setAutoAceitarUI(_autoAceitar);
+  console.log('[AUTO] estado carregado:', _autoAceitar ? 'ATIVO' : 'OFF');
+}
+
+async function toggleAutoAceitar(input) {
+  _autoAceitar = input.checked;
+  _setAutoAceitarUI(_autoAceitar);
+  console.log('[AUTO] toggle alterado →', _autoAceitar ? 'ATIVO' : 'OFF');
+  try {
+    await db.doc(`clientes/${slug}/config/painel`).set({ autoAceitar: _autoAceitar }, { merge: true });
+  } catch (e) {
+    console.error('[AUTO] erro ao salvar toggle:', e);
+    notify('Erro ao salvar configuração de auto-aceite', 'error');
+  }
+}
+
+async function _logAuto(tipo, p, resultado, detalhes) {
+  try {
+    await db.collection(`clientes/${slug}/logs`).add({
+      tipo,
+      pedidoId:   String(p.id),
+      timestamp:  firebase.firestore.FieldValue.serverTimestamp(),
+      valorTotal: p.total || 0,
+      pagamento:  p.pagamento || '',
+      resultado,
+      ...(detalhes ? { detalhes } : {})
+    });
+  } catch (e) {
+    console.error('[AUTO] erro ao gravar log:', e);
+  }
+}
+
+// CASO 1 — pagamento não-PIX: janela de 3s, re-checa e move
+function _autoAceitarDinheiro(ped) {
+  if (_autoProcessados.has(ped.id)) return;
+  _autoProcessados.add(ped.id);
+  console.log(`[AUTO] Pedido #${ped.id} detectado, método: ${(ped.pagamento||'?').toUpperCase()}, aguardando 3s...`);
+  setTimeout(async () => {
+    const atual = pedidos.find(x => x.id === ped.id);
+    if (!atual || atual.status !== 'novo') {
+      console.log(`[AUTO] Pedido #${ped.id} não está mais em "novo" — auto-aceite abortado`);
+      _autoProcessados.delete(ped.id);
+      return;
+    }
+    if (!_botConectado) {
+      console.log(`[AUTO] Pedido #${ped.id} falhou: bot offline`);
+      notify(`⚠️ Auto-aceite bloqueado — bot WhatsApp offline (pedido ${ped.id})`, 'error');
+      _logAuto('auto_aceitar', atual, 'bloqueado_bot_offline');
+      _autoProcessados.delete(ped.id);
+      return;
+    }
+    await _executarAutoAceite(atual, 'auto_aceitar');
+  }, 3000);
+}
+
+// CASO 2 — PIX: só marca aguardando (o move acontece quando pixStatus → 'pago')
+function _autoMarcarAguardandoPix(ped) {
+  if (_autoPixVistos.has(ped.id)) return;
+  _autoPixVistos.add(ped.id);
+  console.log(`[AUTO-PIX] Pedido #${ped.id} aguardando confirmação de pagamento`);
+  notify(`🔔 Pedido ${ped.id} aguardando confirmação de PIX`);
+}
+
+// Executa o aceite: move → imprime → som → WhatsApp (reverte se WhatsApp falhar)
+async function _executarAutoAceite(p, tipoLog) {
+  console.log(`[AUTO] Pedido #${p.id} aceito automaticamente`);
+  try {
+    await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ status: 'producao', autoAceito: true });
+    p.status = 'producao';
+    p.autoAceito = true;
+  } catch (e) {
+    console.error(`[AUTO] Pedido #${p.id} — falha ao mover para produção:`, e);
+    _autoProcessados.delete(p.id);
+    return;
+  }
+  renderKanban();
+  // Impressão — best-effort (não detecta erro no fallback browser)
+  try { imprimirPedidoProducao(p); }
+  catch (e) { console.error(`[AUTO] Pedido #${p.id} — impressão falhou (best-effort):`, e); }
+  // Som de notificação 2x
+  if (_somAtivo) { tocarSomPedido(); setTimeout(() => tocarSomPedido(), 700); }
+  // WhatsApp — falha detectável → reverte
+  try {
+    await _enviarWppConfirmadoAuto(p);
+    console.log(`[AUTO] Pedido #${p.id} — WhatsApp "em produção" enviado`);
+    notify(`🤖 Pedido ${p.id} auto-aceito → Produção`);
+    _logAuto(tipoLog, p, 'sucesso');
+  } catch (e) {
+    console.log(`[AUTO] Pedido #${p.id} falhou: WhatsApp (${e.message}) — revertendo para "novo"`);
+    try {
+      await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ status: 'novo', autoAceito: false });
+      p.status = 'novo';
+      p.autoAceito = false;
+    } catch (e2) { console.error(`[AUTO] Pedido #${p.id} — falha ao reverter:`, e2); }
+    renderKanban();
+    notify(`⚠️ Auto-aceite revertido — falha no WhatsApp (pedido ${p.id})`, 'error');
+    _logAuto(tipoLog, p, 'falha_whatsapp', e.message);
+  }
+}
+
+// Envia WhatsApp "pedido confirmado" propagando erro (diferente de enviarWppConfirmado)
+async function _enviarWppConfirmadoAuto(p) {
+  const cfg = _notifCfg('confirmado');
+  if (!cfg.ativo || !cfg.template) return;  // notif desativada — não conta como falha
+  if (!p?.cliente?.tel) return;             // sem telefone — não conta como falha
+  let tel = p.cliente.tel.replace(/\D/g, '');
+  if (!tel.startsWith('55')) tel = '55' + tel;
+  const msg = _buildNotifMsg(cfg.template, p);
+  const resp = await fetch(`${BOT_URL}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ numero: tel, mensagem: msg })
+  });
+  const data = await resp.json().catch(() => ({ ok: false, erro: 'resposta inválida da API' }));
+  if (!data.ok) throw new Error(data.erro || 'Falha no envio');
 }
 
 function setFiltro(f,btn) {
@@ -5251,6 +5427,7 @@ _atualizarBtnSom();
 // =================== LISTENERS FIREBASE (TEMPO REAL) ===================
 let _listenersIniciados = false;
 function iniciarListenersFirestore() {
+  carregarAutoAceitar();
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
     const defaults = { nome:'Joey Pizza', wpp:'', taxa:5, end:'', aberto:true, horarios:{}, bairros:[], impressaoAtiva:true, viasImpressao:1, impressoraNome:'' };
     config = snap.exists ? { ...defaults, ...snap.data() } : defaults;
@@ -5311,6 +5488,14 @@ function iniciarListenersFirestore() {
         if (_somAtivo) tocarSomPedido();
         mostrarNotificacaoPush('🍕 Novo pedido!', 'Um novo pedido chegou no Joey Pizza');
         _iniciarTitleFlash(qtd);
+        // Auto-aceitar — encaminha cada pedido novo conforme método de pagamento
+        if (_autoAceitar) {
+          chegaram.forEach(d => {
+            const ped = d.data();
+            if (ped.pagamento === 'pix') _autoMarcarAguardandoPix(ped);
+            else                        _autoAceitarDinheiro(ped);
+          });
+        }
       }
       _knownPedidoIds = novosIds;
     }
@@ -5322,6 +5507,18 @@ function iniciarListenersFirestore() {
         if (ant && ant.pixStatus !== 'pago') {
           tocarSomPixPago();
           notify('💚 PIX confirmado! Pedido ' + p.id + ' — clique Confirmar');
+          // Auto-aceitar CASO 2 — PIX confirmado: move para produção
+          if (_autoAceitar && p.status === 'novo' && !_autoProcessados.has(p.id)) {
+            _autoProcessados.add(p.id);
+            console.log(`[AUTO-PIX] Pedido #${p.id} PIX confirmado, movendo para produção`);
+            if (!_botConectado) {
+              console.log(`[AUTO] Pedido #${p.id} falhou: bot offline`);
+              notify(`⚠️ Auto-aceite bloqueado — bot WhatsApp offline (pedido ${p.id})`, 'error');
+              _logAuto('auto_aceitar_pix', p, 'bloqueado_bot_offline');
+            } else {
+              _executarAutoAceite(p, 'auto_aceitar_pix');
+            }
+          }
         }
       }
     });
