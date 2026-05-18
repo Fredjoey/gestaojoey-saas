@@ -2359,27 +2359,27 @@ function gerarHtmlComanda(p) {
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;color:#000;font-weight:900}
+*{margin:0;padding:0;box-sizing:border-box;color:#000;background:#fff;font-weight:normal}
 @page{margin:0;size:80mm auto}
-@media print{*{color:#000!important;font-weight:900!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-body{font-family:'Courier New',Courier,monospace;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.line{font-family:'Courier New',Courier,monospace;font-size:13px;text-align:center;letter-spacing:0;white-space:pre}
+@media print{*{color:#000!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.line{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;text-align:center;letter-spacing:0;white-space:pre}
 .tipo-ent{font-size:18px;font-weight:900;text-align:center;letter-spacing:1px;margin:3px 0}
 .info{font-size:13px;text-align:center}
-.loja{font-size:15px;font-weight:900;text-align:center;letter-spacing:1px;margin-top:2px}
+.loja{font-size:15px;text-align:center;letter-spacing:1px;margin-top:2px}
 .ped-label{font-size:12px;text-align:center}
 .ped-num{font-size:30px;font-weight:900;text-align:center;letter-spacing:2px;margin:2px 0}
-.itens-label{font-size:14px;font-weight:900;margin-bottom:3px}
-.row-item{display:flex;justify-content:space-between;font-size:14px;font-weight:bold;margin:2px 0}
+.itens-label{font-size:14px;margin-bottom:3px}
+.row-item{display:flex;justify-content:space-between;font-size:14px;margin:2px 0}
 .item-desc{flex:1;margin-right:4px;word-break:break-word}
 .item-val{white-space:nowrap}
 .adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
-.obs-box{font-family:'Courier New',Courier,monospace;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
+.obs-box{font-family:'Arial Narrow',Arial,sans-serif;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
 .cli{font-size:13px;margin:1px 0}
 .row-val{display:flex;justify-content:space-between;font-size:14px;margin:1px 0}
 .row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;margin-top:4px}
-.pag-label{font-size:14px;font-weight:900;margin-bottom:2px}
-.centro-bold{font-size:14px;font-weight:900;text-align:center;margin-top:2px}
+.pag-label{font-size:14px;margin-bottom:2px}
+.centro-bold{font-size:14px;text-align:center;margin-top:2px}
 .rodape{text-align:center;font-size:12px;margin-top:4px}
 </style></head><body>
 
@@ -2605,27 +2605,27 @@ function gerarHtmlPedidoProducao(p) {
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;color:#000;font-weight:900}
+*{margin:0;padding:0;box-sizing:border-box;color:#000;background:#fff;font-weight:normal}
 @page{margin:0;size:80mm auto}
-@media print{*{color:#000!important;font-weight:900!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-body{font-family:'Courier New',Courier,monospace;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.line{font-family:'Courier New',Courier,monospace;font-size:13px;text-align:center;letter-spacing:0;white-space:pre}
+@media print{*{color:#000!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.line{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;text-align:center;letter-spacing:0;white-space:pre}
 .tipo-ent{font-size:18px;font-weight:900;text-align:center;letter-spacing:1px;margin:3px 0}
 .info{font-size:13px;text-align:center}
-.loja{font-size:15px;font-weight:900;text-align:center;letter-spacing:1px;margin-top:2px}
+.loja{font-size:15px;text-align:center;letter-spacing:1px;margin-top:2px}
 .ped-label{font-size:12px;text-align:center}
 .ped-num{font-size:30px;font-weight:900;text-align:center;letter-spacing:2px;margin:2px 0}
-.itens-label{font-size:14px;font-weight:900;margin-bottom:3px}
-.row-item{display:flex;justify-content:space-between;font-size:14px;font-weight:bold;margin:2px 0}
+.itens-label{font-size:14px;margin-bottom:3px}
+.row-item{display:flex;justify-content:space-between;font-size:14px;margin:2px 0}
 .item-desc{flex:1;margin-right:4px;word-break:break-word}
 .item-val{white-space:nowrap}
 .adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
-.obs-box{font-family:'Courier New',Courier,monospace;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
+.obs-box{font-family:'Arial Narrow',Arial,sans-serif;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
 .cli{font-size:13px;margin:1px 0}
 .row-val{display:flex;justify-content:space-between;font-size:14px;margin:1px 0}
 .row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;margin-top:4px}
-.pag-label{font-size:14px;font-weight:900;margin-bottom:2px}
-.centro-bold{font-size:14px;font-weight:900;text-align:center;margin-top:2px}
+.pag-label{font-size:14px;margin-bottom:2px}
+.centro-bold{font-size:14px;text-align:center;margin-top:2px}
 .rodape{text-align:center;font-size:12px;margin-top:4px}
 </style></head><body>
 
