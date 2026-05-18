@@ -2259,6 +2259,21 @@ async function salvarNotaFiscalPedido(p) {
 }
 
 // ── IMPRESSÃO TÉRMICA 80mm ──
+// Hora prevista de entrega = hora do pedido + tempo configurado (usa o maior do range)
+function _horaPrevista(p) {
+  let tempoStr = config.tempo_local || '';
+  if (p.entrega === 'delivery')      tempoStr = config.tempo_delivery || '';
+  else if (p.entrega === 'retirada') tempoStr = config.tempo_retirada || '';
+  const nums = String(tempoStr).match(/\d+/g);
+  if (!nums || !nums.length) return '';
+  const minutos = Math.max(...nums.map(Number));
+  const base = new Date(p.ts || Date.now());
+  base.setMinutes(base.getMinutes() + minutos);
+  const hh = String(base.getHours()).padStart(2, '0');
+  const mm = String(base.getMinutes()).padStart(2, '0');
+  return `Previsão de entrega: ${hh}:${mm}`;
+}
+
 function gerarHtmlComanda(p) {
   const now  = new Date();
   const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -2272,9 +2287,8 @@ function gerarHtmlComanda(p) {
   if (p.entrega === 'delivery')      tipoEntrega = 'PARA ENTREGA';
   else if (p.entrega === 'retirada') tipoEntrega = 'RETIRADA';
 
-  let previsaoHtml = '';
-  if (p.entrega === 'delivery')      previsaoHtml = `<div class="info">Previsao: 45 a 60 min</div>`;
-  else if (p.entrega === 'retirada') previsaoHtml = `<div class="info">Previsao: 20 a 30 min</div>`;
+  const _prev = _horaPrevista(p);
+  const previsaoHtml = _prev ? `<div class="info">${_prev}</div>` : '';
 
   // Caixa de OBS em ASCII (largura fixa 28)
   function obsBox(texto) {
@@ -2602,6 +2616,8 @@ function gerarHtmlPedidoProducao(p) {
   }
 
   const obsHtml = p.obs ? `<div class="cli">Obs: ${p.obs}</div>` : '';
+  const _prev = _horaPrevista(p);
+  const previsaoHtml = _prev ? `<div class="info">${_prev}</div>` : '';
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
@@ -2636,6 +2652,7 @@ body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;paddi
 <div class="line">${eq}</div>
 
 <div class="info">${data} ${hora}</div>
+${previsaoHtml}
 <div class="loja">${loja}</div>
 <div class="line">${dash}</div>
 
