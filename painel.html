@@ -2780,6 +2780,8 @@ async function cancelarPedido(id) {
   }
   atualizarStatusFb(id, 'cancelado');
   notify('Pedido cancelado.', 'warning');
+  const relPanel = document.getElementById('panel-relatorios');
+  if (relPanel && relPanel.style.display !== 'none') renderRelatorioDia();
 }
 
 function finalizarPedido(id) {
@@ -7924,7 +7926,10 @@ function renderRelatorioDia() {
       ? ''
       : '<button onclick="openNfceModalRD(\'' + item.srcId + '\',\'' + item.tipo + '\')" style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--orange);white-space:nowrap" title="Emitir NFCe">&#x1F9FE; Emitir</button>';
     var btnReimp  = '<button onclick="reimprimirRD(\'' + item.srcId + '\',\'' + item.tipo + '\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--text2);white-space:nowrap" title="Reimprimir comanda" onmouseover="this.style.borderColor=\'var(--border2)\';this.style.color=\'var(--text)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--text2)\'">&#x1F5A8; Imprimir</button>';
-    var btnNfce   = '<td><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap">' + btnEmitir + btnReimp + '</div></td>';
+    var btnCancelar = (item.tipo === 'pedido' && !cancelado && item.status !== 'entregue')
+      ? '<button onclick="cancelarPedido(\'' + item.srcId + '\')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:#ef4444;white-space:nowrap" title="Cancelar pedido">&#x2715; Cancelar</button>'
+      : '';
+    var btnNfce   = '<td><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap">' + btnEmitir + btnReimp + btnCancelar + '</div></td>';
     var pagCell = cancelado ? _pagChip('cancelado') : _pagChip(item.pagamento, item.srcId);
     return '<tr' + (cancelado ? ' style="opacity:0.55"' : '') + '>'
       + checkbox
