@@ -1501,11 +1501,43 @@ function changeCartQty(id, d) {
   renderCartContent();
 }
 
+// Endereço de entrega salvo por tenant (isolado por slug)
+function _enderecoSalvo() {
+  try { return JSON.parse(localStorage.getItem('joey_endereco_' + slug) || 'null'); }
+  catch(e) { return null; }
+}
+
+function _salvarEnderecoTenant() {
+  if (!clienteData || !clienteData.rua) return;
+  try {
+    localStorage.setItem('joey_endereco_' + slug, JSON.stringify({
+      rua:    clienteData.rua    || '',
+      bairro: clienteData.bairro || '',
+      comp:   clienteData.comp   || '',
+      ref:    clienteData.ref    || ''
+    }));
+  } catch(e) {}
+}
+
+function limparEndereco() {
+  ['fRua','fComp','fRef'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const fb = document.getElementById('fBairro');
+  if (fb) fb.value = '';
+  bairroSelecionado = null;
+  const taxaInfo = document.getElementById('taxaInfo');
+  if (taxaInfo) taxaInfo.style.display = 'none';
+}
+
 // STEP 2: DADOS DO CLIENTE
 function renderStepDados(el) {
   const _mesaNum = sessionStorage.getItem('mesaAtiva');
   if (_mesaNum && !tipoEntrega) tipoEntrega = 'local';
   const c = clienteData || {};
+  const cEnd = _enderecoSalvo() || {};
+  if (!bairroSelecionado && cEnd.bairro && CONFIG.bairros) {
+    const bMatch = CONFIG.bairros.find(b => b.nome === cEnd.bairro);
+    if (bMatch) bairroSelecionado = { nome: bMatch.nome, taxa: bMatch.taxa };
+  }
   const temBairros = CONFIG.bairros && CONFIG.bairros.length > 0;
   const bairroOpts = temBairros
     ? CONFIG.bairros.map(b =>
@@ -1564,7 +1596,7 @@ function renderStepDados(el) {
     <div id="enderecoFields" style="display:${tipoEntrega==='delivery'?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Rua e número *</label>
-        <input class="form-input" id="fRua" placeholder="Rua das Flores, 123" value="${c.rua||''}">
+        <input class="form-input" id="fRua" placeholder="Rua das Flores, 123" value="${cEnd.rua||c.rua||''}">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -1574,12 +1606,12 @@ function renderStepDados(el) {
                 <option value="">Selecione seu bairro...</option>
                 ${bairroOpts}
               </select>`
-            : `<input class="form-input" id="fBairro" placeholder="Centro" value="${c.bairro||''}">`
+            : `<input class="form-input" id="fBairro" placeholder="Centro" value="${cEnd.bairro||c.bairro||''}">`
           }
         </div>
         <div class="form-group">
           <label class="form-label">Complemento</label>
-          <input class="form-input" id="fComp" placeholder="Apto 2, fundos..." value="${c.comp||''}">
+          <input class="form-input" id="fComp" placeholder="Apto 2, fundos..." value="${cEnd.comp||c.comp||''}">
         </div>
       </div>
       ${temBairros && bairroSelecionado ? `
@@ -1589,7 +1621,10 @@ function renderStepDados(el) {
         </div>` : temBairros ? `<div class="info-note" id="taxaInfo" style="display:none"></div>` : ''}
       <div class="form-group">
         <label class="form-label">Referência (opcional)</label>
-        <input class="form-input" id="fRef" placeholder="Próximo ao mercado X..." value="${c.ref||''}">
+        <input class="form-input" id="fRef" placeholder="Próximo ao mercado X..." value="${cEnd.ref||c.ref||''}">
+      </div>
+      <div style="text-align:right;margin-top:-4px">
+        <a onclick="limparEndereco()" style="font-size:12px;color:var(--orange);cursor:pointer;text-decoration:underline">Entregar em outro endereço?</a>
       </div>
     </div>
     ${CONFIG.pedidoMinimo > 0 ? `<div id="minimoWarning" style="${tipoEntrega==='delivery'&&cartTotal()<CONFIG.pedidoMinimo?'':'display:none;'}background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.35);border-radius:10px;padding:12px 14px;font-size:13px;color:#ff6b35;margin-bottom:12px">⚠️ Valor mínimo para delivery é R$ ${CONFIG.pedidoMinimo.toFixed(2).replace('.',',')}. Seu carrinho: R$ ${cartTotal().toFixed(2).replace('.',',')}</div>` : '<div id="minimoWarning" style="display:none"></div>'}
@@ -1814,6 +1849,7 @@ function finalizarPedido() {
     renderProducts();
     checkoutStep = 4;
     marcarCarrinhoConvertido(clienteData?.tel);
+    _salvarEnderecoTenant();
     renderCartContent();
   }).catch(() => {
     btn.textContent = '✓ Finalizar Pedido';
