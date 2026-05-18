@@ -2391,7 +2391,7 @@ body{font-family:'Courier New',Courier,monospace;font-size:13px;width:80mm;paddi
 
 <div class="info">${data} ${hora}</div>
 ${previsaoHtml}
-<div class="loja">HAMBURGUERIA JOEY</div>
+<div class="loja">${(config.nome||'JOEY').toUpperCase()}</div>
 <div class="line">${dash}</div>
 
 <div class="ped-label">Pedido</div>
@@ -2501,9 +2501,8 @@ async function _dispararHtml(html) {
         try {
           const fdoc = f.contentDocument || f.contentWindow.document;
           const st = fdoc.createElement('style');
-          st.textContent = '@media print{@page{margin:0;size:80mm auto}body{margin:0}}';
+          st.textContent = '@media print{@page{margin:0;size:80mm auto}}';
           fdoc.head.appendChild(st);
-          if (fdoc.body) fdoc.body.style.margin = '0';
           f.contentWindow.print();
         } catch(e) {}
         if (n < copias) setTimeout(() => go(n + 1), 800);
@@ -2520,7 +2519,7 @@ function _cssTermico() {
 *{margin:0;padding:0;box-sizing:border-box;color:#000!important;font-weight:900}
 @page{margin:0;size:80mm auto}
 @media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-body{font-family:Verdana,Geneva,sans-serif;font-size:12px;width:80mm;padding:2mm;color:#000!important;background:#fff!important;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Courier New',Courier,monospace;font-size:11px;width:76mm;padding:1mm 1mm 1mm 3mm;margin:0;color:#000!important;background:#fff!important;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 hr.d{border:none;border-top:1px dashed #000;margin:4px 0}hr.s{border:none;border-top:2px solid #000;margin:4px 0}
 .sp{white-space:pre}.c{text-align:center}.g{font-size:16px;font-weight:900;text-align:center}
 .sub{padding-left:12px;font-size:10px;font-weight:900}.tot{font-size:16px;font-weight:900}
@@ -2542,9 +2541,9 @@ function gerarHtmlComandaMesa(comanda, mesaNome) {
   }).join('');
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">${_cssTermico()}</head><body>
-<div class="sp c">${S1}</div>
+<div class="sp">${S1}</div>
 <div class="c">=== ${loja} ===</div>
-<div class="sp c">${S1}</div>
+<div class="sp">${S1}</div>
 <div class="g">${mesaNome.toUpperCase()} — ${hora}</div>
 <div class="sp">${S2}</div>
 ${itensHtml}
@@ -2560,71 +2559,109 @@ function imprimirComandaMesa(comanda, mesaNome) {
 
 // Template: comanda de produção do kanban (delivery/retirada/local)
 function gerarHtmlPedidoProducao(p) {
-  const S1 = '================================';
-  const S2 = '- - - - - - - - - - - - - - - -';
+  const now  = new Date();
+  const data = p.data || now.toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' });
+  const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
   const loja = (config.nome || 'JOEY').toUpperCase();
-  const hora = p.hora || new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
-  const data = p.data || new Date().toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' });
+
+  const W = 28;
+  const eq = '='.repeat(W);
+  const dash = '- '.repeat(Math.floor(W/2));
 
   let tipo = 'NO LOCAL';
-  if (p.entrega === 'delivery')  tipo = 'DELIVERY';
+  if (p.entrega === 'delivery')      tipo = 'DELIVERY';
   else if (p.entrega === 'retirada') tipo = 'PARA LEVAR';
 
   const itensHtml = (p.itens || []).map(i => {
     const unitPrice = i.precoTotal != null ? i.precoTotal : i.preco;
+    const val = 'R$ ' + (unitPrice * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
-      const v = a.preco > 0 ? ` (+R$ ${(a.preco).toFixed(2).replace('.', ',')})` : '';
-      return `<div class="sub">+ ${a.nome}${v}</div>`;
+      const aVal = a.preco > 0 ? `<span>R$ ${(a.preco).toFixed(2).replace('.', ',')}</span>` : '';
+      return `<div class="adic"><span>+ ${a.nome}</span>${aVal}</div>`;
     }).join('');
-    const obs = i.obs ? `<div class="sub">Obs: ${i.obs}</div>` : '';
-    const subItem = `R$ ${(unitPrice * i.qty).toFixed(2).replace('.', ',')}`;
-    return `<div>${i.qty}x ${i.nome} — ${subItem}</div>${adics}${obs}`;
+    const obs = i.obs ? `<div class="adic"><span>Obs: ${i.obs}</span></div>` : '';
+    return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
   }).join('');
 
-  const pagamento  = (p.pagamento || '—').toUpperCase();
-  const subtotal   = (p.subtotal  || 0).toFixed(2).replace('.', ',');
-  const taxa       = p.taxaEntrega || 0;
-  const total      = (p.total     || 0).toFixed(2).replace('.', ',');
-  const nomeCliente = p.cliente?.nome || '';
-  const tel         = p.cliente?.tel  || '';
+  const pagamento   = (p.pagamento || '-').toUpperCase();
+  const subtotal    = (p.subtotal  || p.total || 0).toFixed(2).replace('.', ',');
+  const taxaVal     = p.taxaEntrega || 0;
+  const total       = (p.total     || 0).toFixed(2).replace('.', ',');
+  const nomeCliente = p.cliente?.nome || '-';
+  const tel         = p.cliente?.tel  || '-';
   const mesaNome    = p.mesaNome || (p.mesa ? p.mesa.replace('mesa-', 'Mesa ') : '');
 
-  let clienteHtml = '';
-  if (nomeCliente) clienteHtml += `<div>Cliente: ${nomeCliente}</div>`;
-  if (tel)         clienteHtml += `<div>Tel: ${tel}</div>`;
-
-  let mesaHtml = '';
-  if (mesaNome) mesaHtml = `<div>Mesa: ${mesaNome}</div>`;
+  const mesaHtml = mesaNome ? `<div class="cli">Mesa: ${mesaNome}</div>` : '';
 
   let endHtml = '';
   if (p.entrega === 'delivery') {
     const rua    = p.cliente?.rua    || '';
     const bairro = p.cliente?.bairro || '';
-    endHtml = `<div class="sp">${S2}</div>`;
-    if (rua)    endHtml += `<div>End: ${rua}</div>`;
-    if (bairro) endHtml += `<div>Bairro: ${bairro}</div>`;
+    if (rua)    endHtml += `<div class="cli">End: ${rua}</div>`;
+    if (bairro) endHtml += `<div class="cli">Bairro: ${bairro}</div>`;
   }
 
-  const taxaHtml = taxa > 0
-    ? `<div>Taxa entrega: R$ ${taxa.toFixed(2).replace('.', ',')}</div>`
-    : '';
-  const obsHtml = p.obs ? `<div class="sp">${S2}</div><div>Obs: ${p.obs}</div>` : '';
+  const obsHtml = p.obs ? `<div class="cli">Obs: ${p.obs}</div>` : '';
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">${_cssTermico()}</head><body>
-<div class="sp c">${S1}</div>
-<div class="c">=== ${loja} ===</div>
-<div class="sp c">${S1}</div>
-<div class="g">PEDIDO ${p.id}</div>
-<div>${data} — ${hora}</div>
-<div>Tipo: ${tipo}</div>
-${mesaHtml}${clienteHtml}${endHtml}
-<div class="sp">${S2}</div>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;color:#000;font-weight:bold}
+@page{margin:0;size:80mm auto}
+@media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+body{font-family:'Courier New',Courier,monospace;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.line{font-family:'Courier New',Courier,monospace;font-size:13px;text-align:center;letter-spacing:0;white-space:pre}
+.tipo-ent{font-size:18px;font-weight:900;text-align:center;letter-spacing:1px;margin:3px 0}
+.info{font-size:13px;text-align:center}
+.loja{font-size:15px;font-weight:900;text-align:center;letter-spacing:1px;margin-top:2px}
+.ped-label{font-size:12px;text-align:center}
+.ped-num{font-size:30px;font-weight:900;text-align:center;letter-spacing:2px;margin:2px 0}
+.itens-label{font-size:14px;font-weight:900;margin-bottom:3px}
+.row-item{display:flex;justify-content:space-between;font-size:14px;font-weight:bold;margin:2px 0}
+.item-desc{flex:1;margin-right:4px;word-break:break-word}
+.item-val{white-space:nowrap}
+.adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
+.obs-box{font-family:'Courier New',Courier,monospace;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
+.cli{font-size:13px;margin:1px 0}
+.row-val{display:flex;justify-content:space-between;font-size:14px;margin:1px 0}
+.row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;margin-top:4px}
+.pag-label{font-size:14px;font-weight:900;margin-bottom:2px}
+.centro-bold{font-size:14px;font-weight:900;text-align:center;margin-top:2px}
+.rodape{text-align:center;font-size:12px;margin-top:4px}
+</style></head><body>
+
+<div class="line">${eq}</div>
+<div class="line">${eq}</div>
+<div class="tipo-ent">${tipo}</div>
+<div class="line">${eq}</div>
+<div class="line">${eq}</div>
+
+<div class="info">${data} ${hora}</div>
+<div class="loja">${loja}</div>
+<div class="line">${dash}</div>
+
+<div class="ped-label">Pedido</div>
+<div class="ped-num">#${p.id}</div>
+<div class="line">${dash}</div>
+
+<div class="itens-label">Itens</div>
 ${itensHtml}
+<div class="line">${dash}</div>
+
+<div class="cli">Nome: ${nomeCliente}</div>
+<div class="cli">Tel: ${tel}</div>
+${mesaHtml}${endHtml}
 ${obsHtml}
-<div class="sp">${S2}</div>
-${taxaHtml}
-<div class="tot">TOTAL: R$ ${total}</div>
-<div class="sp">${S1}</div>
+<div class="line">${dash}</div>
+
+<div class="pag-label">Pagamento:</div>
+<div class="cli">${pagamento}</div>
+<div class="line">${dash}</div>
+
+<div class="row-val"><span>Subtotal:</span><span>R$ ${subtotal}</span></div>
+${taxaVal > 0 ? `<div class="row-val"><span>Taxa de entrega:</span><span>R$ ${taxaVal.toFixed(2).replace('.', ',')}</span></div>` : ''}
+<div class="row-total"><span>TOTAL:</span><span>R$ ${total}</span></div>
+<div class="line">${dash}</div>
+
 </body></html>`;
 }
 
