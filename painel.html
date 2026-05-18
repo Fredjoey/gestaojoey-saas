@@ -2498,9 +2498,16 @@ async function _dispararHtml(html) {
     document.body.appendChild(f);
     f.onload = function() {
       setTimeout(() => {
-        try { f.contentWindow.print(); } catch(e) {}
-        if (n < copias) setTimeout(() => go(n + 1), 1500);
-      }, 200);
+        try {
+          const fdoc = f.contentDocument || f.contentWindow.document;
+          const st = fdoc.createElement('style');
+          st.textContent = '@media print{@page{margin:0;size:80mm auto}body{margin:0}}';
+          fdoc.head.appendChild(st);
+          if (fdoc.body) fdoc.body.style.margin = '0';
+          f.contentWindow.print();
+        } catch(e) {}
+        if (n < copias) setTimeout(() => go(n + 1), 800);
+      }, 50);
     };
     const d = f.contentDocument || f.contentWindow.document;
     d.open(); d.write(html); d.close();
@@ -2513,10 +2520,10 @@ function _cssTermico() {
 *{margin:0;padding:0;box-sizing:border-box;color:#000!important;font-weight:900}
 @page{margin:0;size:80mm auto}
 @media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-body{font-family:Verdana,Geneva,sans-serif;font-size:15px;width:80mm;padding:4mm;color:#000!important;background:#fff!important;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:Verdana,Geneva,sans-serif;font-size:12px;width:80mm;padding:2mm;color:#000!important;background:#fff!important;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 hr.d{border:none;border-top:1px dashed #000;margin:4px 0}hr.s{border:none;border-top:2px solid #000;margin:4px 0}
-.sp{white-space:pre}.c{text-align:center}.g{font-size:20px;font-weight:900;text-align:center}
-.sub{padding-left:12px;font-size:13px;font-weight:900}.tot{font-size:20px;font-weight:900}
+.sp{white-space:pre}.c{text-align:center}.g{font-size:16px;font-weight:900;text-align:center}
+.sub{padding-left:12px;font-size:10px;font-weight:900}.tot{font-size:16px;font-weight:900}
 </style>`;
 }
 
