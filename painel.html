@@ -1425,6 +1425,13 @@ textarea.fi{resize:vertical;min-height:60px}
       <div class="modal-title" id="pedidoMesaModalTitle">+ Pedido</div>
       <button class="modal-close" onclick="fecharPedidoMesaModal()">✕</button>
     </div>
+    <div style="position:relative;margin-bottom:10px">
+      <input id="pmBuscaInput" type="text" placeholder="🔍 Buscar produto..." oninput="filtrarPedidoMesa(this.value)"
+        style="width:100%;padding:10px 34px 10px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box;outline:none"
+        onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'">
+      <button id="pmBuscaClear" onclick="limparBuscaPedidoMesa()"
+        style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:4px;font-family:inherit">✕</button>
+    </div>
     <div id="pedidoMesaProdList" style="max-height:72vh;overflow-y:auto"></div>
   </div>
 </div>
@@ -7469,7 +7476,7 @@ function fecharDividirContaModal() {
   document.getElementById('dividirContaModal').classList.remove('show');
 }
 
-let _pedidoMesaId = null, _pedidoMesaNome = null, _pedidoMesaCart = [], _editandoComandaId = null;
+let _pedidoMesaId = null, _pedidoMesaNome = null, _pedidoMesaCart = [], _editandoComandaId = null, _pmBusca = '';
 
 // Retorna mapa de comandas: { [id]: {itens, total, hora, status} }
 // Suporta formato legado (pedidos array) para mesas abertas antes da migração
@@ -7487,20 +7494,28 @@ function abrirPedidoMesa(mesaId, mesaNome) {
   _pedidoMesaNome = mesaNome;
   _pedidoMesaCart = [];
   _editandoComandaId = null;
+  _pmBusca = '';
   renderPedidoMesaModal();
   document.getElementById('pedidoMesaModal').classList.add('show');
+  const _bi = document.getElementById('pmBuscaInput');
+  if (_bi) { _bi.value = ''; setTimeout(() => _bi.focus(), 60); }
+  const _bc = document.getElementById('pmBuscaClear');
+  if (_bc) _bc.style.display = 'none';
 }
 
 function renderPedidoMesaModal() {
-  const prods = recipes.filter(r => {
+  const _norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _termo = _norm(_pmBusca);
+  let prods = recipes.filter(r => {
     const ativo = catalogoStatusMap[r.id] !== undefined ? catalogoStatusMap[r.id].ativo : true;
     return ativo;
   });
+  if (_termo) prods = prods.filter(p => _norm(p.name || p.nome || '').includes(_termo));
 
   document.getElementById('pedidoMesaModalTitle').textContent = _editandoComandaId ? '✏️ Editar Comanda — ' + _pedidoMesaNome : '+ Pedido — ' + _pedidoMesaNome;
 
   const listHtml = prods.length === 0
-    ? '<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:13px">Nenhum produto disponível</div>'
+    ? `<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:13px">${_termo ? 'Nenhum produto encontrado' : 'Nenhum produto disponível'}</div>`
     : prods.map(p => {
         const temAdic = (p.adicionais || []).length > 0;
         const preco = p.price || p.preco || 0;
@@ -7550,6 +7565,22 @@ function renderPedidoMesaModal() {
   }
 
   document.getElementById('pedidoMesaProdList').innerHTML = listHtml + cartHtml;
+}
+
+function filtrarPedidoMesa(valor) {
+  _pmBusca = valor || '';
+  const clr = document.getElementById('pmBuscaClear');
+  if (clr) clr.style.display = _pmBusca ? '' : 'none';
+  renderPedidoMesaModal();
+}
+
+function limparBuscaPedidoMesa() {
+  _pmBusca = '';
+  const bi = document.getElementById('pmBuscaInput');
+  if (bi) { bi.value = ''; bi.focus(); }
+  const clr = document.getElementById('pmBuscaClear');
+  if (clr) clr.style.display = 'none';
+  renderPedidoMesaModal();
 }
 
 // ---- Sub-modal: detalhe do produto ----
@@ -7796,8 +7827,13 @@ function abrirEditarComanda(mesaId, mesaNome, comandaId) {
     total:     ((it.preco || 0) + (it.adicionais || []).reduce((s, a) => s + (a.preco || 0), 0)) * (it.qty || 1)
   }));
 
+  _pmBusca = '';
   renderPedidoMesaModal();
   document.getElementById('pedidoMesaModal').classList.add('show');
+  const _bi = document.getElementById('pmBuscaInput');
+  if (_bi) { _bi.value = ''; setTimeout(() => _bi.focus(), 60); }
+  const _bc = document.getElementById('pmBuscaClear');
+  if (_bc) _bc.style.display = 'none';
 }
 
 async function cancelarComanda(mesaId, mesaNome, comandaId) {
