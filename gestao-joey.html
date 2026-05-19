@@ -607,6 +607,12 @@
     <div class="header-led"></div>
 
     <div id="appContainer" class="container" style="display:none">
+        <div id="contasPagarBanner" style="display:none; background:#1f0a0a; border:0.5px solid #5a1a1a; padding:10px 16px; border-radius:6px; margin:8px 16px; align-items:center; gap:12px; font-size:13px;">
+            <span id="contasPagarBannerIcon" style="font-size:16px;">⚠️</span>
+            <span id="contasPagarBannerTexto" style="flex:1; color:#e8e8e8;"></span>
+            <button onclick="switchTab('notas')" style="background:#f97316; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">Ver Compras</button>
+            <button onclick="document.getElementById('contasPagarBanner').style.display='none'" style="background:none; border:none; color:#888; font-size:16px; cursor:pointer; line-height:1;">✕</button>
+        </div>
         <div class="tabs">
             <button class="tab-button active" onclick="switchTab('recipes', event)">📋 Receitas</button>
             <button class="tab-button" onclick="switchTab('insumos', event)">📦 Insumos</button>
@@ -1119,7 +1125,7 @@
             <!-- FORMULÁRIO NOVA NOTA -->
             <div class="section-title">✏️ Nova Nota</div>
             <div style="background:#2c2c2c; padding:1.5rem; border-radius:8px; border:1px solid #3a3a3a; margin-bottom:1.5rem;">
-                <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-bottom:16px; width:100%;">
+                <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr; gap:12px; margin-bottom:16px; width:100%;">
                     <div class="form-group" style="width:100%;">
                         <label>Fornecedor</label>
                         <div style="position:relative; width:100%;">
@@ -1134,6 +1140,20 @@
                     <div class="form-group">
                         <label>Número da Nota</label>
                         <input type="text" id="notaNumero" placeholder="Ex: 5.581.171">
+                    </div>
+                    <div class="form-group">
+                        <label>Vencimento</label>
+                        <input type="date" id="notaVencimento">
+                    </div>
+                    <div class="form-group">
+                        <label>Pagamento</label>
+                        <select id="notaFormaPagamento" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; width:100%;">
+                            <option value="">—</option>
+                            <option value="Boleto">Boleto</option>
+                            <option value="PIX">PIX</option>
+                            <option value="Cartão">Cartão</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                        </select>
                     </div>
                 </div>
 
@@ -1322,6 +1342,12 @@
                         </div>
                         <div class="metric-value" style="color:#f97316;" id="rmProjecao">—</div>
                         <div style="font-size:10px; color:#777; margin-top:3px;" id="rmProjecaoBase"></div>
+                    </div>
+                    <div class="metric-card" id="rmContasPagarCard">
+                        <div class="metric-label">Contas a pagar</div>
+                        <div class="metric-value" id="rmContasPagarValor">—</div>
+                        <div id="rmContasPagarBadges" style="margin-top:5px;"></div>
+                        <div style="font-size:10px;color:#555;margin-top:4px;cursor:pointer;" onclick="switchTab('notas')">Ver na aba Compras →</div>
                     </div>
                 </div>
                 <div id="rmDRE" style="display:none; background:#1a1a2e; border:1px solid #2a2a4a; border-radius:10px; padding:1.25rem;">
@@ -1955,6 +1981,7 @@
             onSnapshot(collection(db, `clientes/${slug}/notasLancadas`), (snap) => {
                 notasLancadas = snap.docs.map(d => d.data());
                 renderNotasLancadas();
+                _atualizarContasPagarBanner();
             });
 
             // Vendas
@@ -5424,6 +5451,8 @@
             document.getElementById('notaFornecedor').value = '';
             document.getElementById('notaData').value = '';
             document.getElementById('notaNumero').value = '';
+            const _elVenc = document.getElementById('notaVencimento'); if (_elVenc) _elVenc.value = '';
+            const _elFP = document.getElementById('notaFormaPagamento'); if (_elFP) _elFP.value = '';
             document.getElementById('notaItens').innerHTML = '';
             adicionarLinhaItem();
             const _elSoma = document.getElementById('notaSomaItens');
@@ -5514,7 +5543,9 @@
             }
 
             const totalCampo = parseFloat(document.getElementById('notaValorTotal')?.value) || totalNota;
-            const nota = { id: Date.now(), fornecedor, data, numero, itens, total: totalCampo };
+            const vencimento     = document.getElementById('notaVencimento')?.value || '';
+            const formaPagamento = document.getElementById('notaFormaPagamento')?.value || '';
+            const nota = { id: Date.now(), fornecedor, data, numero, itens, total: totalCampo, vencimento, formaPagamento, statusPagamento: 'pendente', dataPagamento: '' };
 
             const reajustes = _detectarReajustes(itens);
             if (reajustes.length > 0) {
@@ -5781,10 +5812,12 @@
                                     ${nota.numero ? '· Nº ' + nota.numero : ''}
                                     · ${(nota.itens||[]).length} item(ns)
                                 </span>
+                                ${_badgeStatusNota(nota)}
                             </div>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px;">
                             <span style="font-weight:700; font-size:16px; color:#ff6b35;">R$ ${(nota.total||0).toFixed(2).replace('.', ',')}</span>
+                            ${_btnMarcarPago(nota)}
                             <button onclick="event.stopPropagation(); editarNota(${nota.id})" style="background:#3498db; color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer;">✏️</button>
                             <button class="danger" onclick="event.stopPropagation(); excluirNota(${nota.id})" style="padding:6px 10px; font-size:12px;">🗑</button>
                         </div>
@@ -5805,6 +5838,105 @@
                     </div>
                 </div>
             `).join('');
+        }
+
+        // ===== CONTAS A PAGAR =====
+        function _diasAteVencimento(venc) {
+            if (!venc) return null;
+            const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+            const d = new Date(venc + 'T12:00:00');
+            if (isNaN(d)) return null;
+            return Math.floor((d - hoje) / 86400000);
+        }
+
+        function _badgeStatusNota(nota) {
+            if (!nota.vencimento) return '';
+            const base = 'display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:8px; text-transform:uppercase; letter-spacing:0.3px;';
+            if (nota.statusPagamento === 'pago')
+                return `<span style="${base} background:#103a1a; color:#4ade80; border:1px solid #1c5c30;">Pago</span>`;
+            const dias = _diasAteVencimento(nota.vencimento);
+            if (dias === null) return '';
+            if (dias < 0)
+                return `<span style="${base} background:#3a0f0f; color:#f87171; border:1px solid #5a1a1a;">Vencida</span>`;
+            if (dias <= 3) {
+                const txt = dias === 0 ? 'Vence hoje' : `Vence em ${dias} dia${dias > 1 ? 's' : ''}`;
+                return `<span style="${base} background:#3a2a00; color:#fbbf24; border:1px solid #5a3a00;">${txt}</span>`;
+            }
+            const dataFmt = new Date(nota.vencimento + 'T12:00:00').toLocaleDateString('pt-BR');
+            return `<span style="${base} background:#2a2a2a; color:#999; border:1px solid #3a3a3a;">Vence ${dataFmt}</span>`;
+        }
+
+        function _btnMarcarPago(nota) {
+            if (nota.statusPagamento === 'pago' || !nota.vencimento) return '';
+            return `<button onclick="event.stopPropagation(); marcarNotaPaga(${nota.id})" style="background:#27ae60; color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer; white-space:nowrap;">✓ Marcar pago</button>`;
+        }
+
+        function marcarNotaPaga(id) {
+            const nota = notasLancadas.find(n => n.id === id);
+            if (!nota) return;
+            nota.statusPagamento = 'pago';
+            nota.dataPagamento = new Date().toISOString().slice(0, 10);
+            if (window._fb) window._fb.fbSave('notasLancadas', id, nota).catch(e => console.error('Erro marcar pago:', e));
+            renderNotasLancadas();
+            _atualizarContasPagarBanner();
+        }
+
+        function _atualizarContasPagarBanner() {
+            const pendentes = (notasLancadas || []).filter(n => n.vencimento && n.statusPagamento !== 'pago');
+            const vencidas = [], vencendo = [];
+            pendentes.forEach(n => {
+                const dias = _diasAteVencimento(n.vencimento);
+                if (dias === null) return;
+                if (dias < 0) vencidas.push(n);
+                else if (dias <= 3) vencendo.push(n);
+            });
+            const fmtR = v => 'R$ ' + (v || 0).toFixed(2).replace('.', ',');
+            const somaTot = arr => arr.reduce((s, n) => s + (n.total || 0), 0);
+            const nomes = arr => [...new Set(arr.map(n => n.fornecedor || '—'))].slice(0, 4).join(', ');
+
+            // Banner
+            const banner = document.getElementById('contasPagarBanner');
+            if (banner) {
+                const icon = document.getElementById('contasPagarBannerIcon');
+                const texto = document.getElementById('contasPagarBannerTexto');
+                if (vencidas.length > 0) {
+                    banner.style.background = '#1f0a0a';
+                    banner.style.borderColor = '#5a1a1a';
+                    if (icon) icon.textContent = '⚠️';
+                    if (texto) texto.innerHTML = `<strong>${vencidas.length} conta(s) vencida(s)</strong> · ${fmtR(somaTot(vencidas))} — ${nomes(vencidas)}`;
+                    banner.style.display = 'flex';
+                } else if (vencendo.length > 0) {
+                    banner.style.background = '#1f1400';
+                    banner.style.borderColor = '#5a3a00';
+                    if (icon) icon.textContent = '⏰';
+                    if (texto) texto.innerHTML = `<strong>${vencendo.length} conta(s) vencendo em até 3 dias</strong> · ${fmtR(somaTot(vencendo))} — ${nomes(vencendo)}`;
+                    banner.style.display = 'flex';
+                } else {
+                    banner.style.display = 'none';
+                }
+            }
+
+            // Card no grid de Vendas
+            const card = document.getElementById('rmContasPagarCard');
+            const valorEl = document.getElementById('rmContasPagarValor');
+            const badgesEl = document.getElementById('rmContasPagarBadges');
+            if (card && valorEl && badgesEl) {
+                if (pendentes.length === 0) {
+                    valorEl.textContent = 'Em dia ✓';
+                    valorEl.style.color = '#4ade80';
+                    badgesEl.innerHTML = '';
+                    card.style.borderColor = '#E87722';
+                } else {
+                    valorEl.textContent = fmtR(somaTot(pendentes));
+                    valorEl.style.color = '';
+                    const bStyle = 'display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:9px; margin:2px 3px 0 0;';
+                    let html = '';
+                    if (vencidas.length > 0) html += `<span style="${bStyle} background:#3a0f0f; color:#f87171; border:1px solid #5a1a1a;">${vencidas.length} vencida(s)</span>`;
+                    if (vencendo.length > 0) html += `<span style="${bStyle} background:#3a2a00; color:#fbbf24; border:1px solid #5a3a00;">${vencendo.length} vencendo</span>`;
+                    badgesEl.innerHTML = html;
+                    card.style.borderColor = vencidas.length > 0 ? '#e74c3c' : (vencendo.length > 0 ? '#f97316' : '#E87722');
+                }
+            }
         }
 
         function recalcularVariacaoPreco(mesComp) {
@@ -5890,6 +6022,8 @@
             document.getElementById('notaFornecedor').value = nota.fornecedor || '';
             document.getElementById('notaData').value = nota.data || '';
             document.getElementById('notaNumero').value = nota.numero || '';
+            const _elVencEdit = document.getElementById('notaVencimento'); if (_elVencEdit) _elVencEdit.value = nota.vencimento || '';
+            const _elFPEdit = document.getElementById('notaFormaPagamento'); if (_elFPEdit) _elFPEdit.value = nota.formaPagamento || '';
 
             // Preencher itens
             document.getElementById('notaItens').innerHTML = '';
@@ -5946,7 +6080,14 @@
             const totalCampoUpd = parseFloat(document.getElementById('notaValorTotal')?.value) || totalNota;
             const idx = notasLancadas.findIndex(n => n.id === id);
             if (idx !== -1) {
-                notasLancadas[idx] = { id, fornecedor, data, numero, itens, total: totalCampoUpd };
+                const _notaOrig = notasLancadas[idx] || {};
+                notasLancadas[idx] = {
+                    id, fornecedor, data, numero, itens, total: totalCampoUpd,
+                    vencimento: document.getElementById('notaVencimento')?.value || '',
+                    formaPagamento: document.getElementById('notaFormaPagamento')?.value || '',
+                    statusPagamento: _notaOrig.statusPagamento || 'pendente',
+                    dataPagamento: _notaOrig.dataPagamento || ''
+                };
                 if (window._fb) {
                     window._fb.fbSave('notasLancadas', id, notasLancadas[idx]).catch(e => console.error('Erro atualizar nota:', e));
                     window._fb.fbLog('editou', 'Nota Fiscal', fornecedor, `Nº ${numero || '-'} | R$ ${totalNota.toFixed(2).replace('.', ',')}`).catch(()=>{});
@@ -5964,6 +6105,8 @@
             document.getElementById('notaFornecedor').value = '';
             document.getElementById('notaData').value = '';
             document.getElementById('notaNumero').value = '';
+            const _elVencUpd = document.getElementById('notaVencimento'); if (_elVencUpd) _elVencUpd.value = '';
+            const _elFPUpd = document.getElementById('notaFormaPagamento'); if (_elFPUpd) _elFPUpd.value = '';
             document.getElementById('notaItens').innerHTML = '';
             adicionarLinhaItem();
             const _elSomaUpd = document.getElementById('notaSomaItens');

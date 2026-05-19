@@ -106,7 +106,8 @@
         "trocar*.js", "limpar*.js", "gerar*.js"
       ],
       "headers": [
-        { "source": "/painel.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] }
+        { "source": "/painel.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
+        { "source": "/gestao-joey.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] }
       ],
       "rewrites": [
         { "source": "/pedidos",          "destination": "/painel.html" },
