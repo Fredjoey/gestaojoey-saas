@@ -375,6 +375,10 @@ textarea.fi{resize:vertical;min-height:60px}
 .mesa-card.livre{border-top:3px solid #34d399}
 .mesa-card.ocupada{border-top:3px solid #f59e0b}
 .mesa-card.fechando{border-top:3px solid #ef4444}
+.menu-mesa-item{display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;color:var(--text);font-size:12px;font-family:inherit;cursor:pointer}
+.menu-mesa-item:hover{background:var(--bg3)}
+.salao-head{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 1.5rem 0}
+.salao-head h2{font-size:18px;font-weight:700;color:var(--text);margin:0}
 .mesa-nome{font-size:15px;font-weight:700;color:var(--text)}
 .mesa-status-lbl{font-size:12px;font-weight:600;color:var(--text2)}
 .mesa-total{font-size:22px;font-weight:700;color:var(--orange)}
@@ -1278,6 +1282,10 @@ textarea.fi{resize:vertical;min-height:60px}
     <!-- SALÃO -->
     <div id="panel-salao" style="display:none;height:100%;overflow:hidden">
       <div style="height:100%;overflow-y:auto">
+        <div class="salao-head">
+          <h2>🍽️ Salão</h2>
+          <button onclick="abrirModalMesa()" style="padding:8px 16px;background:var(--orange);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">+ Nova Mesa</button>
+        </div>
         <div id="salaoGrid" class="salao-grid"></div>
       </div>
     </div>
@@ -1385,6 +1393,31 @@ textarea.fi{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- MODAL CRIAR/EDITAR MESA -->
+<div class="modal-overlay" id="mesaConfigModal" onclick="if(event.target===this)fecharModalMesa()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title" id="mesaModalTitulo">Nova Mesa</div>
+    <div class="fg"><label class="fl">Nome da mesa *</label>
+      <input class="fi" id="mesaNome" placeholder="Ex: Mesa 8, Varanda 1"></div>
+    <div class="fg"><label class="fl">Capacidade (lugares)</label>
+      <input class="fi" id="mesaCapacidade" type="number" min="1" placeholder="Opcional"></div>
+    <div class="fg"><label class="fl">Localização</label>
+      <select class="fi" id="mesaLocalizacao">
+        <option value="Salão">Salão</option>
+        <option value="Varanda">Varanda</option>
+        <option value="Externa">Externa</option>
+        <option value="Balcão">Balcão</option>
+        <option value="Outro">Outro</option>
+      </select></div>
+    <div id="mesaModalErro" style="display:none;color:#f87171;font-size:12px;margin:6px 0"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-ghost" style="flex:1" onclick="fecharModalMesa()">Cancelar</button>
+      <button class="btn btn-primary" style="flex:1" onclick="salvarMesa()">Salvar</button>
+    </div>
+    <button id="mesaBtnExcluir" onclick="excluirMesa()" style="display:none;width:100%;margin-top:8px;padding:8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#ef4444;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer">🗑️ Excluir mesa</button>
+  </div>
+</div>
+
 <!-- MODAL PEDIDO MESA -->
 <div class="modal-overlay" id="pedidoMesaModal" onclick="if(event.target===this)fecharPedidoMesaModal()">
   <div class="modal-box" style="max-width:520px">
@@ -1483,13 +1516,6 @@ textarea.fi{resize:vertical;min-height:60px}
         <label class="fl">Mesa</label>
         <select class="fi" id="npMesa">
           <option value="">Sem mesa / Balcão</option>
-          <option value="mesa-1">Mesa 1</option>
-          <option value="mesa-2">Mesa 2</option>
-          <option value="mesa-3">Mesa 3</option>
-          <option value="mesa-4">Mesa 4</option>
-          <option value="mesa-5">Mesa 5</option>
-          <option value="mesa-6">Mesa 6</option>
-          <option value="mesa-7">Mesa 7</option>
         </select>
       </div>
     </div>
@@ -5587,6 +5613,12 @@ function iniciarListenersFirestore() {
     if (_mesaModalId && document.getElementById('orderModal').classList.contains('show')) refreshVerMesaModal();
   });
 
+  db.collection(`clientes/${slug}/mesas-config`).orderBy('ordem').onSnapshot(snap => {
+    mesasConfig = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (document.getElementById('panel-salao').style.display !== 'none') renderSalao();
+    _popularSelectMesa();
+  });
+
   db.collection(`clientes/${slug}/conversas`).orderBy('ultimaAtividade', 'desc').onSnapshot(snap => {
     const novas = snap.docs.map(d => ({ ...d.data(), id: d.id })); // id vem por último — impede campo 'id' do documento sobrescrever o doc ID real
     _wppDetectarNovas(novas);
@@ -6862,36 +6894,215 @@ async function excluirGatilhoCustom(uid) {
 
 // =================== SALÃO ===================
 let mesasData = {};
-const MESAS = ['Mesa 1','Mesa 2','Mesa 3','Mesa 4','Mesa 5','Mesa 6','Mesa 7'];
+let mesasConfig = [];
+let _mesaEditId = null;
 
 function renderSalao() {
   const grid = document.getElementById('salaoGrid');
   if (!grid) return;
-  grid.innerHTML = MESAS.map((nome, i) => {
-    const id = 'mesa-' + (i + 1);
-    const m = mesasData[id] || {};
-    const status = m.status || 'livre';
-    const total = m.total || 0;
+
+  if (mesasConfig.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:var(--text2)">
+        <div style="font-size:40px;margin-bottom:12px">🍽️</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">Nenhuma mesa cadastrada</div>
+        <div style="font-size:13px;margin-bottom:18px">Crie suas mesas para gerenciar o salão.</div>
+        <button onclick="criarMesasPadrao()" style="padding:10px 20px;background:var(--orange);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;margin-right:8px">Criar 7 mesas padrão</button>
+        <button onclick="abrirModalMesa()" style="padding:10px 20px;background:transparent;color:var(--text);border:1px solid var(--border2);border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">+ Nova Mesa</button>
+      </div>`;
+    return;
+  }
+
+  const ativas = mesasConfig.filter(m => m.ativa !== false);
+  if (ativas.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem 1rem;color:var(--text2);font-size:13px">Nenhuma mesa ativa. Crie uma nova ou reative uma existente.</div>`;
+    return;
+  }
+
+  grid.innerHTML = ativas.map(m => {
+    const est = mesasData[m.id] || {};
+    const status = est.status || 'livre';
+    const total = est.total || 0;
     const statusLabel = status === 'livre' ? '🟢 Livre' : status === 'ocupada' ? '🟡 Ocupada' : '🔴 Fechando conta';
-    const num = i + 1;
+    const qrParam = String(m.id).replace(/^mesa-/, '');
+    const nomeEsc = String(m.nome || '').replace(/'/g, "\\'");
+    const meta = [m.localizacao, m.capacidade ? m.capacidade + ' lug.' : '']
+      .filter(Boolean).join(' · ');
     return `
       <div class="mesa-card ${status}">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div class="mesa-nome">${nome}</div>
-          <button onclick="abrirQrMesa(${num},'${nome}')" title="QR Code da mesa"
-            style="background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M18 14h.01M14 18h.01M18 18h.01M14 14v4h4v-4"/></svg>
-          </button>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between">
+          <div>
+            <div class="mesa-nome">${m.nome}</div>
+            ${meta ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${meta}</div>` : ''}
+          </div>
+          <div style="position:relative">
+            <button onclick="toggleMenuMesa(event,'${m.id}')" title="Opções"
+              style="background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1;flex-shrink:0">⋮</button>
+            <div id="menuMesa-${m.id}" class="menu-mesa" style="display:none;position:absolute;right:0;top:36px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;z-index:50;min-width:170px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.5)">
+              <button class="menu-mesa-item" onclick="abrirModalMesa('${m.id}')">✏️ Editar</button>
+              <button class="menu-mesa-item" onclick="abrirQrMesa('${qrParam}','${nomeEsc}')">🔳 Gerar QR Code</button>
+              <button class="menu-mesa-item" onclick="desativarMesa('${m.id}')" style="color:#f87171">🚫 Desativar mesa</button>
+            </div>
+          </div>
         </div>
         <div class="mesa-status-lbl">${statusLabel}</div>
         <div class="mesa-total">R$&nbsp;${total.toFixed(2).replace('.',',')}</div>
         <div class="mesa-actions">
-          <button class="mesa-btn mesa-btn-ver" onclick="abrirVerMesa('${id}','${nome}')">👁️ Ver mesa</button>
-          <button class="mesa-btn mesa-btn-add" onclick="abrirPedidoMesa('${id}','${nome}')">+ Pedido</button>
+          <button class="mesa-btn mesa-btn-ver" onclick="abrirVerMesa('${m.id}','${nomeEsc}')">👁️ Ver mesa</button>
+          <button class="mesa-btn mesa-btn-add" onclick="abrirPedidoMesa('${m.id}','${nomeEsc}')">+ Pedido</button>
         </div>
       </div>`;
   }).join('');
 }
+
+// ── GESTÃO DE MESAS (mesas-config) ───────────────────────────────────────────
+function _popularSelectMesa() {
+  const sel = document.getElementById('npMesa');
+  if (!sel) return;
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">Sem mesa / Balcão</option>' +
+    mesasConfig.filter(m => m.ativa !== false)
+      .map(m => `<option value="${m.id}">${m.nome}</option>`).join('');
+  sel.value = atual;
+}
+
+// Pedidos vinculados a uma mesa — casa tanto pelo id quanto pelo número (QRs antigos)
+function _pedidosDaMesa(mesaId) {
+  const num = String(mesaId).replace(/^mesa-/, '');
+  return pedidos.filter(p => {
+    const pm = String(p.mesa || '');
+    return pm && (pm === mesaId || pm === num || pm === 'mesa-' + num);
+  });
+}
+function _mesaTemPedidoAtivo(mesaId) {
+  return _pedidosDaMesa(mesaId).some(p => p.status !== 'cancelado' && p.status !== 'finalizado');
+}
+function _mesaTemHistorico(mesaId) {
+  return _pedidosDaMesa(mesaId).length > 0;
+}
+
+async function criarMesasPadrao() {
+  if (mesasConfig.length > 0) { notify('Já existem mesas cadastradas.'); return; }
+  if (!confirm('Criar 7 mesas padrão (Mesa 1 a Mesa 7)?')) return;
+  try {
+    const batch = db.batch();
+    for (let i = 1; i <= 7; i++) {
+      const ref = db.collection(`clientes/${slug}/mesas-config`).doc('mesa-' + i);
+      batch.set(ref, {
+        nome: 'Mesa ' + i, capacidade: null, localizacao: 'Salão',
+        ativa: true, ordem: i,
+        criadaEm: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    await batch.commit();
+    notify('7 mesas criadas!');
+  } catch (e) {
+    notify('Erro ao criar mesas: ' + e.message, 'error');
+  }
+}
+
+function abrirModalMesa(id) {
+  _mesaEditId = id || null;
+  const m = id ? mesasConfig.find(x => x.id === id) : null;
+  document.getElementById('mesaModalTitulo').textContent = m ? 'Editar Mesa' : 'Nova Mesa';
+  document.getElementById('mesaNome').value = m ? (m.nome || '') : '';
+  document.getElementById('mesaCapacidade').value = (m && m.capacidade) ? m.capacidade : '';
+  document.getElementById('mesaLocalizacao').value = (m && m.localizacao) ? m.localizacao : 'Salão';
+  const erroEl = document.getElementById('mesaModalErro');
+  erroEl.style.display = 'none'; erroEl.textContent = '';
+  document.getElementById('mesaBtnExcluir').style.display = m ? '' : 'none';
+  document.getElementById('mesaConfigModal').classList.add('show');
+}
+
+function fecharModalMesa() {
+  document.getElementById('mesaConfigModal').classList.remove('show');
+  _mesaEditId = null;
+}
+
+async function salvarMesa() {
+  const nome   = document.getElementById('mesaNome').value.trim();
+  const capRaw = document.getElementById('mesaCapacidade').value.trim();
+  const loc    = document.getElementById('mesaLocalizacao').value;
+  const erroEl = document.getElementById('mesaModalErro');
+  const erro = (msg) => { erroEl.textContent = msg; erroEl.style.display = ''; };
+
+  if (!nome) { erro('Informe o nome da mesa.'); return; }
+  const dup = mesasConfig.some(m => m.id !== _mesaEditId &&
+    String(m.nome || '').trim().toLowerCase() === nome.toLowerCase());
+  if (dup) { erro('Já existe uma mesa com esse nome.'); return; }
+
+  const capacidade = capRaw ? (parseInt(capRaw) || null) : null;
+  try {
+    if (_mesaEditId) {
+      await db.collection(`clientes/${slug}/mesas-config`).doc(_mesaEditId)
+        .set({ nome, capacidade, localizacao: loc }, { merge: true });
+      notify('Mesa atualizada!');
+    } else {
+      const maxOrdem = mesasConfig.reduce((mx, m) => Math.max(mx, m.ordem || 0), 0);
+      await db.collection(`clientes/${slug}/mesas-config`).add({
+        nome, capacidade, localizacao: loc, ativa: true,
+        ordem: maxOrdem + 1,
+        criadaEm: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      notify('Mesa criada!');
+    }
+    fecharModalMesa();
+  } catch (e) {
+    erro('Erro ao salvar: ' + e.message);
+  }
+}
+
+async function desativarMesa(id) {
+  const m = mesasConfig.find(x => x.id === id);
+  if (!m) return;
+  if (_mesaTemPedidoAtivo(id)) {
+    notify('Não é possível desativar: mesa com pedido em aberto.', 'error');
+    return;
+  }
+  if (!confirm(`Desativar "${m.nome}"? Ela sai do salão mas o histórico é mantido.`)) return;
+  try {
+    await db.collection(`clientes/${slug}/mesas-config`).doc(id).set({ ativa: false }, { merge: true });
+    notify('Mesa desativada.');
+  } catch (e) {
+    notify('Erro: ' + e.message, 'error');
+  }
+}
+
+async function excluirMesa() {
+  const id = _mesaEditId;
+  if (!id) return;
+  const m = mesasConfig.find(x => x.id === id);
+  if (!m) return;
+  if (_mesaTemPedidoAtivo(id)) {
+    notify('Não é possível excluir: mesa com pedido em aberto.', 'error');
+    return;
+  }
+  if (_mesaTemHistorico(id)) {
+    notify('Mesa com histórico de pedidos não pode ser excluída — use Desativar.', 'error');
+    return;
+  }
+  if (!confirm(`Excluir a mesa "${m.nome}"?`)) return;
+  if (!confirm('Confirmação final: esta ação é permanente. Excluir mesmo?')) return;
+  try {
+    await db.collection(`clientes/${slug}/mesas-config`).doc(id).delete();
+    notify('Mesa excluída.');
+    fecharModalMesa();
+  } catch (e) {
+    notify('Erro ao excluir: ' + e.message, 'error');
+  }
+}
+
+function toggleMenuMesa(ev, id) {
+  ev.stopPropagation();
+  const menu = document.getElementById('menuMesa-' + id);
+  if (!menu) return;
+  const aberto = menu.style.display !== 'none';
+  document.querySelectorAll('.menu-mesa').forEach(el => el.style.display = 'none');
+  menu.style.display = aberto ? 'none' : 'block';
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.menu-mesa').forEach(el => el.style.display = 'none');
+});
 
 let _mesaModalId = null, _mesaModalNome = null;
 
@@ -7627,7 +7838,17 @@ function abrirQrMesa(num, nome) {
   console.log('QR clicado mesa:', num);
   _qrMesaNum = num;
   const url = `${CARDAPIO_URL}?mesa=${num}`;
-  document.getElementById('qrMesaNomeLabel').textContent = `🍽️ MESA ${num}`;
+  document.getElementById('qrMesaNomeLabel').textContent = '🍽️ ' + (nome ? String(nome).toUpperCase() : 'MESA ' + num);
+  const _qrLogoEl = document.querySelector('#qrMesaModal .qr-arte-logo');
+  const _qrSubEl  = document.querySelector('#qrMesaModal .qr-arte-sub');
+  if (_qrLogoEl) _qrLogoEl.textContent = config.nome || 'Loja';
+  if (_qrSubEl) {
+    const _qrSub = config.descricao || config.slogan || '';
+    _qrSubEl.textContent = _qrSub;
+    _qrSubEl.style.display = _qrSub ? '' : 'none';
+  }
+  const _qrUrlEl = document.querySelector('#qrMesaModal .qr-arte-url');
+  if (_qrUrlEl) _qrUrlEl.textContent = CARDAPIO_URL_DISPLAY;
 
   const wrap = document.getElementById('qrCanvas');
   wrap.innerHTML = '';
@@ -7666,6 +7887,8 @@ function fecharQrMesa() {
 function imprimirQrMesa() {
   const num = _qrMesaNum;
   const url = `${CARDAPIO_URL}?mesa=${num}`;
+  const _qrNomeLoja = config.nome || 'Loja';
+  const _qrSub = config.descricao || config.slogan || '';
 
   // Extrai dataURL do canvas/img já gerado no modal
   const wrap = document.getElementById('qrCanvas');
@@ -7705,8 +7928,8 @@ img{width:170px;height:170px;border-radius:10px;margin-bottom:.8rem}
 .url{font-size:9px;color:#444;margin-top:3px;letter-spacing:.5px}
 </style></head><body>
 <div class="card">
-  <div class="logo">JOEY</div>
-  <div class="sub">Hamburgueria Artesanal</div>
+  <div class="logo">${_qrNomeLoja}</div>
+  ${_qrSub ? `<div class="sub">${_qrSub}</div>` : ''}
   <div class="divider"></div>
   <div class="instrucao">Faça o seu pedido aqui!</div>
   <img src="${dataUrl}" alt="QR Code">
