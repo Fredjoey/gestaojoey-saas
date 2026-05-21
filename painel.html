@@ -575,6 +575,13 @@ textarea.fi{resize:vertical;min-height:60px}
         <span class="slider"></span>
       </label>
     </div>
+    <div class="bot-item">
+      <div><div id="impTopLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🖨️ Impressora: PAUSADA</div></div>
+      <label class="auto-switch">
+        <input type="checkbox" id="impTopInput" onchange="toggleImpressaoTopo(this)">
+        <span class="slider"></span>
+      </label>
+    </div>
   </div>
   <div class="content">
 
@@ -3260,15 +3267,43 @@ function ajustarVias(delta) {
   label.textContent = novo;
 }
 
-function toggleImpressao(cb) {
-  const ativo = cb.checked;
-  const lbl = document.getElementById('statusImpressaoLabel');
+// Aplica estado da impressão em TODOS os UIs (topo + Configurações). Não persiste.
+function _setImpressaoUI(ativo) {
+  ativo = !!ativo;
+  // Toggle do topo (cabeçalho)
+  const topInput = document.getElementById('impTopInput');
+  const topLabel = document.getElementById('impTopLabel');
+  if (topInput) topInput.checked = ativo;
+  if (topLabel) {
+    topLabel.textContent = ativo ? '🖨️ Impressora: ATIVA' : '🖨️ Impressora: PAUSADA';
+    topLabel.className   = ativo ? 'auto-label-on' : 'auto-label-off';
+  }
+  // Toggle da página de Configurações
+  const cfgInput = document.getElementById('cfgImpressao');
+  if (cfgInput) cfgInput.checked = ativo;
+  const lbl   = document.getElementById('statusImpressaoLabel');
   const track = document.getElementById('impTrack');
   const thumb = document.getElementById('impThumb');
-  if (lbl)  lbl.textContent           = ativo ? 'Ativa — imprime ao confirmar pedido' : 'Desativada';
-  if (track) track.style.background   = ativo ? 'var(--orange)' : 'var(--bg3)';
+  if (lbl)   lbl.textContent         = ativo ? 'Ativa — imprime ao confirmar pedido' : 'Desativada';
+  if (track) track.style.background  = ativo ? 'var(--orange)' : 'var(--bg3)';
   if (thumb) { thumb.style.left = ativo ? '25px' : '3px'; thumb.style.background = ativo ? '#fff' : 'var(--text3)'; }
 }
+
+// Atualiza estado em memória + persiste no Firestore imediatamente + atualiza UIs
+async function setImpressaoAtiva(ativo) {
+  ativo = !!ativo;
+  config.impressaoAtiva = ativo;
+  _setImpressaoUI(ativo);
+  try {
+    await db.doc(`clientes/${slug}/config/loja`).set({ impressaoAtiva: ativo }, { merge: true });
+  } catch (e) {
+    console.error('[setImpressaoAtiva] erro ao salvar:', e);
+    notify('Erro ao salvar configuração de impressão', 'error');
+  }
+}
+
+function toggleImpressao(cb)       { setImpressaoAtiva(cb.checked); }
+function toggleImpressaoTopo(input) { setImpressaoAtiva(input.checked); }
 
 function toggleStatusLoja(cb) {
   const aberto = cb.checked;
@@ -5582,6 +5617,7 @@ function iniciarListenersFirestore() {
     config = snap.exists ? { ...defaults, ...snap.data() } : defaults;
     atualizarSidebar();
     atualizarTempoStrip();
+    _setImpressaoUI(config.impressaoAtiva === true);
     if (!_qzInicializado) { _qzInicializado = true; _qzIniciar(); }
     if (document.getElementById('panel-config').style.display !== 'none') { renderDestaqueOpts(); carregarConfig(); }
   });

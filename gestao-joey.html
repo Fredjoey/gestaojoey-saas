@@ -406,6 +406,21 @@
         }
         .anaPeriodBtn:hover { border-color: var(--accent); color: var(--text); transform: none; }
         .anaPeriodBtn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .customClearBtn {
+          width: 28px; height: 28px;
+          background: #3a1010;
+          border: 0.5px solid #5a1a1a;
+          color: #e87;
+          cursor: pointer;
+          border-radius: 4px;
+          padding: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          line-height: 1;
+        }
+        .customClearBtn:hover { background: #5a1a1a; }
 
         .anaKpi {
             background: var(--bg3); border: 1px solid var(--border); border-top: 2px solid var(--accent);
@@ -968,6 +983,13 @@
                 <button class="anaPeriodBtn" data-p="mes"    onclick="setAnalysisPeriod('mes')">Este mês</button>
                 <button class="anaPeriodBtn" data-p="mesAnt" onclick="setAnalysisPeriod('mesAnt')">Mês anterior</button>
                 <button class="anaPeriodBtn" data-p="todos"  onclick="setAnalysisPeriod('todos')">Tudo</button>
+                <div style="display:flex; align-items:center; gap:6px; margin-left:6px;">
+                    <input type="date" id="anaDataInicio" style="background:#1a1a1a; border:1px solid #444; padding:6px 10px; border-radius:4px; color:#ccc; font-size:12px;">
+                    <span style="color:var(--text3); font-size:12px;">→</span>
+                    <input type="date" id="anaDataFim" style="background:#1a1a1a; border:1px solid #444; padding:6px 10px; border-radius:4px; color:#ccc; font-size:12px;">
+                    <button class="anaPeriodBtn" data-p="custom" onclick="setAnalysisPeriodCustom()">Aplicar</button>
+                    <button id="anaCustomClear" class="customClearBtn" onclick="clearAnaCustomPeriod()" title="Limpar período custom" style="display:none;">✕</button>
+                </div>
                 <span id="anaPeriodLabel" style="margin-left:auto; font-size:11px; color:var(--text3);"></span>
             </div>
 
@@ -1014,17 +1036,12 @@
                 </table>
             </div>
 
-            <!-- Curva ABC (mantida) -->
-            <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem; margin-bottom:2rem;">
-                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
-                    <div style="font-size:13px; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:0.5px;">Curva ABC (Pareto)</div>
-                    <div style="font-size:10px; color:var(--text3);">% acumulado de faturamento — período do filtro</div>
-                </div>
-                <div style="font-size:11px; color:var(--text3); margin-bottom:8px;">
-                    🟢 A: até 80% · 🟡 B: 80–95% · 🔴 C: 95–100%
-                </div>
-                <canvas id="anaABC" height="180"></canvas>
-                <div id="anaABCLegend" style="font-size:11px; color:var(--text2); margin-top:10px;"></div>
+            <!-- ONDE AGIR -->
+            <div class="section-title">📊 Onde Agir</div>
+            <div style="font-size:12px; color:var(--text2); margin-bottom:1rem;">Ações práticas baseadas nos seus produtos do período selecionado.</div>
+            <div id="anaOndeAgir" style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1rem;"></div>
+            <div class="info-box" style="margin-bottom:2rem; line-height:1.5;">
+                💡 <strong>Como ler:</strong> CMV (Custo da Mercadoria Vendida) é quanto os ingredientes consomem do preço de venda. Acima de 33% significa que o produto gasta ingrediente demais — considere comprar melhor, ajustar a ficha técnica ou subir o preço. Os produtos campeões de venda com boa margem são os melhores candidatos a um reajuste leve, pois o cliente raramente percebe e o ganho acumulado é significativo.
             </div>
 
         </div>
@@ -1043,6 +1060,13 @@
                 <button class="anaPeriodBtn active" data-finp="mes" onclick="setFinPeriod('mes')">Este mês</button>
                 <button class="anaPeriodBtn" data-finp="mesAnt" onclick="setFinPeriod('mesAnt')">Mês anterior</button>
                 <button class="anaPeriodBtn" data-finp="todos"  onclick="setFinPeriod('todos')">Tudo</button>
+                <div style="display:flex; align-items:center; gap:6px; margin-left:6px;">
+                    <input type="date" id="finDataInicio" style="background:#1a1a1a; border:1px solid #444; padding:6px 10px; border-radius:4px; color:#ccc; font-size:12px;">
+                    <span style="color:var(--text3); font-size:12px;">→</span>
+                    <input type="date" id="finDataFim" style="background:#1a1a1a; border:1px solid #444; padding:6px 10px; border-radius:4px; color:#ccc; font-size:12px;">
+                    <button class="anaPeriodBtn" data-finp="custom" onclick="setFinPeriodCustom()">Aplicar</button>
+                    <button id="finCustomClear" class="customClearBtn" onclick="clearFinCustomPeriod()" title="Limpar período custom" style="display:none;">✕</button>
+                </div>
                 <button onclick="finExportarPDF()" style="margin-left:auto; padding:8px 16px; background:#1a4a2e; color:#4ade80; border:1px solid #2a6a3e; font-size:12px;">📄 Exportar PDF</button>
             </div>
 
@@ -1081,10 +1105,6 @@
             <!-- ④ PAGAMENTOS -->
             <div class="section-title">④ Breakdown por Meio de Pagamento</div>
             <div id="finPagContainer" style="margin-bottom:2rem;"></div>
-
-            <!-- ⑤ SIMULADOR -->
-            <div class="section-title">⑤ Simulador "E-SE" — Cenários</div>
-            <div id="finSimContainer" style="margin-bottom:2rem;"></div>
         </div>
     </div>
 
@@ -1522,7 +1542,7 @@
                             <span style="color:#e74c3c;" id="dreInsumosVal">—</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px; border-bottom:1px solid #2a2a4a; padding-bottom:10px;">
-                            <span style="color:#aaa;">(-) Custos Fixos</span>
+                            <span style="color:#aaa;" id="dreFixosTxt">(-) Custos Fixos</span>
                             <span style="color:#e74c3c;" id="dreFixosVal">—</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; padding:10px 0 4px;">
@@ -1560,12 +1580,6 @@
                         ✕ Limpar
                     </button>
                 </div>
-                <div style="margin-top:10px;">
-                    <input type="file" id="vendasImportFile" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importarRelatorioVendas(this)">
-                    <button onclick="document.getElementById('vendasImportFile').click()" style="width:100%; background:#1c1208; border:1px dashed #f97316; color:#f97316; padding:11px; font-size:13px; border-radius:8px; font-weight:600; cursor:pointer;" onmouseover="this.style.background='#2a1a0a'" onmouseout="this.style.background='#1c1208'">
-                        📂 Importar Relatório Anota AI (.xlsx / .csv)
-                    </button>
-                </div>
                 <div id="vendaFirestoreStatus" style="display:none; margin-top:10px; padding:10px; border-radius:6px; font-size:13px; font-weight:600; text-align:center;"></div>
             </div>
 
@@ -1578,7 +1592,10 @@
                 <div id="vendasResultadoBody">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
                     <input type="text" id="vendasFiltroNome" placeholder="🔍 Filtrar por nome do item..." oninput="filtrarTabelaVendas()" style="flex:1; padding:9px 12px; font-size:13px; border-radius:6px;">
-                    <button onclick="document.getElementById('vendasFiltroNome').value=''; filtrarTabelaVendas();" style="background:#444; padding:9px 14px; font-size:12px; border-radius:6px;">✕ Limpar</button>
+                    <select id="vendasFiltroCategoria" onchange="filtrarTabelaVendas()" style="padding:9px 12px; font-size:13px; border-radius:6px; min-width:180px;">
+                        <option value="">Todas as categorias</option>
+                    </select>
+                    <button onclick="document.getElementById('vendasFiltroNome').value=''; document.getElementById('vendasFiltroCategoria').value=''; filtrarTabelaVendas();" style="background:#444; padding:9px 14px; font-size:12px; border-radius:6px;">✕ Limpar</button>
                 </div>
                 <div style="overflow-x:auto;">
                     <table>
@@ -2874,6 +2891,7 @@
                 { id: 'categoriaFiltro', placeholder: 'Todas as categorias',        desabilitado: false },
                 { id: 'anaPerfCat',      placeholder: 'Todas as categorias',        desabilitado: false },
                 { id: 'precCategoria',   placeholder: 'Todas as categorias',        desabilitado: false },
+                { id: 'vendasFiltroCategoria', placeholder: 'Todas as categorias',  desabilitado: false },
             ];
             configs.forEach(({ id, placeholder, desabilitado }) => {
                 const sel = document.getElementById(id);
@@ -3705,12 +3723,61 @@
         // ============== ANÁLISE EXECUTIVA (refundada) ===============
         // ============================================================
         let _anaPeriod = '30d';
+        let _anaCustomStart = null;
+        let _anaCustomEnd   = null;
         let _anaCharts = { menuEng: null, abc: null, trend: null, heatmap: null };
 
         function setAnalysisPeriod(p) {
             _anaPeriod = p;
-            document.querySelectorAll('.anaPeriodBtn').forEach(b => b.classList.toggle('active', b.dataset.p === p));
+            document.querySelectorAll('.anaPeriodBtn[data-p]').forEach(b => b.classList.toggle('active', b.dataset.p === p));
+            const cc = document.getElementById('anaCustomClear');
+            if (cc) cc.style.display = (p === 'custom') ? 'inline-flex' : 'none';
             updateAnalysis();
+        }
+
+        function setAnalysisPeriodCustom() {
+            const ini = document.getElementById('anaDataInicio')?.value;
+            const fim = document.getElementById('anaDataFim')?.value;
+            if (!ini || !fim) { alert('Preencha as duas datas para aplicar o período customizado.'); return; }
+            const [iy, im, id] = ini.split('-').map(Number);
+            const [fy, fm, fd] = fim.split('-').map(Number);
+            const start = new Date(iy, im - 1, id);
+            const end   = new Date(fy, fm - 1, fd, 23, 59, 59, 999);
+            if (start > end) { alert('A data inicial deve ser anterior ou igual à data final.'); return; }
+            _anaCustomStart = start;
+            _anaCustomEnd   = end;
+            _anaPeriod = 'custom';
+            document.querySelectorAll('.anaPeriodBtn[data-p]').forEach(b => b.classList.toggle('active', b.dataset.p === 'custom'));
+            const cc = document.getElementById('anaCustomClear');
+            if (cc) cc.style.display = 'inline-flex';
+            updateAnalysis();
+        }
+
+        function clearAnaCustomPeriod() {
+            const ini = document.getElementById('anaDataInicio'); if (ini) ini.value = '';
+            const fim = document.getElementById('anaDataFim');    if (fim) fim.value = '';
+            _anaCustomStart = null;
+            _anaCustomEnd   = null;
+            setAnalysisPeriod('30d');
+        }
+
+        // Wrappers da Análise: tratam 'custom' e delegam pros helpers compartilhados.
+        function _anaRangeWrap(p) {
+            if (p === 'custom' && _anaCustomStart && _anaCustomEnd) {
+                return { start: _anaCustomStart, end: _anaCustomEnd };
+            }
+            return _anaPeriodRange(p);
+        }
+
+        function _anaPrevWrap(p) {
+            if (p === 'custom' && _anaCustomStart && _anaCustomEnd) {
+                const len = _anaCustomEnd.getTime() - _anaCustomStart.getTime();
+                return {
+                    start: new Date(_anaCustomStart.getTime() - len - 1),
+                    end:   new Date(_anaCustomStart.getTime() - 1)
+                };
+            }
+            return _anaPrevRange(p);
         }
 
         function _anaPeriodRange(p) {
@@ -3911,8 +3978,8 @@
         const _aggVazio = () => ({ faturamento: 0, custo: 0, unidades: 0, numPedidos: 0, itens: {} });
 
         async function updateAnalysis() {
-            const cur  = _anaPeriodRange(_anaPeriod);
-            const prev = _anaPrevRange(_anaPeriod);
+            const cur  = _anaRangeWrap(_anaPeriod);
+            const prev = _anaPrevWrap(_anaPeriod);
             const cfg  = _anaPrecConfig();
 
             const [aggC, aggP] = await Promise.all([
@@ -3939,7 +4006,6 @@
 
             // ③ Performance (tabela usa mês atual via Firestore — independente do filtro de período)
             _anaRenderPerformance(cfg);
-            _anaRenderABC(aggC);
         }
 
         function _anaRenderKpis(c, p, cfg, hasPrev) {
@@ -4178,6 +4244,7 @@
             }
 
             _anaPerfRender();
+            _anaRenderOndeAgir();
         }
 
         function _anaPerfRender() {
@@ -4346,56 +4413,77 @@
         }
         window.exportarCardapioImpresso = exportarCardapioImpresso;
 
-        // ===== Curva ABC =====
-        function _anaRenderABC(c) {
-            const ctx = document.getElementById('anaABC');
-            if (_anaCharts.abc) _anaCharts.abc.destroy();
-            const itens = Object.values(c.itens).filter(i => i.faturamento > 0).sort((a,b) => b.faturamento - a.faturamento);
-            if (itens.length === 0) {
-                document.getElementById('anaABCLegend').textContent = 'Sem dados de vendas no período.';
+        // ===== Onde Agir — listas de ação derivadas de _anaPerfDados =====
+        function _anaRenderOndeAgir() {
+            const c = document.getElementById('anaOndeAgir');
+            if (!c) return;
+            const dados = (_anaPerfDados || []).filter(d => d.preco > 0 && d.qtd > 0);
+            if (dados.length === 0) {
+                c.innerHTML = '<div style="grid-column:1/-1; background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:1rem; color:var(--text3); text-align:center; font-size:13px;">Sem dados de produtos no período.</div>';
                 return;
             }
-            const total = itens.reduce((s,i) => s + i.faturamento, 0);
-            let acum = 0;
-            const enriched = itens.map(i => {
-                acum += i.faturamento;
-                const pctAcum = (acum / total) * 100;
-                let cls = pctAcum <= 80 ? 'A' : pctAcum <= 95 ? 'B' : 'C';
-                return { ...i, pctAcum, cls };
-            });
-            // Limita a 20 produtos para legibilidade
-            const display = enriched.slice(0, 20);
-            const cores = display.map(d => d.cls === 'A' ? '#4ade80' : d.cls === 'B' ? '#f59e0b' : '#ff6b6b');
+            const fmt = v => 'R$ ' + (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
 
-            _anaCharts.abc = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: display.map(d => d.nome.length > 14 ? d.nome.slice(0,14)+'…' : d.nome),
-                    datasets: [
-                        { type:'bar', label:'Faturamento', data: display.map(d => d.faturamento), backgroundColor: cores, borderColor: cores, borderRadius: 4, yAxisID:'y' },
-                        { type:'line', label:'% acumulado', data: display.map(d => d.pctAcum), borderColor:'#ff6b35', backgroundColor:'#ff6b3540', borderWidth:2, pointRadius:3, yAxisID:'y1', tension:0.3 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: true, labels:{ color:'#aaa', font:{size:10} } },
-                        tooltip: { callbacks: { label: ctx => ctx.dataset.label === '% acumulado' ? `${ctx.raw.toFixed(1)}%` : `R$ ${(+ctx.raw).toFixed(2).replace('.',',')}` } }
-                    },
-                    scales: {
-                        x: { ticks:{ color:'#aaa', font:{size:9}, maxRotation:45, minRotation:45 }, grid:{ display:false } },
-                        y: { position:'left', ticks:{ color:'#aaa', callback: v => 'R$ ' + v }, grid:{ color:'#333' } },
-                        y1:{ position:'right', min:0, max:100, ticks:{ color:'#ff6b35', callback: v => v+'%' }, grid:{ display:false } }
-                    }
-                }
-            });
+            // Lista 1: CMV > 33% — perda potencial = (custo − 33% do preço) × qtd
+            const vazando = dados
+                .map(d => {
+                    const cmvPct = (d.custo / d.preco) * 100;
+                    const perdaUnit = d.custo - (d.preco * 0.33);
+                    const perdaMes  = Math.max(0, perdaUnit * d.qtd);
+                    return { ...d, cmvPct, perdaMes };
+                })
+                .filter(d => d.cmvPct > 33)
+                .sort((a,b) => b.perdaMes - a.perdaMes)
+                .slice(0, 5);
 
-            const a = enriched.filter(d => d.cls === 'A').length;
-            const b = enriched.filter(d => d.cls === 'B').length;
-            const ca = enriched.filter(d => d.cls === 'C').length;
-            document.getElementById('anaABCLegend').innerHTML =
-                `<strong>${a}</strong> produtos A respondem por 80% · <strong>${b}</strong> em B · <strong>${ca}</strong> em C` +
-                (display.length < enriched.length ? ` <span style="color:var(--text3);">(mostrando top 20 de ${enriched.length})</span>` : '');
+            // Lista 2: vendas > média E margem > 50% — ganho com +R$ 2 = 2 × qtd
+            const mediaQtd = dados.reduce((s,d) => s + d.qtd, 0) / dados.length;
+            const subir = dados
+                .filter(d => d.qtd > mediaQtd && d.margemPct > 50)
+                .sort((a,b) => b.qtd - a.qtd)
+                .slice(0, 5);
+
+            // Chip no padrão .anaClassif (mesmo do Performance dos Produtos).
+            const chip = (cor, texto) =>
+                `<span class="anaClassif" style="background:${cor}22; color:${cor}; border:1px solid ${cor}55;">${texto}</span>`;
+            const chipNeutro = texto => chip('#888', texto);
+
+            const card = (d, accent, chipsHtml, ctaTexto) => `
+                <div style="background:var(--bg3); border:1px solid var(--border); border-left:3px solid ${accent}; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
+                    <div style="font-weight:600; font-size:13px; color:var(--text); margin-bottom:8px;">${d.nome}</div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">${chipsHtml}</div>
+                    <div style="border-top:1px solid var(--border); margin-top:8px; padding-top:6px; font-size:11px; color:${accent}; font-weight:700;">${ctaTexto}</div>
+                </div>`;
+
+            const renderVazando = vazando.length === 0
+                ? '<div style="color:var(--text3); font-size:12px; text-align:center; padding:1rem; background:var(--bg3); border:1px solid var(--border); border-radius:6px;">Nenhum produto com CMV acima de 33%. ✅</div>'
+                : vazando.map(d => card(d, '#ff6b6b',
+                    chipNeutro(`Vendas: ${d.qtd} un`) +
+                    chipNeutro(`Margem: ${d.margemPct.toFixed(1)}%`) +
+                    chip('#ff6b6b', `CMV: ${d.cmvPct.toFixed(1)}%`),
+                    `Perda potencial: −${fmt(d.perdaMes)}/mês`
+                )).join('');
+
+            const renderSubir = subir.length === 0
+                ? '<div style="color:var(--text3); font-size:12px; text-align:center; padding:1rem; background:var(--bg3); border:1px solid var(--border); border-radius:6px;">Nenhum produto acima da média com margem &gt; 50%.</div>'
+                : subir.map(d => card(d, '#4ade80',
+                    chipNeutro(`Vendas: ${d.qtd} un`) +
+                    chipNeutro(`Preço: ${fmt(d.preco)}`) +
+                    chip('#4ade80', `Margem: ${d.margemPct.toFixed(1)}%`),
+                    `+${fmt(2 * d.qtd)}/mês se subir R$ 2`
+                )).join('');
+
+            c.innerHTML = `
+                <div>
+                    <div style="font-size:11px; font-weight:700; color:#ff6b6b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">💧 Onde está vazando dinheiro</div>
+                    <div style="font-size:11px; color:var(--text3); margin-bottom:12px;">Produtos com CMV acima de 33% (sua meta). O ingrediente está custando demais para o preço cobrado.</div>
+                    ${renderVazando}
+                </div>
+                <div>
+                    <div style="font-size:11px; font-weight:700; color:#4ade80; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">📈 Onde dá pra subir o preço</div>
+                    <div style="font-size:11px; color:var(--text3); margin-bottom:12px;">Produtos que vendem acima da média e já têm boa margem. Um reajuste leve passa despercebido e soma no fim do mês.</div>
+                    ${renderSubir}
+                </div>`;
         }
 
 
@@ -6254,7 +6342,7 @@
                     custo         += custoTotal;
                     totalUnidades += qtd;
 
-                    return { nomeItem, qtd, preco, custoUnit, subtotal, custoTotal, lucro, cmv, encontrou: !!receitaMatch };
+                    return { nomeItem, qtd, preco, custoUnit, subtotal, custoTotal, lucro, cmv, encontrou: !!receitaMatch, categoria: receitaMatch ? (receitaMatch.categoria || '') : '' };
                 }).filter(Boolean).sort((a, b) => b.qtd - a.qtd);
 
             const lucroGeral = faturamentoReal - custo;
@@ -6284,7 +6372,7 @@
             const tbody = document.getElementById('vendasTabelaItens');
             const tfoot = document.getElementById('vendasTabelaTotais');
             if (tbody) tbody.innerHTML = itensProcessados.map(item => `
-                <tr style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
+                <tr data-categoria="${item.categoria || ''}" data-qtd="${item.qtd || 0}" data-fat="${item.subtotal || 0}" data-custo="${item.custoTotal || 0}" data-lucro="${item.lucro || 0}" style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
                     <td>
                         <strong>${item.nomeItem}</strong>
                         ${!item.encontrou ? '<span style="color:#f39c12; font-size:11px; margin-left:6px;">⚠️ sem receita</span>' : ''}
@@ -6354,6 +6442,7 @@
             atualizarIndicadorPE();
             _dreFaturamento = faturamentoReal;
             _dreCusto       = custo;
+            _dreDias        = _calcDreDias(dataInicio, dataFim);
             calcularDRE();
 
             const relatorio = {
@@ -6479,7 +6568,7 @@
                 custo          += custoTotal;
                 totalUnidades  += qtd;
 
-                return { nomeItem, qtd, preco, custoUnit, subtotal, custoTotal, lucro, cmv, encontrou: !!receitaMatch };
+                return { nomeItem, qtd, preco, custoUnit, subtotal, custoTotal, lucro, cmv, encontrou: !!receitaMatch, categoria: receitaMatch ? (receitaMatch.categoria || '') : '' };
             }).filter(Boolean).sort((a, b) => b.qtd - a.qtd);
 
             const lucroGeral = faturamento - custo;
@@ -6501,7 +6590,7 @@
             const tfoot = document.getElementById('vendasTabelaTotais');
 
             tbody.innerHTML = itensProcessados.map(item => `
-                <tr style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
+                <tr data-categoria="${item.categoria || ''}" data-qtd="${item.qtd || 0}" data-fat="${item.subtotal || 0}" data-custo="${item.custoTotal || 0}" data-lucro="${item.lucro || 0}" style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
                     <td>
                         <strong>${item.nomeItem}</strong>
                         ${!item.encontrou ? '<span style="color:#f39c12; font-size:11px; margin-left:6px;">⚠️ sem receita</span>' : ''}
@@ -6537,6 +6626,7 @@
             atualizarIndicadorPE();
             _dreFaturamento = faturamento;
             _dreCusto       = custo;
+            _dreDias        = _calcDreDias(dataInicio, dataFim);
             calcularDRE();
 
             const relatorio = {
@@ -6560,179 +6650,6 @@
             alert(`✅ Relatório processado!\n\n${itensProcessados.length} itens · ${totalUnidades} unidades\n${semReceita > 0 ? `⚠️ ${semReceita} item(ns) sem receita cadastrada` : '✅ Todos os itens têm receita!'}`);
         }
 
-        // ===== IMPORTAR RELATÓRIO ANOTA AI =====
-        async function importarRelatorioVendas(input) {
-            const file = input.files[0];
-            if (!file) return;
-
-            const dataInicio = document.getElementById('vendaDataInicio').value;
-            const dataFim = document.getElementById('vendaDataFim').value;
-
-            if (!dataInicio || !dataFim) {
-                alert('⚠️ Preencha o período (data início e fim) antes de importar!');
-                input.value = '';
-                return;
-            }
-
-            // Carregar SheetJS
-            if (!window.XLSX) {
-                await new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-
-            const arrayBuffer = await file.arrayBuffer();
-            const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows = window.XLSX.utils.sheet_to_json(sheet);
-
-            if (!rows.length) {
-                alert('⚠️ Arquivo vazio ou formato inválido!');
-                input.value = '';
-                return;
-            }
-
-            // Detectar colunas item/total
-            const primeiraLinha = rows[0];
-            const colunas = Object.keys(primeiraLinha).map(k => k.toLowerCase());
-            const colItem  = Object.keys(primeiraLinha).find(k => k.toLowerCase().includes('item') || k.toLowerCase().includes('produto') || k.toLowerCase().includes('name'));
-            const colTotal = Object.keys(primeiraLinha).find(k => k.toLowerCase().includes('total') || k.toLowerCase().includes('qtd') || k.toLowerCase().includes('quant') || k.toLowerCase().includes('venda'));
-
-            if (!colItem || !colTotal) {
-                alert('⚠️ Não encontrei as colunas "item" e "total" no arquivo. Verifique o formato.');
-                input.value = '';
-                return;
-            }
-
-            // Processar itens cruzando com receitas quando possível
-            let faturamento = 0, custo = 0, totalUnidades = 0;
-            const _palavrasTotal = ['total', 'subtotal', 'soma', 'sum', 'grand total', 'totais', 'geral'];
-            const itensProcessados = rows.map(row => {
-                const nomeItem = String(row[colItem] || '').trim();
-                const qtd = parseFloat(row[colTotal]) || 0;
-                if (!nomeItem || qtd <= 0) return null;
-                if (_palavrasTotal.some(p => nomeItem.toLowerCase().trim() === p)) return null;
-
-                // Normalizar texto para comparação (remove acentos e caracteres especiais)
-                const normalizar = str => str.toLowerCase()
-                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                    .replace(/[^a-z0-9\s]/g, '').trim();
-
-                const nomeNorm = normalizar(nomeItem);
-                const receitaMatch = recipes.find(r => {
-                    const recNorm = normalizar(r.name);
-                    // Correspondência exata
-                    if (recNorm === nomeNorm) return true;
-                    // Um contém o outro
-                    if (nomeNorm.includes(recNorm) || recNorm.includes(nomeNorm)) return true;
-                    // Palavras em comum (mínimo 2 palavras iguais)
-                    const palavrasNome = nomeNorm.split(' ').filter(p => p.length > 3);
-                    const palavrasRec = recNorm.split(' ').filter(p => p.length > 3);
-                    const emComum = palavrasNome.filter(p => palavrasRec.includes(p));
-                    return emComum.length >= 2;
-                });
-
-                const preco = receitaMatch ? receitaMatch.price : 0;
-                const custoUnit = receitaMatch ? receitaMatch.cost : 0;
-                const subtotal = qtd * preco;
-                const custoTotal = qtd * custoUnit;
-                const lucro = subtotal - custoTotal;
-                const cmv = subtotal > 0 ? ((custoTotal / subtotal) * 100).toFixed(1) : 0;
-
-                faturamento += subtotal;
-                custo += custoTotal;
-                totalUnidades += qtd;
-
-                return { nomeItem, qtd, preco, custoUnit, subtotal, custoTotal, lucro, cmv, encontrou: !!receitaMatch };
-            }).filter(Boolean).sort((a, b) => b.qtd - a.qtd);
-
-            const lucroGeral = faturamento - custo;
-            const cmvGeral = faturamento > 0 ? ((custo / faturamento) * 100).toFixed(1) : 0;
-            const semReceita = itensProcessados.filter(i => !i.encontrou).length;
-
-            // Atualizar dashboard
-            const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-            set('vendasUnidadesMes',    totalUnidades);
-            set('vendasFaturamentoMes', faturamento > 0 ? formatarMoeda(faturamento) : '—');
-            set('vendasCustoMes',       custo > 0       ? formatarMoeda(custo)       : '—');
-            set('vendasLucroMes',       faturamento > 0 ? formatarMoeda(lucroGeral)  : '—');
-            const cmvEl = document.getElementById('vendasCMVMes');
-            if (cmvEl) {
-                cmvEl.textContent = faturamento > 0 ? `${cmvGeral}%` : '—';
-                if (faturamento > 0) cmvEl.style.color = getCMVColor(cmvGeral).color;
-            }
-
-            // Renderizar tabela
-            const tbody = document.getElementById('vendasTabelaItens');
-            const tfoot = document.getElementById('vendasTabelaTotais');
-
-            tbody.innerHTML = itensProcessados.map(item => `
-                <tr style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
-                    <td>
-                        <strong>${item.nomeItem}</strong>
-                        ${!item.encontrou ? '<span style="color:#f39c12; font-size:11px; margin-left:6px;">⚠️ sem receita</span>' : ''}
-                    </td>
-                    <td class="text-right">${item.qtd}</td>
-                    <td class="text-right">${item.preco > 0 ? formatarMoeda(item.preco) : '<span style="color:#555;">—</span>'}</td>
-                    <td class="text-right">${item.subtotal > 0 ? formatarMoeda(item.subtotal) : '<span style="color:#555;">—</span>'}</td>
-                    <td class="text-right">${item.custoUnit > 0 ? formatarMoeda(item.custoUnit) : '<span style="color:#555;">—</span>'}</td>
-                    <td class="text-right">${item.custoTotal > 0 ? formatarMoeda(item.custoTotal) : '<span style="color:#555;">—</span>'}</td>
-                    <td class="text-right" style="color:${item.lucro >= 0 ? '#27ae60' : '#e74c3c'};">
-                        ${item.subtotal > 0 ? formatarMoeda(item.lucro) : '<span style="color:#555;">—</span>'}
-                    </td>
-                    <td class="text-right">
-                        ${item.cmv > 0 ? `<strong style="color:${getCMVColor(item.cmv).color};">${item.cmv}%</strong>` : '<span style="color:#555;">—</span>'}
-                    </td>
-                </tr>
-            `).join('');
-
-            tfoot.innerHTML = `
-                <tr style="background:#2c2c2c; font-weight:700; border-top:2px solid #ff6b35;">
-                    <td><strong>TOTAL GERAL</strong></td>
-                    <td class="text-right">${totalUnidades}</td>
-                    <td class="text-right">—</td>
-                    <td class="text-right">${faturamento > 0 ? formatarMoeda(faturamento) : '—'}</td>
-                    <td class="text-right">—</td>
-                    <td class="text-right" style="color:#e74c3c;">${custo > 0 ? formatarMoeda(custo) : '—'}</td>
-                    <td class="text-right" style="color:#27ae60;">${faturamento > 0 ? formatarMoeda(lucroGeral) : '—'}</td>
-                    <td class="text-right">${faturamento > 0 ? `<strong style="color:${getCMVColor(cmvGeral).color};">${cmvGeral}%</strong>` : '—'}</td>
-                </tr>
-            `;
-
-            document.getElementById('vendasResultado').style.display = 'block';
-            atualizarIndicadorPE();
-            _dreFaturamento = faturamento;
-            _dreCusto       = custo;
-            calcularDRE();
-
-            // Salvar no Firebase
-            const relatorio = {
-                id: Date.now(),
-                dataInicio, dataFim,
-                arquivo: file.name,
-                faturamento, custo,
-                lucro: lucroGeral,
-                unidades: totalUnidades,
-                cmv: parseFloat(cmvGeral) || 0,
-                itensSemReceita: semReceita,
-                itens: itensProcessados
-            };
-            vendasRegistradas.unshift(relatorio);
-            if (window._fb) {
-                window._fb.fbSave('vendas', relatorio.id, relatorio).catch(e => console.error('Erro venda:', e));
-                window._fb.fbLog('importou', 'Vendas', `${dataInicio} a ${dataFim}`, `${totalUnidades} unidades | ${semReceita} sem receita`).catch(()=>{});
-            }
-
-            renderVendasHistorico();
-            input.value = '';
-
-            alert(`✅ Relatório importado!\n\n${itensProcessados.length} itens · ${totalUnidades} unidades\n${semReceita > 0 ? `⚠️ ${semReceita} item(ns) sem receita cadastrada` : '✅ Todos os itens têm receita!'}`);
-        }
-
         function toggleResultadoVendas() {
             const body = document.getElementById('vendasResultadoBody');
             const btn  = document.getElementById('btnToggleResultado');
@@ -6743,11 +6660,52 @@
         }
 
         function filtrarTabelaVendas() {
-            const termo = (document.getElementById('vendasFiltroNome').value || '').toLowerCase().trim();
+            const termo  = (document.getElementById('vendasFiltroNome').value || '').toLowerCase().trim();
+            const catSel = document.getElementById('vendasFiltroCategoria')?.value || '';
+            let vQtd = 0, vFat = 0, vCusto = 0, vLucro = 0;
             document.querySelectorAll('#vendasTabelaItens tr').forEach(tr => {
                 const nome = (tr.querySelector('td strong') || {}).textContent || '';
-                tr.style.display = (!termo || nome.toLowerCase().includes(termo)) ? '' : 'none';
+                const cat  = tr.dataset.categoria || '';
+                const okNome = !termo  || nome.toLowerCase().includes(termo);
+                const okCat  = !catSel || cat === catSel;
+                const visivel = okNome && okCat;
+                tr.style.display = visivel ? '' : 'none';
+                if (visivel) {
+                    vQtd   += parseFloat(tr.dataset.qtd)   || 0;
+                    vFat   += parseFloat(tr.dataset.fat)   || 0;
+                    vCusto += parseFloat(tr.dataset.custo) || 0;
+                    vLucro += parseFloat(tr.dataset.lucro) || 0;
+                }
             });
+            _atualizarSubtotalFiltrado(!!(termo || catSel), { termo, catSel, vQtd, vFat, vCusto, vLucro });
+        }
+
+        function _atualizarSubtotalFiltrado(filtroAtivo, d) {
+            const tfoot = document.getElementById('vendasTabelaTotais');
+            if (!tfoot) return;
+            let row = document.getElementById('vendasSubtotalRow');
+            if (!filtroAtivo) { if (row) row.remove(); return; }
+            if (!row) {
+                row = document.createElement('tr');
+                row.id = 'vendasSubtotalRow';
+                tfoot.insertBefore(row, tfoot.firstElementChild);
+            }
+            const cmv    = d.vFat > 0 ? (d.vCusto / d.vFat * 100) : 0;
+            const cmvCor = (typeof getCMVColor === 'function') ? getCMVColor(cmv).color : '#aaa';
+            let label = 'SUBTOTAL FILTRADO';
+            if (d.catSel && d.termo) label = `SUBTOTAL — ${d.catSel} · "${d.termo}"`;
+            else if (d.catSel)       label = `SUBTOTAL — ${d.catSel}`;
+            else if (d.termo)        label = `SUBTOTAL — "${d.termo}"`;
+            row.style.cssText = 'background:#2a2416; font-weight:700;';
+            row.innerHTML = `
+                <td style="border-left:3px solid #f97316;"><strong style="color:#f97316;">${label}</strong></td>
+                <td class="text-right">${d.vQtd}</td>
+                <td class="text-right">—</td>
+                <td class="text-right">${d.vFat > 0 ? formatarMoeda(d.vFat) : '—'}</td>
+                <td class="text-right">—</td>
+                <td class="text-right" style="color:#e74c3c;">${d.vCusto > 0 ? formatarMoeda(d.vCusto) : '—'}</td>
+                <td class="text-right" style="color:${d.vLucro >= 0 ? '#27ae60' : '#e74c3c'};">${formatarMoeda(d.vLucro)}</td>
+                <td class="text-right">${d.vFat > 0 ? `<strong style="color:${cmvCor};">${cmv.toFixed(1)}%</strong>` : '—'}</td>`;
         }
 
         function carregarRelatorio(id) {
@@ -6788,6 +6746,11 @@
             const itens = (v.itens || []).filter(item => {
                 const nome = (item.nomeItem || item.name || '').toLowerCase().trim();
                 return !_palavrasTotal.some(p => nome === p);
+            }).map(item => {
+                if (item.categoria) return item;
+                const nome = (item.nomeItem || item.name || '').toLowerCase().trim();
+                const rec = recipes.find(r => (r.name || '').toLowerCase().trim() === nome);
+                return { ...item, categoria: rec ? (rec.categoria || '') : '' };
             });
 
             const tbody = document.getElementById('vendasTabelaItens');
@@ -6795,7 +6758,7 @@
 
             if (tbody) {
                 tbody.innerHTML = itens.map(item => `
-                    <tr style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
+                    <tr data-categoria="${item.categoria || ''}" data-qtd="${item.qtd || 0}" data-fat="${item.subtotal || 0}" data-custo="${item.custoTotal || 0}" data-lucro="${item.lucro || 0}" style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
                         <td>
                             <strong>${item.nomeItem || item.name}</strong>
                             ${!item.encontrou ? '<span style="color:#f39c12; font-size:11px; margin-left:6px;">⚠️ sem receita</span>' : ''}
@@ -6863,6 +6826,7 @@
 
             _dreFaturamento = v.faturamento || 0;
             _dreCusto       = v.custo || 0;
+            _dreDias        = _calcDreDias(v.dataInicio, v.dataFim);
             calcularDRE();
 
             setTimeout(() => {
@@ -6870,7 +6834,17 @@
             }, 100);
         }
 
-        let _dreFaturamento = 0, _dreCusto = 0;
+        let _dreFaturamento = 0, _dreCusto = 0, _dreDias = 30;
+
+        // Dias do período (inclusive): 20/05→20/05 = 1; 01/05→10/05 = 10. Fallback 30 (mês cheio).
+        function _calcDreDias(ini, fim) {
+            if (!ini || !fim) return 30;
+            const d1 = new Date(ini + 'T12:00:00');
+            const d2 = new Date(fim + 'T12:00:00');
+            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 30;
+            const dias = Math.round((d2 - d1) / 86400000) + 1;
+            return dias > 0 ? dias : 30;
+        }
 
         function calcularDRE() {
             if (!_dreFaturamento) return;
@@ -6878,7 +6852,10 @@
             const simples  = (parseFloat(document.getElementById('dreSimples')?.value) || 0) / 100;
             const cartao   = (parseFloat(document.getElementById('dreTaxaCartao')?.value) || 0) / 100;
             const custo    = _dreCusto;
-            const fixos    = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
+            const diasNoMes = 30; // base comercial fixa, para período que pode cruzar meses
+            const fixosMes = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
+            const dias     = (_dreDias && _dreDias > 0) ? _dreDias : 30;
+            const fixos    = fixosMes * (dias / diasNoMes);
 
             const vlSimples = fat * simples;
             const vlCartao  = fat * cartao;
@@ -6895,6 +6872,7 @@
             set('dreCartaoTxt',  `(-) Taxa Cartão ${pCartao}%`);
             set('dreCartaoVal',  `- ${formatarMoeda(vlCartao)}`);
             set('dreInsumosVal', `- ${formatarMoeda(custo)}`);
+            set('dreFixosTxt',   `(-) Custos Fixos (${dias} dias)`);
             set('dreFixosVal',   `- ${formatarMoeda(fixos)}`);
 
             const lucroEl = document.getElementById('dreLucroLiq');
@@ -7162,7 +7140,7 @@
                                     const nome = (item.nomeItem || item.name || '').toLowerCase().trim();
                                     return !['total','subtotal','soma','sum','grand total','totais','geral'].includes(nome);
                                 }).map(item => `
-                                    <tr style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
+                                    <tr data-categoria="${item.categoria || ''}" data-qtd="${item.qtd || 0}" data-fat="${item.subtotal || 0}" data-custo="${item.custoTotal || 0}" data-lucro="${item.lucro || 0}" style="${!item.encontrou ? 'background:#2a1f0a;' : ''}">
                                         <td>
                                             <strong>${item.nomeItem || item.name || ''}</strong>
                                             ${!item.encontrou ? '<span style="color:#f39c12; font-size:10px; margin-left:4px;">⚠️</span>' : ''}
@@ -7203,13 +7181,62 @@
         // ============= FINANCEIRO — DRE & CENÁRIOS ==================
         // ============================================================
         let _finPeriod = 'mes';
+        let _finCustomStart = null;
+        let _finCustomEnd   = null;
         let _finCharts = { pie: null, comp: null };
         let _finLastDre = null; // mantém último DRE para o simulador
 
         function setFinPeriod(p) {
             _finPeriod = p;
             document.querySelectorAll('[data-finp]').forEach(b => b.classList.toggle('active', b.dataset.finp === p));
+            const cc = document.getElementById('finCustomClear');
+            if (cc) cc.style.display = (p === 'custom') ? 'inline-flex' : 'none';
             _finUpdate();
+        }
+
+        function setFinPeriodCustom() {
+            const ini = document.getElementById('finDataInicio')?.value;
+            const fim = document.getElementById('finDataFim')?.value;
+            if (!ini || !fim) { alert('Preencha as duas datas para aplicar o período customizado.'); return; }
+            const [iy, im, id] = ini.split('-').map(Number);
+            const [fy, fm, fd] = fim.split('-').map(Number);
+            const start = new Date(iy, im - 1, id);
+            const end   = new Date(fy, fm - 1, fd, 23, 59, 59, 999);
+            if (start > end) { alert('A data inicial deve ser anterior ou igual à data final.'); return; }
+            _finCustomStart = start;
+            _finCustomEnd   = end;
+            _finPeriod = 'custom';
+            document.querySelectorAll('[data-finp]').forEach(b => b.classList.toggle('active', b.dataset.finp === 'custom'));
+            const cc = document.getElementById('finCustomClear');
+            if (cc) cc.style.display = 'inline-flex';
+            _finUpdate();
+        }
+
+        function clearFinCustomPeriod() {
+            const ini = document.getElementById('finDataInicio'); if (ini) ini.value = '';
+            const fim = document.getElementById('finDataFim');    if (fim) fim.value = '';
+            _finCustomStart = null;
+            _finCustomEnd   = null;
+            setFinPeriod('mes');
+        }
+
+        // Wrappers do Financeiro: tratam o caso 'custom' e delegam pros helpers de Análise.
+        function _finPeriodRange(p) {
+            if (p === 'custom' && _finCustomStart && _finCustomEnd) {
+                return { start: _finCustomStart, end: _finCustomEnd };
+            }
+            return _anaPeriodRange(p);
+        }
+
+        function _finPrevRange(p) {
+            if (p === 'custom' && _finCustomStart && _finCustomEnd) {
+                const len = _finCustomEnd.getTime() - _finCustomStart.getTime();
+                return {
+                    start: new Date(_finCustomStart.getTime() - len - 1),
+                    end:   new Date(_finCustomStart.getTime() - 1)
+                };
+            }
+            return _anaPrevRange(p);
         }
 
         function _finReadCfg() {
@@ -7232,6 +7259,28 @@
             tot.totalCartoes = tot.debito + tot.credito + tot.cartao + tot.vr;
             tot.total = tot.pix + tot.dinheiro + tot.totalCartoes;
             return tot;
+        }
+
+        // Agrega meios de pagamento dos pedidos reais (clientes/{slug}/pedidos).
+        // Cada pedido tem p.pagamento (string: pix/dinheiro/cartao/credito/debito) e p.total.
+        function _finPagamentosPedidos(pedidos) {
+            const tot = { pix:0, dinheiro:0, debito:0, credito:0, cartao:0, vr:0 };
+            for (const p of pedidos) {
+                const valor = Number(p.total) || (Number(p.subtotal || 0) + Number(p.taxaEntrega || 0));
+                const metodo = (p.pagamento || '').toLowerCase();
+                if (metodo in tot) tot[metodo] += valor;
+            }
+            tot.totalCartoes = tot.debito + tot.credito + tot.cartao + tot.vr;
+            tot.total = tot.pix + tot.dinheiro + tot.totalCartoes;
+            return tot;
+        }
+
+        function _finSomaPagamentos(a, b) {
+            const r = { pix:0, dinheiro:0, debito:0, credito:0, cartao:0, vr:0 };
+            for (const k of Object.keys(r)) r[k] = (a[k] || 0) + (b[k] || 0);
+            r.totalCartoes = r.debito + r.credito + r.cartao + r.vr;
+            r.total = r.pix + r.dinheiro + r.totalCartoes;
+            return r;
         }
 
         function _finFixosRateado(periodo) {
@@ -7267,8 +7316,8 @@
         }
 
         async function _finUpdate() {
-            const cur  = _anaPeriodRange(_finPeriod);
-            const prev = _anaPrevRange(_finPeriod);
+            const cur  = _finPeriodRange(_finPeriod);
+            const prev = _finPrevRange(_finPeriod);
 
             // Aggregate: híbrido (Anota AI pré-corte + pedidos reais pós-corte)
             const _vazio = () => ({ faturamento:0, custo:0, unidades:0, numPedidos:0, itens:{} });
@@ -7277,11 +7326,28 @@
                 prev ? _anaGetAgg(prev.start, prev.end) : Promise.resolve(_vazio())
             ]);
 
-            // Pagamentos: apenas vendasRegistradas (Anota AI) — pedidos reais não têm breakdown de meio de pagamento
-            const vCurPag  = _anaFilterVendas(cur.start, cur.end);
-            const vPrevPag = prev ? _anaFilterVendas(prev.start, prev.end) : [];
-            const pagCur   = _finPagamentos(vCurPag);
-            const pagPrev  = _finPagamentos(vPrevPag);
+            // Pagamentos: combina vendasRegistradas (Anota AI, pré-corte) + pedidos reais (Firestore, pós-corte).
+            // Mesma partição por _ANA_CORTE_PEDIDOS usada em _anaGetAgg — garante que o total do breakdown bata com o faturamento do DRE.
+            async function _pagCombinado(start, end) {
+                const usaVendas  = start < _ANA_CORTE_PEDIDOS;
+                const usaPedidos = end   >= _ANA_CORTE_PEDIDOS;
+                const pagV = usaVendas
+                    ? _finPagamentos(_anaFilterVendas(start, usaPedidos ? new Date(_ANA_CORTE_PEDIDOS.getTime() - 1) : end))
+                    : _finPagamentos([]);
+                let pagP = _finPagamentosPedidos([]);
+                if (usaPedidos && window._fb?.fbQueryPedidos) {
+                    const iniP = usaVendas ? _ANA_CORTE_PEDIDOS : start;
+                    try {
+                        const pedidos = await window._fb.fbQueryPedidos(_anaDateToStr(iniP), _anaDateToStr(end));
+                        pagP = _finPagamentosPedidos(pedidos);
+                    } catch (e) { console.warn('[Financeiro] Falha ao buscar pedidos para pagamentos:', e); }
+                }
+                return _finSomaPagamentos(pagV, pagP);
+            }
+            const [pagCur, pagPrev] = await Promise.all([
+                _pagCombinado(cur.start, cur.end),
+                prev ? _pagCombinado(prev.start, prev.end) : Promise.resolve(_finPagamentos([]))
+            ]);
             const cfg     = _finReadCfg();
             const fixosCur  = _finFixosRateado(cur);
             const fixosPrev = _finFixosRateado(prev);
@@ -7300,7 +7366,6 @@
             _finRenderComparativo(dre, drePrev);
             _finRenderPie(dre);
             _finRenderPagamentos(dre);
-            _finRenderSim(dre);
         }
 
         function _finRenderDre(dre, prev) {
@@ -7558,106 +7623,6 @@
                     <div style="font-size:18px; flex-shrink:0;">💡</div>
                     <div>Se <strong>100%</strong> das vendas fossem em PIX, você economizaria <strong>${fmt(economiaPotencial)}</strong> em taxas de cartão neste período. Considere incentivar o PIX (desconto, programa de fidelidade).</div>
                 </div>` : ''}`;
-        }
-
-        function _finRenderSim(dre) {
-            const c = document.getElementById('finSimContainer');
-            if (!c) return;
-            if (dre.fat === 0) {
-                c.innerHTML = '<div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1rem; color:#777; text-align:center; font-size:13px;">Simulador disponível quando houver vendas no período.</div>';
-                return;
-            }
-            const fmt = v => 'R$ ' + (v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
-            const pctAtualPix = dre.pag.total > 0 ? (dre.pag.pix / dre.pag.total) * 100 : 0;
-
-            c.innerHTML = `
-                <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem;">
-                    <div style="font-size:11px; color:var(--text3); margin-bottom:14px;">
-                        Mexa nos sliders para ver o impacto no lucro. O cenário usa o período selecionado como base.
-                    </div>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-bottom:1.5rem;">
-                        <div>
-                            <label style="font-size:11px; color:var(--text3); text-transform:uppercase; font-weight:600;">Variação de vendas</label>
-                            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-                                <input type="range" id="finSimVendas" min="-50" max="100" step="1" value="0" oninput="_finSimAtualizar()" style="flex:1;">
-                                <span id="finSimVendasVal" style="font-size:14px; font-weight:700; color:#ff6b35; min-width:50px; text-align:right;">+0%</span>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="font-size:11px; color:var(--text3); text-transform:uppercase; font-weight:600;">Variação de CMV (pp)</label>
-                            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-                                <input type="range" id="finSimCmv" min="-15" max="15" step="0.5" value="0" oninput="_finSimAtualizar()" style="flex:1;">
-                                <span id="finSimCmvVal" style="font-size:14px; font-weight:700; color:#e74c3c; min-width:50px; text-align:right;">+0pp</span>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="font-size:11px; color:var(--text3); text-transform:uppercase; font-weight:600;">% em PIX (atual ${pctAtualPix.toFixed(0)}%)</label>
-                            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
-                                <input type="range" id="finSimPix" min="0" max="100" step="1" value="${pctAtualPix.toFixed(0)}" oninput="_finSimAtualizar()" style="flex:1;">
-                                <span id="finSimPixVal" style="font-size:14px; font-weight:700; color:#4ade80; min-width:50px; text-align:right;">${pctAtualPix.toFixed(0)}%</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="finSimResultado" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;"></div>
-                </div>`;
-
-            _finSimAtualizar();
-        }
-
-        function _finSimAtualizar() {
-            const dre = _finLastDre;
-            if (!dre) return;
-            const dvendas = parseFloat(document.getElementById('finSimVendas')?.value || 0) / 100;
-            const dcmvPp  = parseFloat(document.getElementById('finSimCmv')?.value    || 0);
-            const pctPix  = parseFloat(document.getElementById('finSimPix')?.value    || 0) / 100;
-            document.getElementById('finSimVendasVal').textContent = (dvendas >= 0 ? '+' : '') + (dvendas*100).toFixed(0) + '%';
-            document.getElementById('finSimCmvVal').textContent    = (dcmvPp  >= 0 ? '+' : '') + dcmvPp.toFixed(1) + 'pp';
-            document.getElementById('finSimPixVal').textContent    = (pctPix*100).toFixed(0) + '%';
-
-            const cfg = dre.cfg;
-            const novoFat = dre.fat * (1 + dvendas);
-            // Novo CMV: percentual atual ± dcmvPp
-            const novoCmvPct = (dre.cmvPct + dcmvPp) / 100;
-            const novoCmv = Math.max(0, novoFat * novoCmvPct);
-            const novoSimples = novoFat * cfg.simples;
-            // Taxa cartão: pix ganha pctPix; restante distribui proporcionalmente entre os métodos com taxa atuais
-            const totalAtualSemDinheiro = dre.pag.totalCartoes + dre.pag.pix;
-            const totalNovoMonetario = totalAtualSemDinheiro > 0 ? novoFat * (totalAtualSemDinheiro / Math.max(dre.pag.total, 1)) : novoFat;
-            const novoPix    = totalNovoMonetario * pctPix;
-            const restoCart  = totalNovoMonetario - novoPix;
-            const propDeb = dre.pag.totalCartoes > 0 ? dre.pag.debito / dre.pag.totalCartoes : 0;
-            const propCre = dre.pag.totalCartoes > 0 ? dre.pag.credito / dre.pag.totalCartoes : 1;
-            const propVr  = dre.pag.totalCartoes > 0 ? dre.pag.vr / dre.pag.totalCartoes : 0;
-            const propCar = dre.pag.totalCartoes > 0 ? dre.pag.cartao / dre.pag.totalCartoes : 0;
-            const novaTaxa = novoPix * cfg.taxaPix +
-                             restoCart * propDeb * cfg.taxaDebito +
-                             restoCart * propCre * cfg.taxaCredito +
-                             restoCart * propVr  * cfg.taxaVR +
-                             restoCart * propCar * cfg.taxaCartao;
-            const novoLucro = novoFat - novoSimples - novoCmv - novaTaxa - dre.fixos;
-            const novaMargem = novoFat > 0 ? (novoLucro / novoFat) * 100 : 0;
-
-            const dLucro = novoLucro - dre.lucroLiq;
-            const dMargem = novaMargem - dre.margemLiqPct;
-            const fmt = v => 'R$ ' + (v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
-            const sinal = v => v >= 0 ? '+' : '';
-
-            document.getElementById('finSimResultado').innerHTML = `
-                <div class="anaKpi" style="border-top-color:#777;">
-                    <div class="anaKpi-label">Cenário Atual</div>
-                    <div class="anaKpi-value">${fmt(dre.lucroLiq)}</div>
-                    <div class="anaKpi-delta flat">${dre.margemLiqPct.toFixed(1)}% margem</div>
-                </div>
-                <div class="anaKpi" style="border-top-color:${dLucro >= 0 ? '#4ade80' : '#ff6b6b'};">
-                    <div class="anaKpi-label">Variação Simulada</div>
-                    <div class="anaKpi-value" style="color:${dLucro >= 0 ? '#4ade80' : '#ff6b6b'};">${sinal(dLucro)}${fmt(dLucro)}</div>
-                    <div class="anaKpi-delta ${dMargem >= 0 ? 'up' : 'down'}">${sinal(dMargem)}${dMargem.toFixed(1)}pp na margem</div>
-                </div>
-                <div class="anaKpi" style="border-top-color:#ff6b35;">
-                    <div class="anaKpi-label">Cenário Simulado</div>
-                    <div class="anaKpi-value" style="color:${novoLucro >= 0 ? '#4ade80' : '#ff6b6b'};">${fmt(novoLucro)}</div>
-                    <div class="anaKpi-delta flat">${novaMargem.toFixed(1)}% margem · Vendas ${fmt(novoFat)}</div>
-                </div>`;
         }
 
         // Exporta a aba Financeiro como PDF (via janela de impressão)
