@@ -1495,17 +1495,17 @@ textarea.fi{resize:vertical;min-height:60px}
     </div>
     <div class="form-grid" style="margin-bottom:12px">
       <div class="fg">
-        <label class="fl">Cliente</label>
+        <label class="fl" style="color:var(--orange)">Cliente</label>
         <input type="text" class="fi" id="npCliente" placeholder="Nome (opcional)">
       </div>
       <div class="fg">
-        <label class="fl">Telefone</label>
+        <label class="fl" style="color:var(--orange)">Telefone</label>
         <input type="text" class="fi" id="npTelefone" placeholder="(00) 00000-0000 (opcional)" oninput="npAutoBuscaCliente()">
         <div id="npClienteIndicador" style="display:none;font-size:11px;color:#34d399;margin-top:4px;font-weight:500"></div>
       </div>
     </div>
     <div style="margin-bottom:14px">
-      <div class="fl" style="margin-bottom:6px">Tipo</div>
+      <div class="fl" style="margin-bottom:6px;color:var(--orange)">Tipo</div>
       <div style="display:flex;gap:8px">
         <button class="np-tipo-btn active" id="npTipoParaLevar" onclick="npSetTipo('retirada',this)">🥡 Para Levar</button>
         <button class="np-tipo-btn" id="npTipoDelivery" onclick="npSetTipo('delivery',this)">🛵 Delivery</button>
@@ -1544,7 +1544,7 @@ textarea.fi{resize:vertical;min-height:60px}
       </div>
     </div>
     <div style="margin-bottom:12px">
-      <div class="fl" style="margin-bottom:6px">Adicionar Item</div>
+      <div class="fl" style="margin-bottom:6px;color:var(--orange)">Adicionar Item</div>
       <input type="text" class="fi" id="npBusca" placeholder="Buscar produto..." oninput="npRenderBusca()">
       <div id="npResultados" style="margin-top:6px;max-height:200px;overflow-y:auto"></div>
     </div>
@@ -1553,7 +1553,7 @@ textarea.fi{resize:vertical;min-height:60px}
       <div id="npCart"></div>
     </div>
     <div class="fg" style="margin-bottom:14px">
-      <label class="fl">Observações</label>
+      <label class="fl" style="color:var(--orange)">Observações</label>
       <textarea class="fi" id="npObs" placeholder="Observações gerais (opcional)" rows="2"></textarea>
     </div>
     <div id="npPagamentoSection" style="margin-bottom:14px;display:none;padding:10px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3);border-radius:8px">
@@ -1567,7 +1567,7 @@ textarea.fi{resize:vertical;min-height:60px}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:14px">
       <div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Total</div>
+        <div style="font-size:10px;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Total</div>
         <div id="npTotal" style="font-size:22px;font-weight:700;color:var(--orange)">R$ 0,00</div>
       </div>
       <button id="npConfirmarBtn" class="btn btn-primary" style="padding:10px 24px;font-size:14px" onclick="npConfirmar()">✓ Confirmar Pedido</button>
