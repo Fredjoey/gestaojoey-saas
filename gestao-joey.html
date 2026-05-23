@@ -6425,6 +6425,31 @@
             }
         }
 
+        function _renderAdicionaisVendidos(adicionaisVendidos) {
+            const adicSection = document.getElementById('vendasAdicionaisSection');
+            const adicBody    = document.getElementById('vendasAdicionaisBody');
+            const adicLista   = Array.isArray(adicionaisVendidos) ? adicionaisVendidos : [];
+            if (adicBody) {
+                if (adicLista.length === 0) {
+                    adicBody.innerHTML = '';
+                } else {
+                    const maxQtd = Math.max(...adicLista.map(a => a.qtd));
+                    adicBody.innerHTML = adicLista.map(a => {
+                        const pct = maxQtd > 0 ? ((a.qtd / maxQtd) * 100).toFixed(0) : 0;
+                        return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                            <span style="flex:1; min-width:0; font-size:13px; color:#ccc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${a.name}</span>
+                            <div style="flex:1; height:8px; background:#2a2a2a; border-radius:4px; overflow:hidden;">
+                                <div style="height:100%; width:${pct}%; background:#E87722; border-radius:4px;"></div>
+                            </div>
+                            <span style="min-width:50px; text-align:right; font-size:13px; font-weight:700; color:#E87722;">${a.qtd}x</span>
+                            <span style="min-width:80px; text-align:right; font-size:11px; color:#777;">${a.faturamento > 0 ? formatarMoeda(a.faturamento) : '—'}</span>
+                        </div>`;
+                    }).join('');
+                }
+            }
+            if (adicSection) adicSection.style.display = adicLista.length > 0 ? 'block' : 'none';
+        }
+
         async function _processarPedidosFirestore(rowsCombinadas, dataInicio, dataFim, numPedidos, faturamentoReal, ticketMedio, pagamentos, adicionaisVendidos) {
             const normalizar = str => str.toLowerCase()
                 .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -6544,28 +6569,8 @@
             if (pagSection) pagSection.style.display = Object.values(pagamentos).some(v => v > 0) ? 'block' : 'none';
 
             // Adicionais mais vendidos
-            const adicSection = document.getElementById('vendasAdicionaisSection');
-            const adicBody    = document.getElementById('vendasAdicionaisBody');
-            const adicLista   = Array.isArray(adicionaisVendidos) ? adicionaisVendidos : [];
-            if (adicBody) {
-                if (adicLista.length === 0) {
-                    adicBody.innerHTML = '<div style="color:#777; font-size:13px;">Nenhum adicional vendido no período.</div>';
-                } else {
-                    const maxQtd = Math.max(...adicLista.map(a => a.qtd));
-                    adicBody.innerHTML = adicLista.map(a => {
-                        const pct = maxQtd > 0 ? ((a.qtd / maxQtd) * 100).toFixed(0) : 0;
-                        return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-                            <span style="flex:1; min-width:0; font-size:13px; color:#ccc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${a.name}</span>
-                            <div style="flex:1; height:8px; background:#2a2a2a; border-radius:4px; overflow:hidden;">
-                                <div style="height:100%; width:${pct}%; background:#E87722; border-radius:4px;"></div>
-                            </div>
-                            <span style="min-width:50px; text-align:right; font-size:13px; font-weight:700; color:#E87722;">${a.qtd}x</span>
-                            <span style="min-width:80px; text-align:right; font-size:11px; color:#777;">${a.faturamento > 0 ? formatarMoeda(a.faturamento) : '—'}</span>
-                        </div>`;
-                    }).join('');
-                }
-            }
-            if (adicSection) adicSection.style.display = adicLista.length > 0 ? 'block' : 'none';
+            const adicLista = Array.isArray(adicionaisVendidos) ? adicionaisVendidos : [];
+            _renderAdicionaisVendidos(adicLista);
 
             // Período ativo
             const per = `${new Date(dataInicio+'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(dataFim+'T12:00:00').toLocaleDateString('pt-BR')}`;
@@ -6598,7 +6603,8 @@
                 itens: itensProcessados,
                 numPedidos,
                 ticketMedio,
-                pagamentos
+                pagamentos,
+                adicionais: adicLista
             };
             vendasRegistradas.unshift(relatorio);
             if (window._fb) {
@@ -6960,6 +6966,9 @@
             } else if (pagSection) {
                 pagSection.style.display = 'none';
             }
+
+            // Adicionais mais vendidos (relatórios salvos com o campo)
+            _renderAdicionaisVendidos(v.adicionais);
 
             const resultado = document.getElementById('vendasResultado');
             if (resultado) resultado.style.display = 'block';
