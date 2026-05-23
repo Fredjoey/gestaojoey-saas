@@ -1148,7 +1148,7 @@
               <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
                 <div style="background:#141414;border-radius:8px;padding:14px"><div style="font-size:12px;color:#888">A pagar (total)</div><div id="apTotal" style="font-size:22px;font-weight:500;color:#EF9F27">R$ 0,00</div><div id="apTotalQtd" style="font-size:11px;color:#666">0 notas</div></div>
                 <div style="background:#141414;border-radius:8px;padding:14px"><div style="font-size:12px;color:#888">Vencidas</div><div id="apVencidas" style="font-size:22px;font-weight:500;color:#E24B4A">R$ 0,00</div><div id="apVencidasQtd" style="font-size:11px;color:#666">0 notas</div></div>
-                <div style="background:#141414;border-radius:8px;padding:14px"><div style="font-size:12px;color:#888">Vencem em 3 dias</div><div id="apVencendo" style="font-size:22px;font-weight:500;color:#EF9F27">R$ 0,00</div><div id="apVencendoQtd" style="font-size:11px;color:#666">0 notas</div></div>
+                <div style="background:#141414;border-radius:8px;padding:14px"><div style="font-size:12px;color:#888">Vencem em 7 dias</div><div id="apVencendo" style="font-size:22px;font-weight:500;color:#EF9F27">R$ 0,00</div><div id="apVencendoQtd" style="font-size:11px;color:#666">0 notas</div></div>
                 <div style="background:#141414;border-radius:8px;padding:14px"><div style="font-size:12px;color:#888">Pagas no mês</div><div id="apPagas" style="font-size:22px;font-weight:500;color:#639922">R$ 0,00</div><div id="apPagasQtd" style="font-size:11px;color:#666">0 notas</div></div>
               </div>
               <div id="notasAPagarLista"></div>
@@ -6008,8 +6008,8 @@
 
             const pend = notasLancadas.filter(n => n.vencimento && n.statusPagamento !== 'pago');
             const vencidas = pend.filter(n => dias(n.vencimento) < 0).sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento));
-            const vencendo = pend.filter(n => dias(n.vencimento) >= 0 && dias(n.vencimento) <= 3).sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento));
-            const proximas = pend.filter(n => dias(n.vencimento) > 3).sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento));
+            const vencendo = pend.filter(n => dias(n.vencimento) >= 0 && dias(n.vencimento) <= 7).sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento));
+            const proximas = pend.filter(n => dias(n.vencimento) > 7).sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento));
             const pagasMes = notasLancadas.filter(n => n.statusPagamento === 'pago' && (n.dataPagamento||'').startsWith(mesAtual));
 
             const soma = arr => arr.reduce((s,n)=>s+(parseFloat(n.total)||0),0);
@@ -6030,7 +6030,7 @@
             } else if (vencendo.length) {
                 banner.style.display = 'flex';
                 banner.style.background = '#3a2e14'; banner.style.border = '1px solid #EF9F27';
-                banner.innerHTML = `<span style="color:#FAC775;font-weight:500">⏰ ${vencendo.length} nota(s) vencendo em até 3 dias · ${fmt(soma(vencendo))}</span>`;
+                banner.innerHTML = `<span style="color:#FAC775;font-weight:500">⏰ ${vencendo.length} nota(s) vencendo em até 7 dias · ${fmt(soma(vencendo))}</span>`;
             } else {
                 banner.style.display = 'none';
             }
