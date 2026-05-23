@@ -1634,13 +1634,13 @@
                 <div style="margin-top:1rem; font-size:12px; color:#777;">
                     ⚠️ Itens sem receita cadastrada aparecem destacados — cadastre a receita para calcular custo e margem.
                 </div>
-                <div id="vendasPagamentosSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
-                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">💳 Formas de Pagamento</div>
-                    <div id="vendasPagamentosBody"></div>
-                </div>
                 <div id="vendasAdicionaisSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
                     <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">➕ Adicionais mais vendidos</div>
                     <div id="vendasAdicionaisBody"></div>
+                </div>
+                <div id="vendasPagamentosSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
+                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">💳 Formas de Pagamento</div>
+                    <div id="vendasPagamentosBody"></div>
                 </div>
                 </div><!-- fim vendasResultadoBody -->
             </div>
@@ -6545,6 +6545,10 @@
                 </tr>
             `;
 
+            // Adicionais mais vendidos
+            const adicLista = Array.isArray(adicionaisVendidos) ? adicionaisVendidos : [];
+            _renderAdicionaisVendidos(adicLista);
+
             // Pagamentos
             const pagSection = document.getElementById('vendasPagamentosSection');
             const pagBody    = document.getElementById('vendasPagamentosBody');
@@ -6567,10 +6571,6 @@
                     }).join('');
             }
             if (pagSection) pagSection.style.display = Object.values(pagamentos).some(v => v > 0) ? 'block' : 'none';
-
-            // Adicionais mais vendidos
-            const adicLista = Array.isArray(adicionaisVendidos) ? adicionaisVendidos : [];
-            _renderAdicionaisVendidos(adicLista);
 
             // Período ativo
             const per = `${new Date(dataInicio+'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(dataFim+'T12:00:00').toLocaleDateString('pt-BR')}`;
@@ -6942,6 +6942,9 @@
                 `;
             }
 
+            // Adicionais mais vendidos (relatórios salvos com o campo)
+            _renderAdicionaisVendidos(v.adicionais);
+
             // Pagamentos (se existirem no relatório)
             const pagSection = document.getElementById('vendasPagamentosSection');
             const pagBody    = document.getElementById('vendasPagamentosBody');
@@ -6966,9 +6969,6 @@
             } else if (pagSection) {
                 pagSection.style.display = 'none';
             }
-
-            // Adicionais mais vendidos (relatórios salvos com o campo)
-            _renderAdicionaisVendidos(v.adicionais);
 
             const resultado = document.getElementById('vendasResultado');
             if (resultado) resultado.style.display = 'block';
