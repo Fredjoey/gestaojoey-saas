@@ -496,6 +496,7 @@ textarea.fi{resize:vertical;min-height:60px}
   </div>
   <div class="nav-item" onclick="showPanel('salao',this)"><span class="nav-icon">🍽️</span> Salão</div>
   <div class="sb-section">Gestão</div>
+  <div class="nav-item" id="nav-caixa" onclick="showPanel('caixa',this)"><span class="nav-icon">💰</span> Fechamento de Caixa</div>
   <div class="nav-item" onclick="showPanel('cardapio',this)"><span class="nav-icon">🍕</span> Gestor de cardápio</div>
   <div class="nav-item" onclick="showPanel('relatorios',this)"><span class="nav-icon">📊</span> Relatórios</div>
   <div class="nav-item" onclick="showPanel('clientes',this)"><span class="nav-icon">👥</span> Clientes</div>
@@ -1307,6 +1308,80 @@ textarea.fi{resize:vertical;min-height:60px}
       </div>
     </div>
 
+    <div id="panel-caixa" style="display:none;height:100%;overflow:hidden">
+      <div style="height:100%;overflow-y:auto;padding:20px 24px;max-width:900px">
+
+        <!-- Header: data + status -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+          <div>
+            <h2 style="font-size:20px;font-weight:700;color:var(--text);margin:0">💰 Fechamento de Caixa</h2>
+            <div id="cxData" style="font-size:13px;color:var(--text2);margin-top:4px"></div>
+          </div>
+          <div id="cxStatusBadge" style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:999px;background:var(--bg4);color:var(--text2);border:1px solid var(--border2)">—</div>
+        </div>
+
+        <!-- Abertura -->
+        <div id="cxAberturaCard" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:18px">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Abertura do caixa</div>
+          <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="display:block;font-size:13px;color:var(--text2);margin-bottom:6px">Fundo de troco inicial (R$)</label>
+              <input type="number" id="cxFundoTroco" step="0.01" min="0" placeholder="0,00" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:15px;color:var(--text);outline:none">
+            </div>
+            <button id="cxBtnAbrir" onclick="abrirCaixa()" style="padding:11px 22px;background:var(--orange);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Abrir caixa</button>
+          </div>
+        </div>
+
+        <!-- Metric cards -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+            <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Total vendido</div>
+            <div id="cxTotalVendido" style="font-size:24px;font-weight:700;color:var(--orange);margin-top:6px">R$ 0,00</div>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+            <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Nº de pedidos</div>
+            <div id="cxNumPedidos" style="font-size:24px;font-weight:700;color:var(--text);margin-top:6px">0</div>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+            <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Ticket médio</div>
+            <div id="cxTicket" style="font-size:24px;font-weight:700;color:var(--text);margin-top:6px">R$ 0,00</div>
+          </div>
+        </div>
+
+        <!-- Conferência por forma de pagamento -->
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:18px">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px">Conferência por forma de pagamento</div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px">
+              <thead>
+                <tr style="color:var(--text2);text-align:left">
+                  <th style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border2)">Forma</th>
+                  <th style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border2);text-align:right">Sistema</th>
+                  <th style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border2);text-align:right">Real</th>
+                  <th style="padding:8px 10px;font-weight:600;border-bottom:1px solid var(--border2);text-align:right">Diferença</th>
+                </tr>
+              </thead>
+              <tbody id="cxTabelaBody"></tbody>
+            </table>
+          </div>
+          <div id="cxTrocoNota" style="font-size:11px;color:var(--text3);margin-top:10px"></div>
+        </div>
+
+        <!-- Diferença total -->
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 20px;margin-bottom:20px">
+          <div style="font-size:14px;font-weight:600;color:var(--text)">Diferença total do caixa</div>
+          <div id="cxDifTotal" style="font-size:22px;font-weight:700;color:var(--text2)">R$ 0,00</div>
+        </div>
+
+        <!-- Botões -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button id="cxBtnFechar" onclick="fecharCaixa()" style="padding:12px 24px;background:var(--orange);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Fechar caixa do dia</button>
+          <button onclick="abrirHistoricoCaixa()" style="padding:12px 24px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Ver histórico</button>
+        </div>
+
+      </div>
+    </div>
+
     <div id="panel-whatsapp" style="display:none;height:100%;overflow:hidden">
       <div class="panel-inner">
         <div class="panel-head"><h2>📱 Conexão WhatsApp</h2></div>
@@ -1347,6 +1422,17 @@ textarea.fi{resize:vertical;min-height:60px}
       <button class="modal-close" onclick="closeOrderModal()">✕</button>
     </div>
     <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- MODAL HISTÓRICO DE CAIXA -->
+<div class="modal-overlay" id="cxHistModal" onclick="if(event.target===this)fecharHistoricoCaixa()">
+  <div class="modal-box" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title">💰 Histórico de fechamentos</div>
+      <button class="modal-close" onclick="fecharHistoricoCaixa()">✕</button>
+    </div>
+    <div id="cxHistBody" style="font-size:13px;color:var(--text2)">Carregando…</div>
   </div>
 </div>
 
@@ -1678,6 +1764,9 @@ const slug = (
   hostname === '127.0.0.1'
 ) ? 'joey' : hostname.split('.')[0];
 
+// Fechamento de Caixa — só Joey por enquanto
+if (slug !== 'joey') { const nc = document.getElementById('nav-caixa'); if (nc) nc.style.display = 'none'; }
+
 let CLIENTE_PLANO = 'essencial';
 db.doc('clientes/'+slug).onSnapshot(s => {
   CLIENTE_PLANO = s.data()?.plano || 'essencial';
@@ -1777,8 +1866,8 @@ function getDefaultCardapio() {
 }
 
 function showPanel(panel, navEl) {
-  const titulos={pedidos:'Meus Pedidos',salao:'🍽️ Salão',cardapio:'Gestor de Cardápio',relatorios:'Relatórios',clientes:'Relatório de Clientes',fiscal:'Fiscal',config:'Configurações',robo:'🤖 Robô',whatsapp:'📱 Conexão WhatsApp'};
-  ['pedidos','salao','cardapio','relatorios','clientes','fiscal','config','robo','whatsapp'].forEach(p => {
+  const titulos={pedidos:'Meus Pedidos',salao:'🍽️ Salão',caixa:'💰 Fechamento de Caixa',cardapio:'Gestor de Cardápio',relatorios:'Relatórios',clientes:'Relatório de Clientes',fiscal:'Fiscal',config:'Configurações',robo:'🤖 Robô',whatsapp:'📱 Conexão WhatsApp'};
+  ['pedidos','salao','caixa','cardapio','relatorios','clientes','fiscal','config','robo','whatsapp'].forEach(p => {
     document.getElementById('panel-'+p).style.display = p===panel ? 'flex' : 'none';
   });
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -1792,6 +1881,7 @@ function showPanel(panel, navEl) {
   if (panel==='fiscal')     carregarFiscal();
   if (panel==='robo')       carregarRobo();
   if (panel==='salao')      renderSalao();
+  if (panel==='caixa')      renderCaixa();
 }
 
 // ── Conexão WhatsApp ──────────────────────────────────────────────
@@ -7000,6 +7090,189 @@ async function excluirGatilhoCustom(uid) {
 // ── MENSAGENS PROGRAMADAS ─────────────────────────────────────────────────────
 
 // =================== SALÃO ===================
+// =================== FECHAMENTO DE CAIXA (somente Joey) ===================
+const _CX_FORMAS = [
+  { key:'pix',      label:'PIX' },
+  { key:'dinheiro', label:'Dinheiro' },
+  { key:'debito',   label:'Débito' },
+  { key:'credito',  label:'Crédito' },
+];
+let _cxDocId = null;          // YYYY-MM-DD do dia exibido
+let _cxEsperado = { pix:0, dinheiro:0, debito:0, credito:0 };
+let _cxFundo = 0;
+
+function _cxMoney(v)    { return 'R$ ' + (Number(v)||0).toFixed(2).replace('.', ','); }
+function _cxParseNum(v) { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? 0 : n; }
+function _cxHojeBR()    { return new Date().toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' }); }
+function _cxDataToId(dataBR) { const [d,m,a] = dataBR.split('/'); return `${a}-${m}-${d}`; }
+function _cxEsperadoForma(key) { return key === 'dinheiro' ? (_cxEsperado.dinheiro + _cxFundo) : _cxEsperado[key]; }
+
+async function renderCaixa() {
+  const hoje = _cxHojeBR();
+  _cxDocId = _cxDataToId(hoje);
+  document.getElementById('cxData').textContent = 'Dia ' + hoje;
+
+  // Pedidos do dia (exclui cancelados)
+  const doDia = pedidos.filter(p => p.data === hoje && p.status !== 'cancelado');
+
+  // Métricas do dia
+  const totalVendido = doDia.reduce((s,p) => s + (p.total||0), 0);
+  const num = doDia.length;
+  const ticket = num ? totalVendido / num : 0;
+  document.getElementById('cxTotalVendido').textContent = _cxMoney(totalVendido);
+  document.getElementById('cxNumPedidos').textContent   = num;
+  document.getElementById('cxTicket').textContent       = _cxMoney(ticket);
+
+  // Esperado por forma — normaliza minúsculo. 'mesa'/'pendente' contam no total mas ficam fora das 4 formas.
+  _cxEsperado = { pix:0, dinheiro:0, debito:0, credito:0 };
+  doDia.forEach(p => {
+    const forma = (p.pagamento||'').toLowerCase();
+    if (_cxEsperado[forma] !== undefined) _cxEsperado[forma] += (p.total||0);
+  });
+
+  // Carrega doc do caixa do dia
+  let dados = null;
+  try {
+    const snap = await db.doc(`clientes/${slug}/caixa/${_cxDocId}`).get();
+    if (snap.exists) dados = snap.data();
+  } catch(e) { console.error('[CAIXA] erro ao carregar doc:', e); }
+
+  const status  = dados?.status || null;   // 'aberto' | 'fechado' | null
+  const fechado = status === 'fechado';
+  _cxFundo = dados?.fundoTroco || 0;
+
+  // Badge de status
+  const badge = document.getElementById('cxStatusBadge');
+  if (fechado) {
+    badge.textContent = '🔒 Fechado'; badge.style.background = 'var(--bg4)'; badge.style.color = 'var(--text2)';
+  } else if (status === 'aberto') {
+    badge.textContent = '🟢 Aberto'; badge.style.background = 'rgba(52,211,153,0.15)'; badge.style.color = '#34d399';
+  } else {
+    badge.textContent = '⚪ Não aberto'; badge.style.background = 'var(--bg4)'; badge.style.color = 'var(--text2)';
+  }
+
+  // Abertura / fundo de troco
+  const fundoInput = document.getElementById('cxFundoTroco');
+  fundoInput.value = _cxFundo ? _cxFundo.toFixed(2) : '';
+  fundoInput.disabled = (status === 'aberto' || fechado);
+  document.getElementById('cxBtnAbrir').style.display  = (status === 'aberto' || fechado) ? 'none' : '';
+  document.getElementById('cxBtnFechar').style.display = fechado ? 'none' : '';
+
+  // Tabela de conferência
+  const conf = dados?.conferido || {};
+  document.getElementById('cxTabelaBody').innerHTML = _CX_FORMAS.map(f => {
+    const esp = _cxEsperadoForma(f.key);
+    const realVal = conf[f.key];
+    const realStr = (realVal !== undefined && realVal !== null) ? Number(realVal).toFixed(2) : '';
+    return `<tr>
+      <td style="padding:10px;border-bottom:1px solid var(--border)">${f.label}</td>
+      <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right" id="cxEsp-${f.key}">${_cxMoney(esp)}</td>
+      <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right">
+        <input type="number" step="0.01" min="0" value="${realStr}" ${fechado?'disabled':''}
+          oninput="_cxRecalcular()" id="cxReal-${f.key}"
+          style="width:110px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:6px 8px;font-size:13px;color:var(--text);text-align:right;outline:none">
+      </td>
+      <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right" id="cxDif-${f.key}">—</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('cxTrocoNota').textContent =
+    'Dinheiro esperado na gaveta = fundo de troco (' + _cxMoney(_cxFundo) + ') + vendas em dinheiro (' + _cxMoney(_cxEsperado.dinheiro) + ').';
+
+  _cxRecalcular();
+}
+
+function _cxRecalcular() {
+  let difTotal = 0, algumPreenchido = false;
+  _CX_FORMAS.forEach(f => {
+    const input = document.getElementById('cxReal-' + f.key);
+    const cell  = document.getElementById('cxDif-' + f.key);
+    if (!input || !cell) return;
+    if (input.value === '') { cell.textContent = '—'; cell.style.color = 'var(--text3)'; return; }
+    algumPreenchido = true;
+    const dif = _cxParseNum(input.value) - _cxEsperadoForma(f.key);
+    difTotal += dif;
+    if (Math.abs(dif) < 0.005)      { cell.textContent = '✓ Bateu';                                cell.style.color = '#34d399'; }
+    else if (dif < 0)               { cell.textContent = '− ' + _cxMoney(Math.abs(dif)) + ' (falta)'; cell.style.color = '#f87171'; }
+    else                            { cell.textContent = '+ ' + _cxMoney(dif) + ' (sobra)';        cell.style.color = '#fbbf24'; }
+  });
+  const totEl = document.getElementById('cxDifTotal');
+  if (!algumPreenchido) { totEl.textContent = _cxMoney(0); totEl.style.color = 'var(--text2)'; return; }
+  totEl.textContent = (difTotal > 0 ? '+ ' : difTotal < 0 ? '− ' : '') + _cxMoney(Math.abs(difTotal));
+  totEl.style.color = Math.abs(difTotal) < 0.005 ? '#34d399' : (difTotal < 0 ? '#f87171' : '#fbbf24');
+}
+
+async function abrirCaixa() {
+  const fundo = _cxParseNum(document.getElementById('cxFundoTroco').value);
+  try {
+    await db.doc(`clientes/${slug}/caixa/${_cxDocId}`).set({
+      fundoTroco: fundo,
+      status: 'aberto',
+      abertoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    notify('Caixa aberto!');
+    renderCaixa();
+  } catch(e) { console.error('[CAIXA] abrir:', e); notify('Erro ao abrir caixa: ' + e.message, 'error'); }
+}
+
+async function fecharCaixa() {
+  const conferido = {};
+  _CX_FORMAS.forEach(f => { conferido[f.key] = _cxParseNum(document.getElementById('cxReal-' + f.key)?.value); });
+  const esperado = {
+    pix:      _cxEsperado.pix,
+    dinheiro: _cxEsperado.dinheiro + _cxFundo,
+    debito:   _cxEsperado.debito,
+    credito:  _cxEsperado.credito,
+  };
+  const diferencaTotal = _CX_FORMAS.reduce((s,f) => s + (conferido[f.key] - esperado[f.key]), 0);
+  const hoje = _cxHojeBR();
+  const doDia = pedidos.filter(p => p.data === hoje && p.status !== 'cancelado');
+  const totalVendido = doDia.reduce((s,p) => s + (p.total||0), 0);
+  try {
+    await db.doc(`clientes/${slug}/caixa/${_cxDocId}`).set({
+      conferido, esperado, diferencaTotal, totalVendido,
+      status: 'fechado',
+      fechadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    notify('Caixa fechado!');
+    renderCaixa();
+  } catch(e) { console.error('[CAIXA] fechar:', e); notify('Erro ao fechar caixa: ' + e.message, 'error'); }
+}
+
+async function abrirHistoricoCaixa() {
+  const body = document.getElementById('cxHistBody');
+  body.innerHTML = 'Carregando…';
+  document.getElementById('cxHistModal').classList.add('show');
+  try {
+    const snap = await db.collection(`clientes/${slug}/caixa`).get();
+    const docs = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => b.id.localeCompare(a.id));
+    if (!docs.length) { body.innerHTML = '<div style="color:var(--text3);text-align:center;padding:24px">Nenhum fechamento ainda.</div>'; return; }
+    body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="color:var(--text2);text-align:left">
+        <th style="padding:8px;border-bottom:1px solid var(--border2)">Data</th>
+        <th style="padding:8px;border-bottom:1px solid var(--border2);text-align:right">Vendido</th>
+        <th style="padding:8px;border-bottom:1px solid var(--border2);text-align:right">Diferença</th>
+        <th style="padding:8px;border-bottom:1px solid var(--border2);text-align:center">Status</th>
+      </tr></thead><tbody>` +
+      docs.map(d => {
+        const [a,m,dd] = d.id.split('-');
+        const dataBR = `${dd}/${m}/${a}`;
+        const dif = d.diferencaTotal || 0;
+        const difColor = Math.abs(dif) < 0.005 ? '#34d399' : (dif < 0 ? '#f87171' : '#fbbf24');
+        const difStr = d.status === 'fechado' ? ((dif>0?'+ ':dif<0?'− ':'') + _cxMoney(Math.abs(dif))) : '—';
+        const stBadge = d.status === 'fechado' ? '🔒 Fechado' : (d.status === 'aberto' ? '🟢 Aberto' : '—');
+        return `<tr>
+          <td style="padding:8px;border-bottom:1px solid var(--border)">${dataBR}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right">${_cxMoney(d.totalVendido||0)}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;color:${d.status==='fechado'?difColor:'var(--text3)'}">${difStr}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--border);text-align:center;color:var(--text2)">${stBadge}</td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  } catch(e) { console.error('[CAIXA] histórico:', e); body.innerHTML = '<div style="color:#f87171;padding:16px">Erro ao carregar histórico.</div>'; }
+}
+
+function fecharHistoricoCaixa() { document.getElementById('cxHistModal').classList.remove('show'); }
+
 let mesasData = {};
 let mesasConfig = [];
 let _mesaEditId = null;
