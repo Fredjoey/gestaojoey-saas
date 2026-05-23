@@ -1323,6 +1323,16 @@
             <!-- CUSTO FIXO NA PRECIFICAÇÃO -->
             <div class="section-title">🏢 Custo Fixo na Precificação</div>
             <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
+                <div style="display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid #3a3a3a;">
+                    <div class="form-group" style="margin:0; min-width:200px;">
+                        <label>Puxar faturamento de</label>
+                        <select id="precFatMesSelect" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; background:var(--bg4); color:var(--text);">
+                            <option value="atual">Mês atual</option>
+                        </select>
+                    </div>
+                    <button onclick="precPuxarFaturamento()" style="background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; padding:11px 18px; font-size:13px;">🔄 Puxar faturamento</button>
+                    <span id="precFatMesAviso" style="font-size:12px; color:#777;"></span>
+                </div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; align-items:end;">
                     <div class="form-group" style="margin:0;">
                         <label>Custos fixos do mês</label>
@@ -2083,6 +2093,7 @@
 
             if (tabName === 'analysis') updateAnalysis();
             if (tabName === 'precificacao') {
+                _precPopularMeses();
                 calcularPrecificacao();
             }
             if (tabName === 'insumos') renderInsumosList();
@@ -4987,6 +4998,65 @@
                     status.style.border     = '1px solid #ef4444';
                 }
             }
+        }
+
+        const _MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+        function _precPopularMeses() {
+            const sel = document.getElementById('precFatMesSelect');
+            if (!sel || sel.dataset.populado === '1') return;
+            const hoje = new Date();
+            let opts = '<option value="atual">Mês atual</option>';
+            // últimos 6 meses fechados
+            for (let i = 1; i <= 6; i++) {
+                const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+                const y = d.getFullYear();
+                const m = d.getMonth() + 1;
+                opts += `<option value="${y}-${String(m).padStart(2,'0')}">${_MESES_PT[d.getMonth()]}/${y}</option>`;
+            }
+            sel.innerHTML = opts;
+            sel.dataset.populado = '1';
+        }
+
+        async function precPuxarFaturamento() {
+            const sel = document.getElementById('precFatMesSelect');
+            const val = sel ? sel.value : 'atual';
+            const avisoEl = document.getElementById('precFatMesAviso');
+            const setAviso = txt => { if (avisoEl) avisoEl.textContent = txt || ''; };
+            setAviso('Buscando...');
+
+            let faturamento = 0;
+            try {
+                if (val === 'atual' && typeof _fatMesCorrente === 'number' && _fatMesCorrente > 0) {
+                    faturamento = _fatMesCorrente;
+                } else {
+                    const hoje = new Date();
+                    let y, m, fimDia;
+                    if (val === 'atual') {
+                        y = hoje.getFullYear(); m = hoje.getMonth() + 1; fimDia = hoje.getDate();
+                    } else {
+                        [y, m] = val.split('-').map(Number);
+                        fimDia = new Date(y, m, 0).getDate();
+                    }
+                    const ini = `${y}-${String(m).padStart(2,'0')}-01`;
+                    const fim = `${y}-${String(m).padStart(2,'0')}-${String(fimDia).padStart(2,'0')}`;
+                    const peds = await window._fb.fbQueryPedidos(ini, fim);
+                    faturamento = peds.reduce((s, p) => s + (Number(p.total) || 0), 0);
+                }
+            } catch (e) {
+                console.error('[precPuxarFaturamento]', e);
+                setAviso('Erro ao buscar faturamento.');
+                return;
+            }
+
+            if (!faturamento || faturamento <= 0) {
+                setAviso('Sem faturamento registrado para este mês');
+                return;  // não zera valor já digitado
+            }
+            const campo = document.getElementById('precFaturamentoMes');
+            if (campo) campo.value = faturamento.toFixed(2);
+            setAviso('');
+            calcularPrecificacao();
         }
 
         function calcularPrecificacao() {
