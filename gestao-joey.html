@@ -1320,8 +1320,8 @@
                 </div>
             </div>
 
-            <!-- CUSTO FIXO NA PRECIFICAÇÃO -->
-            <div class="section-title">🏢 Custo Fixo na Precificação</div>
+            <!-- CUSTOS OPERACIONAIS NA PRECIFICAÇÃO -->
+            <div class="section-title">🏢 Custos Operacionais na Precificação</div>
             <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
                 <div style="display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid #3a3a3a;">
                     <div class="form-group" style="margin:0; min-width:200px;">
@@ -1333,10 +1333,15 @@
                     <button onclick="precPuxarFaturamento()" style="background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; padding:11px 18px; font-size:13px;">🔄 Puxar faturamento</button>
                     <span id="precFatMesAviso" style="font-size:12px; color:#777;"></span>
                 </div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; align-items:end;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:18px; align-items:end;">
                     <div class="form-group" style="margin:0;">
                         <label>Custos fixos do mês</label>
                         <div id="precCustoFixoTotal" style="padding:10px 0; font-size:18px; font-weight:700; color:#e74c3c;">R$ 0,00</div>
+                        <div style="font-size:10px; color:#777; margin-top:2px;">vindos da aba Custos</div>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label>Custos variáveis do mês</label>
+                        <div id="precCustoVarTotal" style="padding:10px 0; font-size:18px; font-weight:700; color:#e67e22;">R$ 0,00</div>
                         <div style="font-size:10px; color:#777; margin-top:2px;">vindos da aba Custos</div>
                     </div>
                     <div class="form-group" style="margin:0;">
@@ -1344,14 +1349,22 @@
                         <input type="number" id="precFaturamentoMes" min="0" step="0.01" placeholder="0,00"
                                oninput="calcularPrecificacao()"
                                style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;">
-                        <div style="font-size:10px; color:#777; margin-top:4px;">base para ratear o custo fixo (padrão: mês atual)</div>
+                        <div style="font-size:10px; color:#777; margin-top:4px;">base para ratear os custos (padrão: mês atual)</div>
                     </div>
                     <div class="form-group" style="margin:0;">
-                        <label>% de custo fixo</label>
-                        <div id="precPctFixo" style="padding:10px 0; font-size:18px; font-weight:700; color:#f97316;">0,0%</div>
+                        <label>% sobre o faturamento</label>
+                        <div id="precPctCustos" style="padding:10px 0; font-size:15px; font-weight:700; color:#f97316;">Fixo: 0,0% | Variável: 0,0%</div>
                         <div id="precFixoAviso" style="font-size:10px; color:#777; margin-top:2px;">do faturamento do mês</div>
                     </div>
                 </div>
+            </div>
+
+            <!-- ANATOMIA DO PREÇO -->
+            <div class="section-title">🧬 Anatomia do Preço Sugerido</div>
+            <div style="background:#141414; border:1px solid #2a2a2a; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
+                <div style="font-size:12px; color:#777; margin-bottom:14px;">Para onde vai cada R$ 1,00 cobrado, com os parâmetros atuais (vale para todos os produtos):</div>
+                <div id="precAnatomiaBarra" style="display:flex; width:100%; height:28px; border-radius:6px; overflow:hidden; background:#0f0f0f; border:1px solid #2a2a2a;"></div>
+                <div id="precAnatomiaLegenda" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; margin-top:14px;"></div>
             </div>
 
             <!-- FILTRO + LEGENDA -->
@@ -5000,6 +5013,37 @@
             }
         }
 
+        const _ANATOMIA_CORES = {
+            'Ingrediente':    '#e74c3c',
+            'Custo Fixo':     '#9b59b6',
+            'Custo Variável': '#e67e22',
+            'Imposto':        '#3498db',
+            'Taxa Cartão':    '#f1c40f',
+            'Lucro':          '#27ae60'
+        };
+
+        function _renderAnatomiaPreco(fatias) {
+            const barra   = document.getElementById('precAnatomiaBarra');
+            const legenda = document.getElementById('precAnatomiaLegenda');
+            if (!barra || !legenda) return;
+            const entries = Object.entries(fatias);
+            barra.innerHTML = entries.map(([nome, frac]) => {
+                const pct = Math.max(0, frac * 100);
+                if (pct <= 0) return '';
+                const cor = _ANATOMIA_CORES[nome] || '#7f8c8d';
+                return `<div title="${nome}: ${pct.toFixed(1).replace('.', ',')}%" style="width:${pct}%; background:${cor}; height:100%;"></div>`;
+            }).join('');
+            legenda.innerHTML = entries.map(([nome, frac]) => {
+                const pct = frac * 100;
+                const cor = _ANATOMIA_CORES[nome] || '#7f8c8d';
+                return `<div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                    <span style="width:12px; height:12px; border-radius:3px; background:${cor}; flex-shrink:0;"></span>
+                    <span style="color:#ccc;">${nome}</span>
+                    <span style="margin-left:auto; font-weight:700; color:${cor};">${pct.toFixed(1).replace('.', ',')}%</span>
+                </div>`;
+            }).join('');
+        }
+
         const _MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
         function _precPopularMeses() {
@@ -5069,28 +5113,43 @@
             const container = document.getElementById('precResultado');
             if (!container) return;
 
-            // Custo fixo rateado como % do faturamento do mês
+            // Custos fixos e variáveis rateados como % do faturamento do mês
             const totalFixo = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
+            const totalVariavel = variableCosts.reduce((s, c) => s + (c.value || 0), 0);
             const fatInput  = document.getElementById('precFaturamentoMes');
             if (fatInput && (fatInput.value === '' || fatInput.value == null) && _fatMesCorrente > 0) {
                 fatInput.value = _fatMesCorrente.toFixed(2);
             }
             const faturamentoMes = parseFloat(fatInput?.value) || 0;
-            const pctFixo = faturamentoMes > 0 ? (totalFixo / faturamentoMes) : 0;
-            // Atualiza os displays do bloco de custo fixo
+            const pctFixo     = faturamentoMes > 0 ? (totalFixo / faturamentoMes) : 0;
+            const pctVariavel = faturamentoMes > 0 ? (totalVariavel / faturamentoMes) : 0;
+            // Atualiza os displays do bloco de custos
             const _fmt = v => 'R$ ' + (v || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
             const elFixoTotal = document.getElementById('precCustoFixoTotal');
             if (elFixoTotal) elFixoTotal.textContent = _fmt(totalFixo);
-            const elPctFixo = document.getElementById('precPctFixo');
-            if (elPctFixo) elPctFixo.textContent = (pctFixo * 100).toFixed(1).replace('.', ',') + '%';
+            const elVarTotal = document.getElementById('precCustoVarTotal');
+            if (elVarTotal) elVarTotal.textContent = _fmt(totalVariavel);
+            const elPctCustos = document.getElementById('precPctCustos');
+            if (elPctCustos) elPctCustos.textContent = `Fixo: ${(pctFixo*100).toFixed(1).replace('.', ',')}% | Variável: ${(pctVariavel*100).toFixed(1).replace('.', ',')}%`;
             const elFixoAviso = document.getElementById('precFixoAviso');
             if (elFixoAviso) elFixoAviso.textContent = faturamentoMes > 0
                 ? 'do faturamento do mês'
-                : '⚠️ Informe o faturamento para incluir custo fixo';
+                : '⚠️ Informe o faturamento para incluir custos fixo e variável';
 
-            const fator = 1 - margemDesejada - simples - taxaMaq - pctFixo;
+            const fator = 1 - margemDesejada - simples - taxaMaq - pctFixo - pctVariavel;
+
+            // Anatomia do preço (geral): cada fatia é % do preço. "Ingrediente" = fator = custo/preçoSugerido.
+            _renderAnatomiaPreco({
+                Ingrediente: fator > 0 ? fator : 0,
+                'Custo Fixo': pctFixo,
+                'Custo Variável': pctVariavel,
+                Imposto: simples,
+                'Taxa Cartão': taxaMaq,
+                Lucro: margemDesejada
+            });
+
             if (fator <= 0) {
-                container.innerHTML = '<div style="background:#3a1a1a; border:1px solid #ff6b6b; border-radius:8px; padding:1rem; color:#ff6b6b; text-align:center;">⚠️ A soma de Margem Desejada + Simples Nacional + Taxa Maquininha + Custo Fixo precisa ser menor que 100%.</div>';
+                container.innerHTML = '<div style="background:#3a1a1a; border:1px solid #ff6b6b; border-radius:8px; padding:1rem; color:#ff6b6b; text-align:center;">⚠️ A soma de Margem Desejada + Simples Nacional + Taxa Maquininha + Custo Fixo + Custo Variável precisa ser menor que 100%.</div>';
                 return;
             }
 
@@ -5172,7 +5231,7 @@
 
             const total = recipesFiltradas.length;
             const resumo = `${total} produto${total > 1 ? 's' : ''} • <span style="color:#4ade80; font-weight:700;">🟢 ${counts.ideal}</span> · <span style="color:#f59e0b; font-weight:700;">🟡 ${counts.abaixo}</span> · <span style="color:#ef4444; font-weight:700;">🔴 ${counts.muito}</span>`;
-            const formula = `Custo ÷ (1 − ${margemDesejadaPct.toFixed(1)}% − ${simplesPct.toFixed(2)}% − ${taxaMaqPct.toFixed(2)}% − ${(pctFixo*100).toFixed(1)}%) = Custo ÷ ${fator.toFixed(4)}`;
+            const formula = `Custo ÷ (1 − ${margemDesejadaPct.toFixed(1)}% − ${simplesPct.toFixed(2)}% − ${taxaMaqPct.toFixed(2)}% − ${(pctFixo*100).toFixed(1)}% − ${(pctVariavel*100).toFixed(1)}%) = Custo ÷ ${fator.toFixed(4)}`;
 
             container.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text2);">
