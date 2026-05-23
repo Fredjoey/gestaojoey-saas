@@ -1764,9 +1764,6 @@ const slug = (
   hostname === '127.0.0.1'
 ) ? 'joey' : hostname.split('.')[0];
 
-// Fechamento de Caixa — só Joey por enquanto
-if (slug !== 'joey') { const nc = document.getElementById('nav-caixa'); if (nc) nc.style.display = 'none'; }
-
 let CLIENTE_PLANO = 'essencial';
 db.doc('clientes/'+slug).onSnapshot(s => {
   CLIENTE_PLANO = s.data()?.plano || 'essencial';
@@ -7090,7 +7087,7 @@ async function excluirGatilhoCustom(uid) {
 // ── MENSAGENS PROGRAMADAS ─────────────────────────────────────────────────────
 
 // =================== SALÃO ===================
-// =================== FECHAMENTO DE CAIXA (somente Joey) ===================
+// =================== FECHAMENTO DE CAIXA ===================
 const _CX_FORMAS = [
   { key:'pix',      label:'PIX' },
   { key:'dinheiro', label:'Dinheiro' },
