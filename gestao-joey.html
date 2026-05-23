@@ -1638,6 +1638,10 @@
                     <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">💳 Formas de Pagamento</div>
                     <div id="vendasPagamentosBody"></div>
                 </div>
+                <div id="vendasAdicionaisSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
+                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">➕ Adicionais mais vendidos</div>
+                    <div id="vendasAdicionaisBody"></div>
+                </div>
                 </div><!-- fim vendasResultadoBody -->
             </div>
 
@@ -6361,6 +6365,7 @@
                 }
 
                 const mapaItens  = new Map();
+                const mapaAdicionais = new Map();
                 let faturamentoReal = 0;
                 const pagamentos = { pix: 0, dinheiro: 0, cartao: 0, credito: 0, debito: 0 };
 
@@ -6373,12 +6378,29 @@
 
                     for (const item of (p.itens || [])) {
                         const key = (item.nome || '').toLowerCase().trim();
-                        if (!key) continue;
-                        const qty = Number(item.qty || item.quantidade || 1);
-                        if (mapaItens.has(key)) {
-                            mapaItens.get(key).qtd += qty;
-                        } else {
-                            mapaItens.set(key, { name: item.nome, qtd: qty });
+                        const qtyItem = Number(item.qty || item.quantidade || 1);
+                        if (key) {
+                            if (mapaItens.has(key)) {
+                                mapaItens.get(key).qtd += qtyItem;
+                            } else {
+                                mapaItens.set(key, { name: item.nome, qtd: qtyItem });
+                            }
+                        }
+                        // Adicionais do item — array de { nome, preco, qty }
+                        for (const ad of (item.adicionais || [])) {
+                            const adNome = (ad && ad.nome || '').trim();
+                            if (!adNome) continue;
+                            const adKey = adNome.toLowerCase();
+                            // qty do adicional × qty do item; preço unitário usado para faturamento
+                            const adQty = Number(ad.qty || ad.quantidade || 1) * qtyItem;
+                            const adFat = (Number(ad.preco) || 0) * adQty;
+                            if (mapaAdicionais.has(adKey)) {
+                                const cur = mapaAdicionais.get(adKey);
+                                cur.qtd += adQty;
+                                cur.faturamento += adFat;
+                            } else {
+                                mapaAdicionais.set(adKey, { name: adNome, qtd: adQty, faturamento: adFat });
+                            }
                         }
                     }
                 }
@@ -6391,7 +6413,9 @@
                 statusEl.style.color      = '#4ade80';
                 statusEl.textContent      = `✅ ${numPedidos} pedidos encontrados · ${rowsCombinadas.length} itens`;
 
-                await _processarPedidosFirestore(rowsCombinadas, dataInicio, dataFim, numPedidos, faturamentoReal, ticketMedio, pagamentos);
+                const adicionaisVendidos = Array.from(mapaAdicionais.values()).sort((a, b) => b.qtd - a.qtd);
+
+                await _processarPedidosFirestore(rowsCombinadas, dataInicio, dataFim, numPedidos, faturamentoReal, ticketMedio, pagamentos, adicionaisVendidos);
 
             } catch (e) {
                 console.error('[Firestore Pedidos]', e);
@@ -6401,7 +6425,7 @@
             }
         }
 
-        async function _processarPedidosFirestore(rowsCombinadas, dataInicio, dataFim, numPedidos, faturamentoReal, ticketMedio, pagamentos) {
+        async function _processarPedidosFirestore(rowsCombinadas, dataInicio, dataFim, numPedidos, faturamentoReal, ticketMedio, pagamentos, adicionaisVendidos) {
             const normalizar = str => str.toLowerCase()
                 .normalize('NFD').replace(/[̀-ͯ]/g, '')
                 .replace(/[^a-z0-9\s]/g, '').trim();
@@ -6518,6 +6542,30 @@
                     }).join('');
             }
             if (pagSection) pagSection.style.display = Object.values(pagamentos).some(v => v > 0) ? 'block' : 'none';
+
+            // Adicionais mais vendidos
+            const adicSection = document.getElementById('vendasAdicionaisSection');
+            const adicBody    = document.getElementById('vendasAdicionaisBody');
+            const adicLista   = Array.isArray(adicionaisVendidos) ? adicionaisVendidos : [];
+            if (adicBody) {
+                if (adicLista.length === 0) {
+                    adicBody.innerHTML = '<div style="color:#777; font-size:13px;">Nenhum adicional vendido no período.</div>';
+                } else {
+                    const maxQtd = Math.max(...adicLista.map(a => a.qtd));
+                    adicBody.innerHTML = adicLista.map(a => {
+                        const pct = maxQtd > 0 ? ((a.qtd / maxQtd) * 100).toFixed(0) : 0;
+                        return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                            <span style="flex:1; min-width:0; font-size:13px; color:#ccc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${a.name}</span>
+                            <div style="flex:1; height:8px; background:#2a2a2a; border-radius:4px; overflow:hidden;">
+                                <div style="height:100%; width:${pct}%; background:#E87722; border-radius:4px;"></div>
+                            </div>
+                            <span style="min-width:50px; text-align:right; font-size:13px; font-weight:700; color:#E87722;">${a.qtd}x</span>
+                            <span style="min-width:80px; text-align:right; font-size:11px; color:#777;">${a.faturamento > 0 ? formatarMoeda(a.faturamento) : '—'}</span>
+                        </div>`;
+                    }).join('');
+                }
+            }
+            if (adicSection) adicSection.style.display = adicLista.length > 0 ? 'block' : 'none';
 
             // Período ativo
             const per = `${new Date(dataInicio+'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(dataFim+'T12:00:00').toLocaleDateString('pt-BR')}`;
