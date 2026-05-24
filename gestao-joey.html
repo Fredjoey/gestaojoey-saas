@@ -2112,6 +2112,7 @@
             if (tabName === 'precificacao') {
                 _precPopularMeses();
                 calcularPrecificacao();
+                _precAutoFaturamento();
             }
             if (tabName === 'insumos') renderInsumosList();
             if (tabName === 'financeiro') _finUpdate();
@@ -5132,6 +5133,53 @@
             if (campo) campo.value = faturamento.toFixed(2);
             setAviso('');
             calcularPrecificacao();
+        }
+
+        // Auto-preenche o faturamento com o MÊS MAIS RECENTE que tenha faturamento > 0.
+        // Só roda se o campo estiver vazio (não sobrescreve escolha do usuário na sessão).
+        async function _precAutoFaturamento() {
+            const campo = document.getElementById('precFaturamentoMes');
+            if (!campo || (parseFloat(campo.value) || 0) > 0) return;
+            const sel = document.getElementById('precFatMesSelect');
+            const avisoEl = document.getElementById('precFatMesAviso');
+            const setAviso = txt => { if (avisoEl) avisoEl.textContent = txt || ''; };
+
+            const fatDeMes = async (y, m, fimDia) => {
+                const ini = `${y}-${String(m).padStart(2,'0')}-01`;
+                const fim = `${y}-${String(m).padStart(2,'0')}-${String(fimDia).padStart(2,'0')}`;
+                try {
+                    const peds = await window._fb.fbQueryPedidos(ini, fim);
+                    return peds.reduce((s, p) => s + (Number(p.total) || 0), 0);
+                } catch (e) { console.error('[precAutoFaturamento]', e); return 0; }
+            };
+
+            setAviso('Buscando faturamento...');
+            const hoje = new Date();
+            // 1) meses fechados, do mais recente ao mais antigo (até 6)
+            for (let i = 1; i <= 6; i++) {
+                const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+                const y = d.getFullYear(), m = d.getMonth() + 1;
+                const fat = await fatDeMes(y, m, new Date(y, m, 0).getDate());
+                if (fat > 0) {
+                    if (sel) sel.value = `${y}-${String(m).padStart(2,'0')}`;
+                    campo.value = fat.toFixed(2);
+                    setAviso('');
+                    calcularPrecificacao();
+                    return;
+                }
+            }
+            // 2) mês atual (parcial) — só se nenhum fechado teve faturamento
+            let fatAtual = (typeof _fatMesCorrente === 'number' && _fatMesCorrente > 0) ? _fatMesCorrente : 0;
+            if (fatAtual <= 0) fatAtual = await fatDeMes(hoje.getFullYear(), hoje.getMonth() + 1, hoje.getDate());
+            if (fatAtual > 0) {
+                if (sel) sel.value = 'atual';
+                campo.value = fatAtual.toFixed(2);
+                setAviso('');
+                calcularPrecificacao();
+                return;
+            }
+            // 3) nenhum mês com dados — deixa o aviso padrão da própria calcularPrecificacao
+            setAviso('');
         }
 
         // Fonte ÚNICA dos parâmetros e do fator de precificação (mesma fórmula usada na aba Precificação).
