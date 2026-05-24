@@ -3231,6 +3231,10 @@
             }
 
             function renderDetails() {
+                const _precoSug = _calcularPrecoSugerido(recipe.cost);
+                const _sugHtml = _precoSug != null
+                    ? `<div style="font-size:11px; margin-top:4px;">Sugerido: <strong style="color:#27ae60;">R$ ${_precoSug.toFixed(2).replace('.', ',')}</strong> <button type="button" onclick="document.getElementById('editPreco').value='${_precoSug.toFixed(2)}'" style="background:#27ae60; color:#fff; border:none; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:600; cursor:pointer; margin-left:4px;">usar</button></div>`
+                    : `<div style="font-size:11px; color:#e0a030; margin-top:4px;">⚠️ Configure margem e faturamento na aba Precificação</div>`;
                 return `
                     <div style="margin-bottom: 1.5rem;">
                         ${isEditMode ? `
@@ -3242,6 +3246,7 @@
                                 <div>
                                     <div style="font-size:11px; color:#777; text-transform:uppercase; margin-bottom:4px;">Preço de Venda (R$)</div>
                                     <input type="number" id="editPreco" value="${recipe.price}" step="0.01" min="0" style="width:100%; padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; font-weight:600;">
+                                    ${_sugHtml}
                                 </div>
                                 <div>
                                     <div style="font-size:11px; color:#777; text-transform:uppercase; margin-bottom:4px;">Categoria</div>
@@ -5129,6 +5134,30 @@
             calcularPrecificacao();
         }
 
+        // Fonte ÚNICA dos parâmetros e do fator de precificação (mesma fórmula usada na aba Precificação).
+        function _precFatorAtual() {
+            const margemDesejada = (parseFloat(document.getElementById('precMargemDesejada')?.value) || 15) / 100;
+            const simples        = (parseFloat(document.getElementById('precSimples')?.value) || 6) / 100;
+            const taxaMaq        = (parseFloat(document.getElementById('precTaxaMaq')?.value) || 2.99) / 100;
+            const totalFixo     = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
+            const totalVariavel = variableCosts.reduce((s, c) => s + (c.value || 0), 0);
+            const fatInput = document.getElementById('precFaturamentoMes');
+            let faturamentoMes = parseFloat(fatInput?.value) || 0;
+            if (faturamentoMes <= 0 && typeof _fatMesCorrente === 'number' && _fatMesCorrente > 0) faturamentoMes = _fatMesCorrente;
+            const pctFixo     = faturamentoMes > 0 ? (totalFixo / faturamentoMes) : 0;
+            const pctVariavel = faturamentoMes > 0 ? (totalVariavel / faturamentoMes) : 0;
+            const fator = 1 - margemDesejada - simples - taxaMaq - pctFixo - pctVariavel;
+            return { margemDesejada, simples, taxaMaq, totalFixo, totalVariavel, faturamentoMes, pctFixo, pctVariavel, fator,
+                     valido: faturamentoMes > 0 && fator > 0 };
+        }
+
+        // Preço sugerido para um custo, usando os parâmetros atuais. Retorna null se a base estiver incompleta.
+        function _calcularPrecoSugerido(custo) {
+            const f = _precFatorAtual();
+            if (!f.valido) return null;
+            return (Number(custo) || 0) / f.fator;
+        }
+
         function calcularPrecificacao() {
             const margemDesejada = (parseFloat(document.getElementById('precMargemDesejada')?.value) || 15) / 100;
             const simples        = (parseFloat(document.getElementById('precSimples')?.value) || 6) / 100;
@@ -5140,15 +5169,13 @@
             if (!container) return;
 
             // Custos fixos e variáveis rateados como % do faturamento do mês
-            const totalFixo = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
-            const totalVariavel = variableCosts.reduce((s, c) => s + (c.value || 0), 0);
             const fatInput  = document.getElementById('precFaturamentoMes');
             if (fatInput && (fatInput.value === '' || fatInput.value == null) && _fatMesCorrente > 0) {
                 fatInput.value = _fatMesCorrente.toFixed(2);
             }
-            const faturamentoMes = parseFloat(fatInput?.value) || 0;
-            const pctFixo     = faturamentoMes > 0 ? (totalFixo / faturamentoMes) : 0;
-            const pctVariavel = faturamentoMes > 0 ? (totalVariavel / faturamentoMes) : 0;
+            const _fAtual = _precFatorAtual();
+            const totalFixo = _fAtual.totalFixo, totalVariavel = _fAtual.totalVariavel, faturamentoMes = _fAtual.faturamentoMes;
+            const pctFixo = _fAtual.pctFixo, pctVariavel = _fAtual.pctVariavel;
             // Atualiza os displays do bloco de custos
             const _fmt = v => 'R$ ' + (v || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
             const elFixoTotal = document.getElementById('precCustoFixoTotal');
@@ -5162,7 +5189,7 @@
                 ? 'do faturamento do mês'
                 : '⚠️ Informe o faturamento para incluir custos fixo e variável';
 
-            const fator = 1 - margemDesejada - simples - taxaMaq - pctFixo - pctVariavel;
+            const fator = _fAtual.fator;
 
             // Anatomia do preço (geral): cada fatia é % do preço. "Ingrediente" = fator = custo/preçoSugerido.
             _renderAnatomiaPreco({
