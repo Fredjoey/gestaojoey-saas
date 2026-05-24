@@ -5686,6 +5686,7 @@
             const agora = new Date().toISOString();
             let atualizouInsumos = false;
             let atualizouOperacionais = false;
+            const insumosAlterados = new Set();
 
             _reajustesPendentes.forEach((r, i) => {
                 const chk = document.getElementById(`chkReaj${i}`);
@@ -5697,6 +5698,7 @@
                 } else {
                     ingredientsData[r.chave].price = toBaseUnitPrice(r.precoNovo, r.unit);
                     atualizouInsumos = true;
+                    insumosAlterados.add(r.chave);
                 }
 
                 const entrada = {
@@ -5720,9 +5722,26 @@
                 if (atualizouOperacionais) window._fb.fbSaveAll('operacionais',  { data: operacionaisData }).catch(()=>{});
             }
 
+            // Recalcula o CUSTO das receitas afetadas pelos insumos reajustados (NÃO altera o preço de venda)
+            let _receitasRecalc = 0;
+            if (insumosAlterados.size > 0) {
+                recipes.forEach(rec => {
+                    if (!rec.ingredients || !rec.ingredients.some(ing => insumosAlterados.has(ing.name))) return;
+                    rec.cost = rec.ingredients.reduce((s, ing) => s + calculateIngredientCost(ing.name, ing.quantity), 0);
+                    if (window._fb) window._fb.fbSave('recipes', rec.id, rec).catch(e => console.error('Erro ao recalcular custo da receita:', e));
+                    _receitasRecalc++;
+                });
+                renderRecipesList();
+                const _panelPrec = document.getElementById('precificacao');
+                if (_panelPrec && _panelPrec.classList.contains('active')) calcularPrecificacao();
+            }
+
             renderHistoricoPrecos();
 
             if (_notaPendente) _executarSalvarNota(_notaPendente);
+            if (_receitasRecalc > 0) {
+                setTimeout(() => alert(`✅ Preços de insumo atualizados. ${_receitasRecalc} receita(s) tiveram o custo recalculado.`), 100);
+            }
             _notaPendente = null;
             _reajustesPendentes = [];
         }
