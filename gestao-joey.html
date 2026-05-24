@@ -2368,6 +2368,27 @@
             renderRecipesList();
         }
 
+        // Recalcula recipe.cost das receitas que usam algum dos insumos informados (NÃO altera price).
+        // Reaproveitada nos dois fluxos: reajuste por nota (confirmarSalvarNota) e edição direta (updateInsumoPrice).
+        // Retorna a quantidade de receitas recalculadas.
+        function _recalcularCustoReceitas(nomesInsumos) {
+            const alterados = nomesInsumos instanceof Set ? nomesInsumos : new Set(nomesInsumos);
+            if (alterados.size === 0) return 0;
+            let n = 0;
+            recipes.forEach(rec => {
+                if (!rec.ingredients || !rec.ingredients.some(ing => alterados.has(ing.name))) return;
+                rec.cost = rec.ingredients.reduce((s, ing) => s + calculateIngredientCost(ing.name, ing.quantity), 0);
+                if (window._fb) window._fb.fbSave('recipes', rec.id, rec).catch(e => console.error('Erro ao recalcular custo da receita:', e));
+                n++;
+            });
+            if (n > 0) {
+                renderRecipesList();
+                const _panelPrec = document.getElementById('precificacao');
+                if (_panelPrec && _panelPrec.classList.contains('active') && typeof calcularPrecificacao === 'function') calcularPrecificacao();
+            }
+            return n;
+        }
+
         function updateInsumoPrice(ingredientName, newPrice) {
             if (newPrice > 0) {
                 ingredientsData[ingredientName].price = newPrice;
@@ -2376,7 +2397,8 @@
                     window._fb.fbLog('editou', 'Insumo', ingredientName, `Novo preço: R$ ${newPrice.toFixed(2).replace('.', ',')}`).catch(()=>{});
                 }
                 renderInsumosList();
-                renderRecipesList();
+                const _n = _recalcularCustoReceitas([ingredientName]);
+                if (_n === 0) renderRecipesList();
             }
         }
 
@@ -5723,18 +5745,7 @@
             }
 
             // Recalcula o CUSTO das receitas afetadas pelos insumos reajustados (NÃO altera o preço de venda)
-            let _receitasRecalc = 0;
-            if (insumosAlterados.size > 0) {
-                recipes.forEach(rec => {
-                    if (!rec.ingredients || !rec.ingredients.some(ing => insumosAlterados.has(ing.name))) return;
-                    rec.cost = rec.ingredients.reduce((s, ing) => s + calculateIngredientCost(ing.name, ing.quantity), 0);
-                    if (window._fb) window._fb.fbSave('recipes', rec.id, rec).catch(e => console.error('Erro ao recalcular custo da receita:', e));
-                    _receitasRecalc++;
-                });
-                renderRecipesList();
-                const _panelPrec = document.getElementById('precificacao');
-                if (_panelPrec && _panelPrec.classList.contains('active')) calcularPrecificacao();
-            }
+            const _receitasRecalc = _recalcularCustoReceitas(insumosAlterados);
 
             renderHistoricoPrecos();
 
