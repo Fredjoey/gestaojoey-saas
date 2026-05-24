@@ -2307,12 +2307,20 @@
                     : `<span class="insumo-usage unused">Não usado</span>`;
 
                 const ingKey = ing.replace(/'/g, "\\'");
+                const mae = (data.fonteReceitaId != null) ? recipes.find(r => r.id === data.fonteReceitaId) : null;
+                const subReceitaHtml = (data.fonteReceitaId != null)
+                    ? `<div style="margin-top:6px; font-size:11px; color:#E87722; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                         <span>🧪 vem da receita: <strong>${mae ? mae.name : '(receita removida)'}</strong></span>
+                         ${mae ? `<button onclick="showRecipeDetails(${data.fonteReceitaId})" style="background:transparent; border:1px solid #E87722; color:#E87722; border-radius:5px; padding:2px 8px; font-size:11px; font-weight:600; cursor:pointer;">ver receita</button>` : ''}
+                       </div>`
+                    : '';
                 return `
                     <div class="insumo-row">
                         <div>
                             <div class="insumo-name">${ing}</div>
                             <div class="insumo-unit">Unidade: ${data.unit}</div>
                             ${usageLabel}
+                            ${subReceitaHtml}
                         </div>
                         <div>
                             <div style="font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; font-weight:600;">Preço / ${displayUnit}</div>
