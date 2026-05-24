@@ -310,6 +310,10 @@
         }
 
         td { padding: 12px 8px; border-bottom: 1px solid var(--border); color: var(--text); }
+
+        /* Cabeçalho fixo da tabela de Precificação */
+        #precTabelaWrap { max-height: 65vh; overflow-y: auto; }
+        #precTabela thead th { position: sticky; top: 0; z-index: 5; background: #141414; }
         tbody tr:hover { background: var(--bg3); }
 
         .text-right { text-align: right; }
@@ -5238,8 +5242,8 @@
                     <div>${resumo}</div>
                     <div style="font-size:11px; color:var(--text3);">📐 ${formula}</div>
                 </div>
-                <div style="background:var(--bg3); border:1px solid var(--border); border-radius:8px; overflow-x:auto;">
-                    <table style="margin:0; table-layout:fixed; width:100%;">
+                <div id="precTabelaWrap" style="background:var(--bg3); border:1px solid var(--border); border-radius:8px; overflow-x:auto;">
+                    <table id="precTabela" style="margin:0; table-layout:fixed; width:100%;">
                         <colgroup>
                             <col style="width:25%;">
                             <col style="width:10%;">
