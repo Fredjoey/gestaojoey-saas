@@ -2031,6 +2031,7 @@
             onSnapshot(doc(db, `clientes/${slug}/insumos`, 'dados'), (snap) => {
                 if (snap.exists() && snap.data().data) {
                     ingredientsData = snap.data().data;
+                    _migrarSubInsumos();
                     renderInsumosList();
                     renderRecipesList();
                 }
@@ -2047,6 +2048,7 @@
             // Receitas
             onSnapshot(collection(db, `clientes/${slug}/recipes`), (snap) => {
                 recipes = snap.docs.map(d => d.data());
+                _migrarSubInsumos();
                 renderRecipesList();
                 updateAnalysis();
             });
@@ -2369,25 +2371,104 @@
             renderRecipesList();
         }
 
-        // Recalcula recipe.cost das receitas que usam algum dos insumos informados (NÃO altera price).
-        // Reaproveitada nos dois fluxos: reajuste por nota (confirmarSalvarNota) e edição direta (updateInsumoPrice).
-        // Retorna a quantidade de receitas recalculadas.
+        // Recalcula recipe.cost das receitas afetadas E propaga em CASCATA para sub-receitas-insumo.
+        // Cada rodada: (a) recalcula receitas que usam os insumos "afetados"; (b) re-deriva o price
+        // dos insumos que têm fonteReceitaId (= recipe.cost da receita-mãe / rendimento). Insumos
+        // derivados que mudaram alimentam a próxima rodada. Limite de 5 iterações evita loop.
+        // NÃO altera recipe.price. Pode ser chamada com lista vazia (só re-deriva e propaga).
         function _recalcularCustoReceitas(nomesInsumos) {
-            const alterados = nomesInsumos instanceof Set ? nomesInsumos : new Set(nomesInsumos);
-            if (alterados.size === 0) return 0;
-            let n = 0;
-            recipes.forEach(rec => {
-                if (!rec.ingredients || !rec.ingredients.some(ing => alterados.has(ing.name))) return;
-                rec.cost = rec.ingredients.reduce((s, ing) => s + calculateIngredientCost(ing.name, ing.quantity), 0);
-                if (window._fb) window._fb.fbSave('recipes', rec.id, rec).catch(e => console.error('Erro ao recalcular custo da receita:', e));
-                n++;
-            });
-            if (n > 0) {
+            let afetados = nomesInsumos instanceof Set ? new Set(nomesInsumos) : new Set(nomesInsumos || []);
+            const receitasMexidas = new Set();
+            let insumosMudaram = false;
+            const EPS = 1e-6;
+            const MAX = 5;
+
+            for (let iter = 0; iter < MAX; iter++) {
+                let mudou = false;
+
+                // (a) recalcula receitas que usam algum insumo afetado
+                if (afetados.size > 0) {
+                    recipes.forEach(rec => {
+                        if (!rec.ingredients || !rec.ingredients.some(ing => afetados.has(ing.name))) return;
+                        const novo = rec.ingredients.reduce((s, ing) => s + calculateIngredientCost(ing.name, ing.quantity), 0);
+                        if (Math.abs((rec.cost || 0) - novo) > EPS) {
+                            rec.cost = novo;
+                            receitasMexidas.add(rec.id);
+                            mudou = true;
+                        }
+                    });
+                }
+
+                // (b) re-deriva insumos que são feitos de receita (sub-receita-insumo)
+                const proximos = new Set();
+                Object.keys(ingredientsData).forEach(nome => {
+                    const ins = ingredientsData[nome];
+                    if (!ins || ins.fonteReceitaId == null || !(ins.rendimento > 0)) return;
+                    const mae = recipes.find(r => r.id === ins.fonteReceitaId);
+                    if (!mae) return;
+                    const novoPreco = (mae.cost || 0) / ins.rendimento;
+                    if (Math.abs((ins.price || 0) - novoPreco) > EPS) {
+                        ins.price = novoPreco;
+                        insumosMudaram = true;
+                        mudou = true;
+                        proximos.add(nome);   // próxima rodada recalcula quem usa esse insumo derivado
+                    }
+                });
+
+                afetados = proximos;
+                if (!mudou) break;
+            }
+
+            // Persistência
+            if (receitasMexidas.size > 0 && window._fb) {
+                receitasMexidas.forEach(id => {
+                    const rec = recipes.find(r => r.id === id);
+                    if (rec) window._fb.fbSave('recipes', rec.id, rec).catch(e => console.error('Erro ao recalcular custo da receita:', e));
+                });
+            }
+            if (insumosMudaram && window._fb) {
+                window._fb.fbSaveAll('insumos', { data: ingredientsData }).catch(e => console.error('Erro ao salvar insumos derivados:', e));
+            }
+            if (receitasMexidas.size > 0 || insumosMudaram) {
                 renderRecipesList();
+                renderInsumosList();
                 const _panelPrec = document.getElementById('precificacao');
                 if (_panelPrec && _panelPrec.classList.contains('active') && typeof calcularPrecificacao === 'function') calcularPrecificacao();
             }
-            return n;
+            return receitasMexidas.size;
+        }
+
+        // Migração leve: vincula insumos antigos (sem fonteReceitaId) a uma receita de mesmo nome.
+        // Idempotente — só age em insumos ainda não vinculados. Roda quando recipes + insumos carregam.
+        let _migracaoSubInsumosFeita = false;
+        function _migrarSubInsumos() {
+            if (_migracaoSubInsumosFeita) return;
+            if (!Array.isArray(recipes) || recipes.length === 0) return;
+            if (!ingredientsData || Object.keys(ingredientsData).length === 0) return;
+            let vinculados = 0; const pendentes = [];
+            let mudou = false;
+            Object.keys(ingredientsData).forEach(nome => {
+                const ins = ingredientsData[nome];
+                if (!ins || ins.fonteReceitaId != null) return;  // já vinculado ou insumo puro
+                const mae = recipes.find(r => (r.name || '').trim().toLowerCase() === nome.trim().toLowerCase());
+                if (!mae) return;  // não é sub-receita
+                ins.fonteReceitaId = mae.id;
+                // Estima rendimento por recipe.cost / price atual (mantém o price estável na migração)
+                if (ins.price > 0 && mae.cost > 0) {
+                    const rend = mae.cost / ins.price;
+                    if (isFinite(rend) && rend > 0 && rend < 1e7) ins.rendimento = rend;
+                    else pendentes.push(nome);
+                } else {
+                    pendentes.push(nome);
+                }
+                vinculados++;
+                mudou = true;
+            });
+            if (mudou) {
+                _migracaoSubInsumosFeita = true;
+                if (window._fb) window._fb.fbSaveAll('insumos', { data: ingredientsData }).catch(()=>{});
+                console.log(`[migrarSubInsumos] vinculados: ${vinculados} | pendentes de rendimento (${pendentes.length}):`, pendentes);
+            }
         }
 
         function updateInsumoPrice(ingredientName, newPrice) {
@@ -3226,6 +3307,9 @@
                     window._fb.fbSave('recipes', recipe.id, recipe).catch(e => console.error('Erro ao salvar edição:', e));
                     window._fb.fbLog('editou', 'Receita', recipe.name, `Preço: R$ ${recipe.price.toFixed(2).replace('.', ',')}`).catch(()=>{});
                 }
+                // Se esta receita é fonte de algum insumo derivado, re-deriva e propaga em cascata
+                const ehFonte = Object.keys(ingredientsData).some(nome => ingredientsData[nome] && ingredientsData[nome].fonteReceitaId === recipe.id);
+                if (ehFonte && typeof _recalcularCustoReceitas === 'function') _recalcularCustoReceitas([]);
                 isEditMode = false;
                 renderModalContent();
                 renderRecipesList();
@@ -3471,7 +3555,9 @@
             ingredientsData[nomeInsumo.trim()] = {
                 price: custoPorUnidade,
                 unit: unidade.trim(),
-                costUnit: unidade.trim()
+                costUnit: unidade.trim(),
+                fonteReceitaId: recipe.id,   // vínculo: insumo derivado desta receita
+                rendimento: rendimento       // p/ re-derivar price = recipe.cost / rendimento
             };
 
             if (window._fb) {
