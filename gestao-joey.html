@@ -3337,14 +3337,16 @@
             }
 
             function saveRecipeChanges() {
-                // Salvar nome, preço e categoria se editados
+                // Salvar nome, preço, categoria e rendimento se editados
                 const novoNome = document.getElementById('editNome')?.value.trim();
                 const novoPreco = parseFloat(document.getElementById('editPreco')?.value) || recipe.price;
                 const novaCategoria = document.getElementById('editCategoria')?.value || recipe.categoria;
+                const novoRendimento = parseFloat(document.getElementById('editRendimento')?.value);
 
                 if (novoNome) recipe.name = novoNome;
                 recipe.price = novoPreco;
                 recipe.categoria = novaCategoria;
+                if (novoRendimento && novoRendimento > 0) recipe.yield = novoRendimento;
                 recipe.ingredients = editingIngredients;
                 recipe.cost = calculateTotalCost();
 
@@ -3352,9 +3354,15 @@
                     window._fb.fbSave('recipes', recipe.id, recipe).catch(e => console.error('Erro ao salvar edição:', e));
                     window._fb.fbLog('editou', 'Receita', recipe.name, `Preço: R$ ${recipe.price.toFixed(2).replace('.', ',')}`).catch(()=>{});
                 }
-                // Se esta receita é fonte de algum insumo derivado, re-deriva e propaga em cascata
-                const ehFonte = Object.keys(ingredientsData).some(nome => ingredientsData[nome] && ingredientsData[nome].fonteReceitaId === recipe.id);
-                if (ehFonte && typeof _recalcularCustoReceitas === 'function') _recalcularCustoReceitas([]);
+                // Se esta receita é fonte de algum insumo derivado: atualiza o rendimento do insumo
+                // com o valor editado, re-deriva o preço e propaga em cascata (NÃO toca recipe.price).
+                const insumosFonte = Object.keys(ingredientsData).filter(nome => ingredientsData[nome] && ingredientsData[nome].fonteReceitaId === recipe.id);
+                if (insumosFonte.length > 0) {
+                    if (novoRendimento && novoRendimento > 0) {
+                        insumosFonte.forEach(nome => { ingredientsData[nome].rendimento = novoRendimento; });
+                    }
+                    if (typeof _recalcularCustoReceitas === 'function') _recalcularCustoReceitas([]);
+                }
                 isEditMode = false;
                 renderModalContent();
                 renderRecipesList();
@@ -3368,7 +3376,7 @@
                 return `
                     <div style="margin-bottom: 1.5rem;">
                         ${isEditMode ? `
-                            <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-bottom:1rem;">
+                            <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px; margin-bottom:1rem;">
                                 <div>
                                     <div style="font-size:11px; color:#777; text-transform:uppercase; margin-bottom:4px;">Nome da Receita</div>
                                     <input type="text" id="editNome" value="${recipe.name}" style="width:100%; padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; font-weight:600;">
@@ -3377,6 +3385,11 @@
                                     <div style="font-size:11px; color:#777; text-transform:uppercase; margin-bottom:4px;">Preço de Venda (R$)</div>
                                     <input type="number" id="editPreco" value="${recipe.price}" step="0.01" min="0" style="width:100%; padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; font-weight:600;">
                                     ${_sugHtml}
+                                </div>
+                                <div>
+                                    <div style="font-size:11px; color:#777; text-transform:uppercase; margin-bottom:4px;">Rendimento</div>
+                                    <input type="number" id="editRendimento" value="${recipe.yield || ''}" step="0.01" min="0" style="width:100%; padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; font-weight:600;">
+                                    <div style="font-size:10px; color:#777; margin-top:4px;">unidades/porções — ou gramas/ml se a receita é usada como insumo</div>
                                 </div>
                                 <div>
                                     <div style="font-size:11px; color:#777; text-transform:uppercase; margin-bottom:4px;">Categoria</div>
