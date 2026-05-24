@@ -2446,36 +2446,73 @@
             return receitasMexidas.size;
         }
 
-        // Migração leve: vincula insumos antigos (sem fonteReceitaId) a uma receita de mesmo nome.
-        // Idempotente — só age em insumos ainda não vinculados. Roda quando recipes + insumos carregam.
+        // Rendimento estimado (g/ml) que a receita PRODUZ = soma das quantidades dos ingredientes
+        // pesáveis/volumétricos convertidos para a unidade-base (g, ml). 'un' e outros não somam em massa.
+        function _rendimentoEmBase(recipe) {
+            if (!recipe || !Array.isArray(recipe.ingredients)) return 0;
+            let total = 0;
+            recipe.ingredients.forEach(ing => {
+                const q = Number(ing.quantity) || 0;
+                if (q <= 0) return;
+                const u = (ing.unit || (ingredientsData[ing.name] && ingredientsData[ing.name].unit) || '').toLowerCase();
+                if (u === 'g' || u === 'ml')      total += q;
+                else if (u === 'kg' || u === 'l') total += q * 1000;
+                // 'un' e outros: não contribuem para massa/volume total
+            });
+            return total;
+        }
+
+        // Migração: vincula insumos antigos (sem fonteReceitaId) a uma receita de mesmo nome E
+        // re-deriva o preço com rendimento em GRAMAS/ML (não porções). SÓ marca como feita após
+        // persistir de verdade no Firestore (await). Em falha, NÃO trava — tenta de novo no próximo snapshot.
         let _migracaoSubInsumosFeita = false;
-        function _migrarSubInsumos() {
-            if (_migracaoSubInsumosFeita) return;
+        let _migracaoEmAndamento = false;
+        async function _migrarSubInsumos() {
+            if (_migracaoSubInsumosFeita || _migracaoEmAndamento) return;
             if (!Array.isArray(recipes) || recipes.length === 0) return;
             if (!ingredientsData || Object.keys(ingredientsData).length === 0) return;
-            let vinculados = 0; const pendentes = [];
-            let mudou = false;
+
+            // Detecta insumos sem vínculo que têm receita de mesmo nome
+            const alvos = [];
             Object.keys(ingredientsData).forEach(nome => {
                 const ins = ingredientsData[nome];
-                if (!ins || ins.fonteReceitaId != null) return;  // já vinculado ou insumo puro
+                if (!ins || ins.fonteReceitaId != null) return;
                 const mae = recipes.find(r => (r.name || '').trim().toLowerCase() === nome.trim().toLowerCase());
-                if (!mae) return;  // não é sub-receita
+                if (mae) alvos.push({ nome, mae });
+            });
+            if (alvos.length === 0) { _migracaoSubInsumosFeita = true; return; }
+
+            _migracaoEmAndamento = true;
+            const vinculados = [], pendentes = [];
+            const nomesAfetados = new Set();
+            alvos.forEach(({ nome, mae }) => {
+                const ins = ingredientsData[nome];
                 ins.fonteReceitaId = mae.id;
-                // Estima rendimento por recipe.cost / price atual (mantém o price estável na migração)
-                if (ins.price > 0 && mae.cost > 0) {
-                    const rend = mae.cost / ins.price;
-                    if (isFinite(rend) && rend > 0 && rend < 1e7) ins.rendimento = rend;
-                    else pendentes.push(nome);
+                const rendG = _rendimentoEmBase(mae);
+                if (rendG > 0) {
+                    ins.rendimento = rendG;
+                    ins.price = (mae.cost || 0) / rendG;   // preço correto por g/ml
+                    vinculados.push(`${nome} (rend ${rendG.toFixed(0)}${ins.unit||''})`);
+                    nomesAfetados.add(nome);
                 } else {
+                    // vincula, mas não conseguiu estimar rendimento em massa — deixa pendente
                     pendentes.push(nome);
                 }
-                vinculados++;
-                mudou = true;
             });
-            if (mudou) {
+
+            try {
+                if (window._fb) await window._fb.fbSaveAll('insumos', { data: ingredientsData });
                 _migracaoSubInsumosFeita = true;
-                if (window._fb) window._fb.fbSaveAll('insumos', { data: ingredientsData }).catch(()=>{});
-                console.log(`[migrarSubInsumos] vinculados: ${vinculados} | pendentes de rendimento (${pendentes.length}):`, pendentes);
+                console.log(`[migrarSubInsumos] vinculados+PERSISTIDOS: ${vinculados.length}`, vinculados,
+                            `| pendentes de rendimento: ${pendentes.length}`, pendentes);
+                // Cascata: recalcula o custo das receitas que usam os insumos re-derivados (NÃO toca price)
+                if (nomesAfetados.size > 0 && typeof _recalcularCustoReceitas === 'function') _recalcularCustoReceitas(nomesAfetados);
+                renderInsumosList();
+            } catch (e) {
+                console.error('[migrarSubInsumos] FALHA ao persistir — vínculos NÃO salvos, vai tentar de novo:', e);
+                // guard NÃO é setado → permite nova tentativa no próximo snapshot
+            } finally {
+                _migracaoEmAndamento = false;
             }
         }
 
@@ -3538,14 +3575,21 @@
             const nomeInsumo = prompt('Nome do insumo:', recipe.name);
             if (!nomeInsumo || !nomeInsumo.trim()) return;
 
-            // Perguntar rendimento total
+            // Perguntar rendimento total — em GRAMAS ou ML (quanto a receita PRODUZ no total), NÃO em porções
+            const _rendSugerido = _rendimentoEmBase(recipe);
             const rendimento = parseFloat(prompt(
-                `Qual o rendimento total da receita em gramas ou ml?\n\nExemplo: para a Maionese que rende ~2000ml, digite 2000`,
-                '2000'
+                `Rendimento TOTAL da receita em GRAMAS ou ML (não em porções!).\n\n` +
+                `É o quanto a receita produz no total. Ex.: Maionese que rende ~2000ml → 2000.\n` +
+                (_rendSugerido > 0 ? `\nSugestão (soma dos ingredientes pesáveis): ${_rendSugerido.toFixed(0)}\n` : ''),
+                _rendSugerido > 0 ? String(Math.round(_rendSugerido)) : '2000'
             ));
             if (!rendimento || rendimento <= 0) {
                 alert('⚠️ Rendimento inválido!');
                 return;
+            }
+            // Aviso se o rendimento informado for muito menor que a soma dos ingredientes (provável porções)
+            if (_rendSugerido > 0 && rendimento < _rendSugerido * 0.5) {
+                if (!confirm(`⚠️ O rendimento informado (${rendimento}) é bem menor que a soma dos ingredientes (~${_rendSugerido.toFixed(0)} g/ml).\n\nIsso costuma indicar que você digitou PORÇÕES em vez de gramas/ml — o que deixa o preço por grama errado.\n\nDeseja continuar mesmo assim?`)) return;
             }
 
             // Perguntar unidade
