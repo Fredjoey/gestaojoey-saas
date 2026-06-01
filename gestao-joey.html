@@ -779,6 +779,7 @@
                 <div class="cost-summary-label">Custo Total da Receita</div>
                 <div class="cost-summary-value" id="recipeCostValue">R$ 0,00</div>
             </div>
+            <div id="recipeSugeridoLine" style="display:none; margin-top:8px; padding:10px 12px; background:#141414; border:1px solid #2a2a2a; border-radius:8px; font-size:13px; color:#ccc;"></div>
 
             <div class="button-group">
                 <button onclick="saveRecipe()">✓ Salvar Receita</button>
@@ -971,6 +972,21 @@
             </div>
 
             <div id="variableCostsList"></div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; margin-top: 2rem;">
+                <div class="section-title" style="margin: 0;">Taxas de Cartão (por método)</div>
+            </div>
+            <p class="text-secondary">Taxas reais cobradas por meio de pagamento. Usadas no DRE (Financeiro, Análise, Vendas) e no preço sugerido. Salvas por loja.</p>
+            <div style="background:#2c2c2c; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #3a3a3a;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:14px;">
+                    <div class="form-group" style="margin:0;"><label>PIX (%)</label><input type="number" id="taxaPix" value="0" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>Débito (%)</label><input type="number" id="taxaDebito" value="1.5" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>Crédito (%)</label><input type="number" id="taxaCredito" value="2.99" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>VR/VA (%)</label><input type="number" id="taxaVR" value="1.2" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>Cartão genérico (%)</label><input type="number" id="taxaCartao" value="2.99" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                </div>
+                <div style="font-size:10px; color:#777; margin-top:8px;">Editar aqui recalcula o DRE e o preço sugerido na hora, e salva por loja.</div>
+            </div>
         </div>
 
         <!-- ANÁLISE TAB -->
@@ -982,9 +998,8 @@
             <!-- FILTRO DE PERÍODO GLOBAL -->
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:1.5rem;">
                 <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; margin-right:6px;">📅 Período:</div>
-                <button class="anaPeriodBtn" data-p="7d"     onclick="setAnalysisPeriod('7d')">7 dias</button>
-                <button class="anaPeriodBtn active" data-p="30d" onclick="setAnalysisPeriod('30d')">30 dias</button>
-                <button class="anaPeriodBtn" data-p="mes"    onclick="setAnalysisPeriod('mes')">Este mês</button>
+                <button class="anaPeriodBtn" data-p="7d"     onclick="setAnalysisPeriod('7d')">Esta semana</button>
+                <button class="anaPeriodBtn active" data-p="mes"    onclick="setAnalysisPeriod('mes')">Este mês</button>
                 <button class="anaPeriodBtn" data-p="mesAnt" onclick="setAnalysisPeriod('mesAnt')">Mês anterior</button>
                 <button class="anaPeriodBtn" data-p="todos"  onclick="setAnalysisPeriod('todos')">Tudo</button>
                 <div style="display:flex; align-items:center; gap:6px; margin-left:6px;">
@@ -1059,8 +1074,7 @@
             <!-- TOOLBAR: PERÍODO + EXPORT -->
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:1rem;">
                 <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; margin-right:6px;">📅 Período:</div>
-                <button class="anaPeriodBtn" data-finp="7d"     onclick="setFinPeriod('7d')">7 dias</button>
-                <button class="anaPeriodBtn" data-finp="30d"    onclick="setFinPeriod('30d')">30 dias</button>
+                <button class="anaPeriodBtn" data-finp="7d"     onclick="setFinPeriod('7d')">Esta semana</button>
                 <button class="anaPeriodBtn active" data-finp="mes" onclick="setFinPeriod('mes')">Este mês</button>
                 <button class="anaPeriodBtn" data-finp="mesAnt" onclick="setFinPeriod('mesAnt')">Mês anterior</button>
                 <button class="anaPeriodBtn" data-finp="todos"  onclick="setFinPeriod('todos')">Tudo</button>
@@ -1076,16 +1090,16 @@
 
             <!-- CONFIGURAÇÃO DE TAXAS POR MÉTODO -->
             <details style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:12px 16px; margin-bottom:1.5rem;">
-                <summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">⚙️ Taxas reais por meio de pagamento (clique para ajustar)</summary>
+                <summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">⚙️ Taxas reais por meio de pagamento (somente leitura — edite em Custos)</summary>
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-top:12px;">
-                    <div class="form-group" style="margin:0;"><label>PIX (%)</label>          <input type="number" id="taxaPix"     value="0"    step="0.01" min="0" max="100" oninput="_finUpdate()"></div>
-                    <div class="form-group" style="margin:0;"><label>Débito (%)</label>       <input type="number" id="taxaDebito"  value="1.5"  step="0.01" min="0" max="100" oninput="_finUpdate()"></div>
-                    <div class="form-group" style="margin:0;"><label>Crédito (%)</label>      <input type="number" id="taxaCredito" value="2.99" step="0.01" min="0" max="100" oninput="_finUpdate()"></div>
-                    <div class="form-group" style="margin:0;"><label>VR/VA (%)</label>        <input type="number" id="taxaVR"      value="1.2"  step="0.01" min="0" max="100" oninput="_finUpdate()"></div>
-                    <div class="form-group" style="margin:0;"><label>Cartão genérico (%)</label><input type="number" id="taxaCartao" value="2.99" step="0.01" min="0" max="100" oninput="_finUpdate()"></div>
+                    <div class="form-group" style="margin:0;"><label>PIX</label>          <div id="taxaPixView"     style="font-weight:700; font-size:16px; color:var(--text); padding:6px 0;">—</div></div>
+                    <div class="form-group" style="margin:0;"><label>Débito</label>       <div id="taxaDebitoView"  style="font-weight:700; font-size:16px; color:var(--text); padding:6px 0;">—</div></div>
+                    <div class="form-group" style="margin:0;"><label>Crédito</label>      <div id="taxaCreditoView" style="font-weight:700; font-size:16px; color:var(--text); padding:6px 0;">—</div></div>
+                    <div class="form-group" style="margin:0;"><label>VR/VA</label>        <div id="taxaVRView"      style="font-weight:700; font-size:16px; color:var(--text); padding:6px 0;">—</div></div>
+                    <div class="form-group" style="margin:0;"><label>Cartão genérico</label><div id="taxaCartaoView" style="font-weight:700; font-size:16px; color:var(--text); padding:6px 0;">—</div></div>
                 </div>
                 <div style="font-size:10px; color:var(--text3); margin-top:8px;">
-                    📌 As taxas só impactam esta aba. Simples Nacional e CMV vêm da aba <strong>Precificação</strong> para manter consistência.
+                    📌 Somente leitura. <strong>Edite as taxas na aba Custos</strong> — são salvas por loja e usadas no DRE. Simples Nacional e CMV vêm da aba <strong>Precificação</strong>.
                 </div>
             </details>
 
@@ -1145,6 +1159,9 @@
 
             <!-- ANÁLISE DE COMPRAS -->
             <div id="notasAnalise" style="display:none; margin-bottom:1.5rem;"></div>
+
+            <!-- CONSOLIDADO DE INSUMOS (aparece com filtro de fornecedor) -->
+            <div id="notasConsolidadoInsumos" style="display:none; margin-bottom:1.5rem;"></div>
 
             <!-- ═══ NOTAS A PAGAR ═══ -->
             <div id="notasAPagarSection" style="margin:24px 0">
@@ -1289,79 +1306,89 @@
                 💡 Compare o preço sugerido (custo + margem desejada + impostos + taxa da maquininha) com o preço atual de cada produto.
             </div>
 
-            <!-- CONFIGURAÇÕES -->
-            <div class="section-title">⚙️ Configurações de Precificação</div>
-            <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px;">
-                    <div class="form-group" style="margin:0;">
-                        <label>Margem Desejada (%)</label>
-                        <input type="number" id="precMargemDesejada" value="15" min="0" max="100" step="0.1"
-                               oninput="calcularPrecificacao()"
-                               style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;">
-                        <div style="font-size:10px; color:#777; margin-top:4px;">lucro limpo por venda (já descontado o custo fixo)</div>
+            <!-- DECISÃO ÚNICA: MARGEM -->
+            <div style="background:linear-gradient(135deg,#2c2c2c,#241c12); border:1px solid #E87722; border-radius:10px; padding:1.5rem; margin-bottom:1.25rem;">
+                <label style="font-size:15px; font-weight:700; color:#fff;">Quanto de lucro você quer em cada venda?</label>
+                <div style="font-size:12px; color:#aaa; margin:4px 0 14px;">É a sua decisão. O sistema calcula o preço pra sobrar isso de lucro limpo, já descontando imposto, taxa de cartão e os custos da loja.</div>
+                <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:baseline; gap:6px;">
+                        <input type="number" id="precMargemDesejada" value="15" min="0" max="100" step="0.1" oninput="_onConfigEdit()"
+                               style="width:120px; padding:12px; border:2px solid #E87722; border-radius:8px; font-size:28px; font-weight:800; text-align:center; background:var(--bg); color:#E87722;">
+                        <span style="font-size:22px; font-weight:800; color:#E87722;">%</span>
                     </div>
-                    <div class="form-group" style="margin:0;">
-                        <label>Simples Nacional (%)</label>
-                        <input type="number" id="precSimples" value="6" min="0" max="100" step="0.01"
-                               oninput="calcularPrecificacao()"
-                               style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;">
-                        <div style="font-size:10px; color:#777; margin-top:4px;">imposto sobre faturamento</div>
-                    </div>
-                    <div class="form-group" style="margin:0;">
-                        <label>Taxa Maquininha (%)</label>
-                        <input type="number" id="precTaxaMaq" value="2.99" min="0" max="100" step="0.01"
-                               oninput="calcularPrecificacao()"
-                               style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;">
-                        <div style="font-size:10px; color:#777; margin-top:4px;">taxa média de cartão / pix</div>
-                    </div>
-                    <div class="form-group" style="margin:0;">
-                        <label>CMV Desejado (%)</label>
-                        <input type="number" id="precCmvDesejado" value="33" min="0" max="100" step="0.1"
-                               oninput="calcularPrecificacao()"
-                               style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;">
-                        <div style="font-size:10px; color:#777; margin-top:4px;">custo máximo de insumos sobre o preço</div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button type="button" onclick="precSetMargem(15)" style="background:#3a3a3a; color:#eee; border:1px solid #555; border-radius:6px; padding:9px 16px; cursor:pointer; font-weight:600;">15%</button>
+                        <button type="button" onclick="precSetMargem(20)" style="background:#3a3a3a; color:#eee; border:1px solid #555; border-radius:6px; padding:9px 16px; cursor:pointer; font-weight:600;">20%</button>
+                        <button type="button" onclick="precSetMargem(30)" style="background:#3a3a3a; color:#eee; border:1px solid #555; border-radius:6px; padding:9px 16px; cursor:pointer; font-weight:600;">30%</button>
+                        <button type="button" onclick="document.getElementById('precMargemDesejada').focus()" style="background:transparent; color:#aaa; border:1px solid #555; border-radius:6px; padding:9px 16px; cursor:pointer;">outro</button>
                     </div>
                 </div>
             </div>
 
-            <!-- CUSTOS OPERACIONAIS NA PRECIFICAÇÃO -->
-            <div class="section-title">🏢 Custos Operacionais na Precificação</div>
-            <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
-                <div style="display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:18px; padding-bottom:18px; border-bottom:1px solid #3a3a3a;">
-                    <div class="form-group" style="margin:0; min-width:200px;">
-                        <label>Puxar faturamento de</label>
-                        <select id="precFatMesSelect" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; background:var(--bg4); color:var(--text);">
-                            <option value="atual">Mês atual</option>
-                        </select>
+            <!-- O SISTEMA CUIDA DO RESTO -->
+            <div style="background:#1e2a1e; border:1px solid #2f4a2f; border-radius:10px; padding:1.1rem 1.25rem; margin-bottom:1.25rem;">
+                <div style="font-size:12px; font-weight:700; color:#4ade80; margin-bottom:12px;">✓ O sistema cuida do resto automaticamente</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:18px;">
+                    <div>
+                        <div style="font-size:11px; color:#888; margin-bottom:3px;">Imposto (Simples Nacional)</div>
+                        <div style="display:flex; align-items:baseline; gap:3px;">
+                            <input type="number" id="precSimples" value="6" min="0" max="100" step="0.01" oninput="_onConfigEdit()"
+                                   style="width:66px; padding:5px 6px; border:1px solid #3a3a3a; border-radius:5px; font-size:14px; font-weight:600; background:var(--bg); color:var(--text2);">
+                            <span style="color:#888; font-size:13px;">%</span>
+                        </div>
                     </div>
-                    <button onclick="precPuxarFaturamento()" style="background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; padding:11px 18px; font-size:13px;">🔄 Puxar faturamento</button>
-                    <span id="precFatMesAviso" style="font-size:12px; color:#777;"></span>
-                </div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:18px; align-items:end;">
-                    <div class="form-group" style="margin:0;">
-                        <label>Custos fixos do mês</label>
-                        <div id="precCustoFixoTotal" style="padding:10px 0; font-size:18px; font-weight:700; color:#e74c3c;">R$ 0,00</div>
-                        <div style="font-size:10px; color:#777; margin-top:2px;">vindos da aba Custos</div>
+                    <div>
+                        <div style="font-size:11px; color:#888; margin-bottom:3px;">Taxa do cartão (automática)</div>
+                        <div id="precTaxaMaqAuto" style="font-size:16px; font-weight:700; color:var(--text2);">—</div>
                     </div>
-                    <div class="form-group" style="margin:0;">
-                        <label>Custos variáveis do mês</label>
-                        <div id="precCustoVarTotal" style="padding:10px 0; font-size:18px; font-weight:700; color:#e67e22;">R$ 0,00</div>
-                        <div style="font-size:10px; color:#777; margin-top:2px;">vindos da aba Custos</div>
-                    </div>
-                    <div class="form-group" style="margin:0;">
-                        <label>Faturamento do mês (R$)</label>
-                        <input type="number" id="precFaturamentoMes" min="0" step="0.01" placeholder="0,00"
-                               oninput="calcularPrecificacao()"
-                               style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;">
-                        <div style="font-size:10px; color:#777; margin-top:4px;">base para ratear os custos (padrão: mês atual)</div>
-                    </div>
-                    <div class="form-group" style="margin:0;">
-                        <label>% sobre o faturamento</label>
-                        <div id="precPctCustos" style="padding:10px 0; font-size:15px; font-weight:700; color:#f97316;">Fixo: 0,0% | Variável: 0,0%</div>
-                        <div id="precFixoAviso" style="font-size:10px; color:#777; margin-top:2px;">do faturamento do mês</div>
+                    <div>
+                        <div style="font-size:11px; color:#888; margin-bottom:3px;">Custos da loja</div>
+                        <div id="precCustosLojaPct" style="font-size:16px; font-weight:700; color:var(--text2);">—</div>
+                        <div style="font-size:10px; color:#666;">da aba Custos</div>
                     </div>
                 </div>
             </div>
+
+            <!-- SEMÁFORO DE SAÚDE (CMV) + DRILL-DOWN CLICÁVEL -->
+            <div id="precSemaforoCmv" onclick="_toggleCmvDrill()" style="border-radius:10px; padding:1rem 1.25rem; margin-bottom:8px; background:#222; border:1px solid #3a3a3a; font-size:13px; color:#ccc; cursor:pointer;">—</div>
+            <div id="precCmvDrill" style="display:none; background:#141414; border:1px solid #2a2a2a; border-radius:10px; padding:1rem 1.25rem; margin-bottom:1.25rem;"></div>
+
+            <!-- AJUSTES AVANÇADOS -->
+            <details style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:12px 16px; margin-bottom:1.5rem;">
+                <summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">⚙️ Ajustes avançados</summary>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-top:14px;">
+                    <div class="form-group" style="margin:0;">
+                        <label>Meta de CMV — ingredientes no máximo (%)</label>
+                        <input type="number" id="precCmvDesejado" value="33" min="0" max="100" step="0.1" oninput="_onConfigEdit()"
+                               style="padding:10px; border:1px solid #444; border-radius:6px; font-size:15px; font-weight:600;">
+                        <div style="font-size:10px; color:#777; margin-top:4px;">usada no semáforo de saúde acima</div>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label>Taxa adicional</label>
+                        <input type="text" id="precTaxaGenericaNome" value="Taxa adicional" maxlength="40"
+                               oninput="_onConfigEdit()" title="Nome da taxa (editável)"
+                               style="width:100%; box-sizing:border-box; padding:4px 6px; margin-bottom:4px; border:1px solid #444; border-radius:6px; font-size:12px; font-weight:600; background:var(--bg4); color:var(--text);">
+                        <input type="number" id="precTaxaGenerica" value="0" min="0" max="100" step="0.01"
+                               oninput="_onConfigEdit()"
+                               style="padding:10px; border:1px solid #444; border-radius:6px; font-size:15px; font-weight:600;">
+                        <div style="font-size:10px; color:#777; margin-top:4px;">ex: marketplace, royalties (% sobre o preço)</div>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label>Base de faturamento p/ ratear custos</label>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <select id="precFatMesSelect" style="padding:8px; border:1px solid #444; border-radius:6px; font-size:13px; background:var(--bg4); color:var(--text);">
+                                <option value="atual">Mês atual</option>
+                            </select>
+                            <button onclick="precPuxarFaturamento()" style="background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; padding:8px 12px; font-size:12px;">🔄 Puxar</button>
+                        </div>
+                        <input type="number" id="precFaturamentoMes" min="0" step="0.01" placeholder="faturamento do mês (R$)"
+                               oninput="_onConfigEdit()"
+                               style="margin-top:6px; padding:8px; border:1px solid #444; border-radius:6px; font-size:14px; font-weight:600; width:100%; box-sizing:border-box;">
+                        <span id="precFatMesAviso" style="font-size:11px; color:#777;"></span>
+                        <div style="font-size:10px; color:#777; margin-top:4px;">Fixo <span id="precCustoFixoTotal">R$ 0,00</span> · Variável <span id="precCustoVarTotal">R$ 0,00</span> · <span id="precPctCustos">Fixo: 0,0% | Variável: 0,0%</span> <span id="precFixoAviso"></span></div>
+                    </div>
+                </div>
+            </details>
 
             <!-- ANATOMIA DO PREÇO -->
             <div class="section-title">🧬 Anatomia do Preço Sugerido</div>
@@ -2067,6 +2094,16 @@
                 updateCostsDisplay();
             });
 
+            // Config geral por loja (taxas de cartão + parâmetros de precificação) — persistida
+            onSnapshot(doc(db, `clientes/${slug}/config/geral`), (snap) => {
+                const c = snap.exists ? (snap.data() || {}) : {};
+                const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '' && document.activeElement !== el) el.value = v; };
+                ['taxaPix','taxaDebito','taxaCredito','taxaVR','taxaCartao','precMargemDesejada','precSimples','precCmvDesejado','precTaxaGenerica','precTaxaGenericaNome'].forEach(k => setVal(k, c[k]));
+                if (typeof _atualizarTaxasViews === 'function') _atualizarTaxasViews();
+                if (typeof _finUpdate === 'function') _finUpdate();
+                if (typeof calcularPrecificacao === 'function') calcularPrecificacao();
+            });
+
             // Notas
             onSnapshot(collection(db, `clientes/${slug}/notasLancadas`), (snap) => {
                 notasLancadas = snap.docs.map(d => d.data());
@@ -2701,6 +2738,24 @@
                 costValue.textContent = `R$ ${totalCost.toFixed(2).replace('.', ',')}`;
             } else {
                 summary.style.display = 'none';
+            }
+
+            // Linha de preço sugerido AO VIVO (mesmo motor da Precificação — _calcularPrecoSugerido, nunca diverge)
+            const sugEl = document.getElementById('recipeSugeridoLine');
+            if (sugEl) {
+                if (totalCost > 0) {
+                    const fmtR = v => 'R$ ' + (v || 0).toFixed(2).replace('.', ',');
+                    const ps = (typeof _calcularPrecoSugerido === 'function') ? _calcularPrecoSugerido(totalCost) : null;
+                    sugEl.style.display = 'block';
+                    if (ps != null) {
+                        const margem = (parseFloat(document.getElementById('precMargemDesejada')?.value) || 15);
+                        sugEl.innerHTML = `Custo <strong>${fmtR(totalCost)}</strong> · Preço sugerido <strong style="color:#E87722;">${fmtR(ps)}</strong> · <strong style="color:#4ade80;">${margem.toFixed(0)}% de lucro</strong>`;
+                    } else {
+                        sugEl.innerHTML = `Custo <strong>${fmtR(totalCost)}</strong> · <span style="color:#f59e0b;">defina o faturamento do mês na aba Precificação para ver o preço sugerido</span>`;
+                    }
+                } else {
+                    sugEl.style.display = 'none';
+                }
             }
 
             return totalCost;
@@ -3974,7 +4029,7 @@
         // ============================================================
         // ============== ANÁLISE EXECUTIVA (refundada) ===============
         // ============================================================
-        let _anaPeriod = '30d';
+        let _anaPeriod = 'mes';
         let _anaCustomStart = null;
         let _anaCustomEnd   = null;
         let _anaCharts = { menuEng: null, abc: null, trend: null, heatmap: null };
@@ -4010,7 +4065,7 @@
             const fim = document.getElementById('anaDataFim');    if (fim) fim.value = '';
             _anaCustomStart = null;
             _anaCustomEnd   = null;
-            setAnalysisPeriod('30d');
+            setAnalysisPeriod('mes');
         }
 
         // Wrappers da Análise: tratam 'custom' e delegam pros helpers compartilhados.
@@ -4035,8 +4090,13 @@
         function _anaPeriodRange(p) {
             const now = new Date();
             let start, end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-            if (p === '7d')          start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-            else if (p === '30d')    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+            if (p === '7d') {
+                // "Esta semana": segunda 00:00 → domingo 23:59:59.999 da semana que contém hoje (horário LOCAL).
+                const dow = now.getDay();                        // 0=dom, 1=seg, ... 6=sáb
+                const desdeSegunda = (dow === 0) ? 6 : dow - 1;  // domingo pertence à semana iniciada na segunda anterior
+                start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - desdeSegunda);
+                end   = new Date(now.getFullYear(), now.getMonth(), now.getDate() - desdeSegunda + 6, 23, 59, 59, 999);
+            }
             else if (p === 'mes')    start = new Date(now.getFullYear(), now.getMonth(), 1);
             else if (p === 'mesAnt') {
                 start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -4070,9 +4130,15 @@
         // Filtra vendas do período (usa dataInicio como âncora)
         function _anaFilterVendas(start, end) {
             return vendasRegistradas.filter(v => {
+                // Ignora relatórios sintéticos de busca por período (não são vendas Anota reais;
+                // somá-los duplicava Faturamento Bruto/CMV em cima dos pedidos reais).
+                if (v.arquivo === 'Pedidos Firestore') return false;
                 const ref = v.dataInicio || v.data;
                 if (!ref) return false;
-                const d = new Date(ref);
+                // Parse em horário LOCAL (não UTC): "2026-05-01" não pode virar 30/04 21:00 (BRT).
+                const m = String(ref).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(ref);
+                if (isNaN(d)) return false;
                 return d >= start && d <= end;
             });
         }
@@ -4101,15 +4167,10 @@
 
         function _anaPrecConfig() {
             const simples        = (parseFloat(document.getElementById('precSimples')?.value) || 6) / 100;
-            const taxaMaq        = (parseFloat(document.getElementById('precTaxaMaq')?.value) || 2.99) / 100;
+            const taxaMaq        = _blendTaxaCartao() / 100;
             const cmvDesejadoPct = parseFloat(document.getElementById('precCmvDesejado')?.value) || 33;
             const margemDesejadaPct = parseFloat(document.getElementById('precMargemDesejada')?.value) || 15;
             return { simples, taxaMaq, cmvDesejadoPct, margemDesejadaPct };
-        }
-
-        // Lucro líquido = faturamento − custo − impostos − maquininha
-        function _anaLucroLiq(fat, custo, cfg) {
-            return fat - custo - (fat * cfg.simples) - (fat * cfg.taxaMaq);
         }
 
         function _anaDelta(curr, prev, isPp = false) {
@@ -4239,6 +4300,12 @@
                 prev ? _anaGetAgg(prev.start, prev.end) : Promise.resolve(_aggVazio())
             ]);
 
+            // DRE pela fonte única (_dreDoPeriodo) — Lucro Líquido/Margem idênticos ao Financeiro.
+            const [dreC, dreP] = await Promise.all([
+                _dreDoPeriodo(cur.start, cur.end, _anaPeriod),
+                prev ? _dreDoPeriodo(prev.start, prev.end, _anaPeriod) : Promise.resolve(null)
+            ]);
+
             // Label do período
             const lbl = document.getElementById('anaPeriodLabel');
             if (lbl) {
@@ -4248,10 +4315,10 @@
             }
 
             // ① KPIs
-            _anaRenderKpis(aggC, aggP, cfg, prev != null);
+            _anaRenderKpis(aggC, aggP, cfg, prev != null, dreC, dreP);
 
             // ② Insights
-            _anaRenderInsights(aggC, aggP, cfg, prev != null);
+            _anaRenderInsights(aggC, aggP, cfg, prev != null, dreC, dreP);
 
             // Gráficos (precisa de Chart.js)
             await _anaEnsureChart();
@@ -4260,23 +4327,24 @@
             _anaRenderPerformance(cfg);
         }
 
-        function _anaRenderKpis(c, p, cfg, hasPrev) {
-            const lucroC = _anaLucroLiq(c.faturamento, c.custo, cfg);
-            const lucroP = _anaLucroLiq(p.faturamento, p.custo, cfg);
-            const margemC = c.faturamento > 0 ? (lucroC / c.faturamento) * 100 : 0;
-            const margemP = p.faturamento > 0 ? (lucroP / p.faturamento) * 100 : 0;
+        function _anaRenderKpis(c, p, cfg, hasPrev, dreC, dreP) {
+            // Lucro Líquido, CMV (R$) e Custos Fixos (R$) vêm da fonte única (_dreDoPeriodo) — idênticos ao DRE.
+            const lucroC = dreC ? dreC.lucroLiquido : 0;
+            const lucroP = dreP ? dreP.lucroLiquido : 0;
+            const cmvReaisC = dreC ? dreC.cmv : 0;          // = "(−) CMV" do DRE
+            const cmvReaisP = dreP ? dreP.cmv : 0;
+            const fixosC = dreC ? dreC.custosFixos : 0;     // = "(−) Custos Fixos" do DRE
+            const fixosP = dreP ? dreP.custosFixos : 0;
             const ticketC = c.numPedidos > 0 ? c.faturamento / c.numPedidos : 0;
             const ticketP = p.numPedidos > 0 ? p.faturamento / p.numPedidos : 0;
-            const cmvC = c.faturamento > 0 ? (c.custo / c.faturamento) * 100 : 0;
-            const cmvP = p.faturamento > 0 ? (p.custo / p.faturamento) * 100 : 0;
 
             const kpis = [
                 { label:'Faturamento',   val:_anaFmt(c.faturamento), delta: hasPrev ? _anaDelta(c.faturamento, p.faturamento) : null, accent:'#ff6b35' },
+                { label:'Custo de Insumos (CMV R$)', val:_anaFmt(cmvReaisC), delta: hasPrev ? _anaDelta(cmvReaisC, cmvReaisP) : null, accent:'#e74c3c', invertDelta: true },
+                { label:'Custo Fixo (R$)', val:_anaFmt(fixosC),      delta: hasPrev ? _anaDelta(fixosC, fixosP) : null,            accent:'#60a5fa', invertDelta: true },
                 { label:'Lucro Líquido', val:_anaFmt(lucroC),         delta: hasPrev ? _anaDelta(lucroC, lucroP) : null,            accent: lucroC >= 0 ? '#4ade80' : '#ff6b6b' },
-                { label:'Margem Líq.',   val:`${margemC.toFixed(1)}%`,delta: hasPrev ? _anaDelta(margemC, margemP, true) : null,    accent:'#60a5fa' },
                 { label:'Ticket Médio',  val:_anaFmt(ticketC),        delta: hasPrev ? _anaDelta(ticketC, ticketP) : null,          accent:'#9b59b6' },
-                { label:'Pedidos',       val:_anaFmtInt(c.numPedidos),delta: hasPrev ? _anaDelta(c.numPedidos, p.numPedidos) : null, accent:'#f39c12' },
-                { label:'CMV ponderado', val:`${cmvC.toFixed(1)}%`,   delta: hasPrev ? _anaDelta(cmvC, cmvP, true) : null,          accent: cmvC <= cfg.cmvDesejadoPct ? '#4ade80' : '#ff6b6b', invertDelta: true }
+                { label:'Pedidos',       val:_anaFmtInt(c.numPedidos),delta: hasPrev ? _anaDelta(c.numPedidos, p.numPedidos) : null, accent:'#f39c12' }
             ];
 
             document.getElementById('anaKpis').innerHTML = kpis.map(k => {
@@ -4297,7 +4365,7 @@
             }).join('');
         }
 
-        function _anaRenderInsights(c, p, cfg, hasPrev) {
+        function _anaRenderInsights(c, p, cfg, hasPrev, dreC, dreP) {
             const insights = [];
 
             // Sem dados
@@ -4316,11 +4384,9 @@
             }
 
             // Variação de margem vs período anterior
-            if (hasPrev && p.faturamento > 0 && c.faturamento > 0) {
-                const lucroC = _anaLucroLiq(c.faturamento, c.custo, cfg);
-                const lucroP = _anaLucroLiq(p.faturamento, p.custo, cfg);
-                const mc = (lucroC / c.faturamento) * 100;
-                const mp = (lucroP / p.faturamento) * 100;
+            if (hasPrev && dreC && dreP && p.faturamento > 0 && c.faturamento > 0) {
+                const mc = dreC.margemLiquida;
+                const mp = dreP.margemLiquida;
                 const diff = mc - mp;
                 if (diff < -1.5) {
                     insights.push({ kind:'bad', icon:'📉', text:`Margem líquida caiu <strong>${Math.abs(diff).toFixed(1)} pp</strong> vs período anterior (${mp.toFixed(1)}% → ${mc.toFixed(1)}%). Investigue insumos que subiram.` });
@@ -5333,11 +5399,70 @@
             setAviso('');
         }
 
+        // ===== CONFIG POR LOJA (taxas + parâmetros) — persistida em clientes/{slug}/config/geral =====
+        let _mixCartaoMes = { debito: 0, credito: 0 };
+        let _cmvRealMes = null; // CMV % ponderado do mês (= dre.cmv/dre.fat), cacheado por _dreDoPeriodo('mes')
+
+        // Taxa de cartão "maquininha" automática: blend de débito/crédito ponderado pelo mix real do mês (em %).
+        function _blendTaxaCartao() {
+            const txDeb  = parseFloat(document.getElementById('taxaDebito')?.value);
+            const txCred = parseFloat(document.getElementById('taxaCredito')?.value);
+            const d = isNaN(txDeb) ? 1.5 : txDeb, c = isNaN(txCred) ? 2.99 : txCred;
+            const vDeb = _mixCartaoMes.debito || 0, vCred = _mixCartaoMes.credito || 0;
+            const tot = vDeb + vCred;
+            return tot > 0 ? (d * vDeb + c * vCred) / tot : (d + c) / 2;
+        }
+
+        function _coletarConfig() {
+            const o = {};
+            ['taxaPix','taxaDebito','taxaCredito','taxaVR','taxaCartao','precMargemDesejada','precSimples','precCmvDesejado','precTaxaGenerica'].forEach(k => {
+                const v = parseFloat(document.getElementById(k)?.value); if (!isNaN(v)) o[k] = v;
+            });
+            const nome = document.getElementById('precTaxaGenericaNome')?.value;
+            if (nome != null && nome !== '') o.precTaxaGenericaNome = nome;
+            return o;
+        }
+
+        function _salvarConfig() {
+            if (window._fb) window._fb.fbSave('config', 'geral', _coletarConfig()).catch(e => console.error('config save', e));
+        }
+
+        function _atualizarTaxasViews() {
+            const map = { taxaPixView:'taxaPix', taxaDebitoView:'taxaDebito', taxaCreditoView:'taxaCredito', taxaVRView:'taxaVR', taxaCartaoView:'taxaCartao' };
+            for (const viewId in map) {
+                const el = document.getElementById(viewId); if (!el) continue;
+                const v = parseFloat(document.getElementById(map[viewId])?.value);
+                el.textContent = (isNaN(v) ? '—' : v.toFixed(2).replace('.', ',')) + '%';
+            }
+        }
+
+        // Editou qualquer campo de config (taxas em Custos ou parâmetros na Precificação): salva + re-renderiza.
+        function _onConfigEdit() {
+            _salvarConfig();
+            _atualizarTaxasViews();
+            if (typeof _finUpdate === 'function') _finUpdate();
+            if (typeof calcularPrecificacao === 'function') calcularPrecificacao();
+        }
+
+        // Chips de atalho da margem desejada (a decisão única da Precificação).
+        function precSetMargem(v) {
+            const el = document.getElementById('precMargemDesejada');
+            if (el) { el.value = v; _onConfigEdit(); }
+        }
+
+        // Abre/fecha o drill-down de CMV por produto.
+        function _toggleCmvDrill() {
+            const el = document.getElementById('precCmvDrill');
+            if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+        }
+
         // Fonte ÚNICA dos parâmetros e do fator de precificação (mesma fórmula usada na aba Precificação).
         function _precFatorAtual() {
             const margemDesejada = (parseFloat(document.getElementById('precMargemDesejada')?.value) || 15) / 100;
             const simples        = (parseFloat(document.getElementById('precSimples')?.value) || 6) / 100;
-            const taxaMaq        = (parseFloat(document.getElementById('precTaxaMaq')?.value) || 2.99) / 100;
+            const taxaMaq        = _blendTaxaCartao() / 100;
+            const taxaGenerica   = (parseFloat(document.getElementById('precTaxaGenerica')?.value) || 0) / 100;
+            const nomeTaxaGenerica = (document.getElementById('precTaxaGenericaNome')?.value || 'Taxa adicional').trim() || 'Taxa adicional';
             const totalFixo     = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
             const totalVariavel = variableCosts.reduce((s, c) => s + (c.value || 0), 0);
             const fatInput = document.getElementById('precFaturamentoMes');
@@ -5345,8 +5470,8 @@
             if (faturamentoMes <= 0 && typeof _fatMesCorrente === 'number' && _fatMesCorrente > 0) faturamentoMes = _fatMesCorrente;
             const pctFixo     = faturamentoMes > 0 ? (totalFixo / faturamentoMes) : 0;
             const pctVariavel = faturamentoMes > 0 ? (totalVariavel / faturamentoMes) : 0;
-            const fator = 1 - margemDesejada - simples - taxaMaq - pctFixo - pctVariavel;
-            return { margemDesejada, simples, taxaMaq, totalFixo, totalVariavel, faturamentoMes, pctFixo, pctVariavel, fator,
+            const fator = 1 - margemDesejada - simples - taxaMaq - pctFixo - pctVariavel - taxaGenerica;
+            return { margemDesejada, simples, taxaMaq, taxaGenerica, nomeTaxaGenerica, totalFixo, totalVariavel, faturamentoMes, pctFixo, pctVariavel, fator,
                      valido: faturamentoMes > 0 && fator > 0 };
         }
 
@@ -5360,7 +5485,7 @@
         function calcularPrecificacao() {
             const margemDesejada = (parseFloat(document.getElementById('precMargemDesejada')?.value) || 15) / 100;
             const simples        = (parseFloat(document.getElementById('precSimples')?.value) || 6) / 100;
-            const taxaMaq        = (parseFloat(document.getElementById('precTaxaMaq')?.value) || 2.99) / 100;
+            const taxaMaq        = _blendTaxaCartao() / 100;
             const cmvDesejadoPct = parseFloat(document.getElementById('precCmvDesejado')?.value) || 33;
             const categoria      = document.getElementById('precCategoria')?.value || '';
 
@@ -5389,6 +5514,12 @@
                 : '⚠️ Informe o faturamento para incluir custos fixo e variável';
 
             const fator = _fAtual.fator;
+            const elTxAuto = document.getElementById('precTaxaMaqAuto');
+            if (elTxAuto) elTxAuto.textContent = (taxaMaq * 100).toFixed(2).replace('.', ',') + '%';
+            const elCustosLoja = document.getElementById('precCustosLojaPct');
+            if (elCustosLoja) elCustosLoja.textContent = faturamentoMes > 0
+                ? ((pctFixo + pctVariavel) * 100).toFixed(1).replace('.', ',') + '% do preço'
+                : '— (informe o faturamento)';
 
             // Anatomia do preço (geral): cada fatia é % do preço. "Ingrediente" = fator = custo/preçoSugerido.
             _renderAnatomiaPreco({
@@ -5397,11 +5528,12 @@
                 'Custo Variável': pctVariavel,
                 Imposto: simples,
                 'Taxa Cartão': taxaMaq,
+                [_fAtual.nomeTaxaGenerica]: _fAtual.taxaGenerica,
                 Lucro: margemDesejada
             });
 
             if (fator <= 0) {
-                container.innerHTML = '<div style="background:#3a1a1a; border:1px solid #ff6b6b; border-radius:8px; padding:1rem; color:#ff6b6b; text-align:center;">⚠️ A soma de Margem Desejada + Simples Nacional + Taxa Maquininha + Custo Fixo + Custo Variável precisa ser menor que 100%.</div>';
+                container.innerHTML = '<div style="background:#3a1a1a; border:1px solid #ff6b6b; border-radius:8px; padding:1rem; color:#ff6b6b; text-align:center;">⚠️ A soma de Margem Desejada + Simples Nacional + Taxa Maquininha + Custo Fixo + Custo Variável + taxa adicional precisa ser menor que 100%.</div>';
                 return;
             }
 
@@ -5409,7 +5541,55 @@
 
             if (recipesFiltradas.length === 0) {
                 container.innerHTML = '<div class="empty-state" style="text-align:center; padding:2rem; color:#777;">Nenhuma receita encontrada' + (categoria ? ' para esta categoria.' : '. Cadastre receitas na aba Receitas para ver a precificação.') + '</div>';
+                const _semVazio = document.getElementById('precSemaforoCmv'); if (_semVazio) _semVazio.style.display = 'none';
+                const _drillVazio = document.getElementById('precCmvDrill'); if (_drillVazio) _drillVazio.style.display = 'none';
                 return;
+            }
+
+            // HEADLINE do semáforo = CMV REAL ponderado pelas vendas (mesmo do DRE/_dreDoPeriodo('mes')), vs meta.
+            const _semEl = document.getElementById('precSemaforoCmv');
+            if (_semEl) {
+                _semEl.style.display = '';
+                const _cmvReal = (typeof _cmvRealMes === 'number') ? _cmvRealMes : null;
+                if (_cmvReal == null) {
+                    _semEl.style.borderColor = '#3a3a3a';
+                    _semEl.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px;"><span style="color:#aaa;">CMV real do mês ainda indisponível (sem vendas registradas). Clique para ver o CMV por produto.</span><span style="color:#888; font-size:12px; white-space:nowrap;">ver por produto ▾</span></div>`;
+                } else {
+                    const _cor = _cmvReal <= cmvDesejadoPct ? '#4ade80' : (_cmvReal <= cmvDesejadoPct + 5 ? '#f59e0b' : '#ef4444');
+                    const _ic  = _cmvReal <= cmvDesejadoPct ? '🟢' : (_cmvReal <= cmvDesejadoPct + 5 ? '🟡' : '🔴');
+                    const _msg = _cmvReal <= cmvDesejadoPct ? 'dentro da meta — saudável' : (_cmvReal <= cmvDesejadoPct + 5 ? 'um pouco acima da meta' : 'acima da meta — reveja preços/fichas');
+                    _semEl.style.borderColor = _cor;
+                    _semEl.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px;"><div><span style="font-size:16px;">${_ic}</span> <strong style="color:${_cor};">Seu CMV real (custo de ingredientes ÷ vendas): ${_cmvReal.toFixed(1).replace('.', ',')}%</strong> — ideal até ${cmvDesejadoPct.toFixed(0)}%. <span style="color:#aaa;">(${_msg})</span></div><span style="color:#888; font-size:12px; white-space:nowrap;">ver CMV por produto ▾</span></div>`;
+                }
+            }
+
+            // Drill-down: CMV por produto (custo da ficha ÷ preço atual), do maior pro menor.
+            const _drillEl = document.getElementById('precCmvDrill');
+            if (_drillEl) {
+                const _fmtR = v => 'R$ ' + (v || 0).toFixed(2).replace('.', ',');
+                const _rank = recipesFiltradas.filter(r => (r.price || 0) > 0)
+                    .map(r => ({ nome: r.name || '(sem nome)', custo: r.cost || 0, preco: r.price, cmv: ((r.cost || 0) / r.price) * 100 }))
+                    .sort((a, b) => b.cmv - a.cmv);
+                _drillEl.innerHTML = `
+                    <div style="font-size:11px; color:#888; margin-bottom:10px;">CMV por produto (custo da ficha ÷ preço atual). Métrica <strong>diferente</strong> do headline acima — aqui cada produto pesa igual; o headline é ponderado pelas vendas reais.</div>
+                    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <thead><tr style="background:#1a1a1a; color:#888; font-size:11px; text-transform:uppercase;">
+                            <th style="padding:6px 10px; text-align:left;">Produto</th>
+                            <th style="padding:6px 10px; text-align:right;">Custo</th>
+                            <th style="padding:6px 10px; text-align:right;">Preço atual</th>
+                            <th style="padding:6px 10px; text-align:right;">CMV%</th>
+                        </tr></thead>
+                        <tbody>${_rank.map(r => {
+                            const _c = r.cmv <= cmvDesejadoPct ? '#4ade80' : (r.cmv <= cmvDesejadoPct + 5 ? '#f59e0b' : '#ef4444');
+                            const _tag = r.cmv >= 100 ? ' <span style="background:#3a1a1a; color:#f59e0b; font-size:10px; padding:1px 6px; border-radius:8px;">parece insumo/sub-receita — confira se deveria ter preço de venda</span>' : '';
+                            return `<tr style="border-top:1px solid #2a2a2a;">
+                                <td style="padding:6px 10px; color:#e8e8e8;">${r.nome}${_tag}</td>
+                                <td style="padding:6px 10px; text-align:right; color:#ccc; white-space:nowrap;">${_fmtR(r.custo)}</td>
+                                <td style="padding:6px 10px; text-align:right; color:#ccc; white-space:nowrap;">${_fmtR(r.preco)}</td>
+                                <td style="padding:6px 10px; text-align:right; font-weight:700; color:${_c};">${r.cmv.toFixed(0)}%</td>
+                            </tr>`;
+                        }).join('')}</tbody>
+                    </table></div>`;
             }
 
             // Ordenar por categoria depois por nome
@@ -6103,6 +6283,122 @@
             }
         }
 
+        // Consolidado de insumos: agrega os itens de TODAS as notas filtradas por insumo (nome normalizado,
+        // mesma normalização de caixa do histórico de reajuste + strip de acento), conciliando unidades
+        // (kg/g, l/ml). Só aparece com filtro de fornecedor ativo; respeita também o filtro de mês.
+        function _renderConsolidadoInsumos(notasFiltradas, filtroFornecedor, filtroMes) {
+            const div = document.getElementById('notasConsolidadoInsumos');
+            if (!div) return;
+            if (!filtroFornecedor) { div.style.display = 'none'; div.innerHTML = ''; return; }
+
+            const brl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const normNome = s => (s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+            const unidadeInfo = u => {
+                let x = (u || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+                if (['kg','quilo','quilos','kgs','kilo','kilos'].includes(x)) return { fam:'massa',  fator:1000, base:'g' };
+                if (['g','grama','gramas','gr','grs'].includes(x))            return { fam:'massa',  fator:1,    base:'g' };
+                if (['l','lt','lts','litro','litros'].includes(x))            return { fam:'volume', fator:1000, base:'ml' };
+                if (['ml','mls'].includes(x))                                 return { fam:'volume', fator:1,    base:'ml' };
+                if (['un','und','unid','unidade','unidades','pc','pca','peca','pecas'].includes(x)) x = 'un';
+                if (x === '') x = 'un';
+                return { fam:'outro:'+x, fator:1, base:x };
+            };
+            const displayUni = (qtdBase, base) => {
+                if (base === 'g')  return qtdBase >= 1000 ? { u:'kg', div:1000, frac:3 } : { u:'g',  div:1, frac:0 };
+                if (base === 'ml') return qtdBase >= 1000 ? { u:'L',  div:1000, frac:3 } : { u:'ml', div:1, frac:0 };
+                return { u: base, div: 1, frac: 2 };
+            };
+
+            // Agrega itens por insumo → família de unidade
+            const insumos = new Map();
+            let totalGeralItens = 0;
+            notasFiltradas.forEach(nota => {
+                (nota.itens || []).forEach(item => {
+                    const nomeRaw = (item.produto || item.insumo || '').trim();
+                    const key = normNome(nomeRaw);
+                    if (!key) return;
+                    const qtd   = Number(item.qtd) || 0;
+                    const valor = Number(item.valor) || (qtd * (Number(item.valorUnit) || 0));
+                    totalGeralItens += valor;
+                    const ui = unidadeInfo(item.unidade || item.unit);
+                    if (!insumos.has(key)) insumos.set(key, { display: nomeRaw, grupos: new Map() });
+                    const reg = insumos.get(key);
+                    if (!reg.grupos.has(ui.fam)) reg.grupos.set(ui.fam, { qtdBase: 0, base: ui.base, valor: 0, notas: new Set() });
+                    const g = reg.grupos.get(ui.fam);
+                    g.qtdBase += qtd * ui.fator;
+                    g.valor   += valor;
+                    g.notas.add(nota.id);
+                });
+            });
+
+            if (insumos.size === 0) { div.style.display = 'none'; div.innerHTML = ''; return; }
+
+            // Monta linhas (insumo com unidades incompatíveis vira várias linhas + flag)
+            const linhas = [];
+            insumos.forEach(reg => {
+                const grupos = [...reg.grupos.values()];
+                const valorInsumo = grupos.reduce((s, g) => s + g.valor, 0);
+                const misto = grupos.length > 1;
+                grupos.forEach(g => {
+                    const d = displayUni(g.qtdBase, g.base);
+                    const qtdDisp = g.qtdBase / d.div;
+                    const precoMedio = qtdDisp > 0 ? g.valor / qtdDisp : 0;
+                    linhas.push({
+                        valorInsumo, valor: g.valor, nome: reg.display, misto,
+                        qtdStr: `${qtdDisp.toLocaleString('pt-BR', { maximumFractionDigits: d.frac })} ${d.u}`,
+                        precoMedio, unidadePreco: `/${d.u}`, nNotas: g.notas.size
+                    });
+                });
+            });
+            linhas.sort((a, b) => (b.valorInsumo - a.valorInsumo) || (b.valor - a.valor));
+
+            const fornecedores = [...new Set(notasFiltradas.map(n => n.fornecedor).filter(Boolean))];
+            const fornLabel = fornecedores.join(', ') || '—';
+            const periodoLabel = filtroMes
+                ? (() => { const [y, m] = filtroMes.split('-'); return new Date(+y, +m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); })()
+                : 'todos os meses';
+            const temMisto = linhas.some(l => l.misto);
+
+            const linhasHtml = linhas.map(l => `
+                <tr style="border-top:1px solid #3a3a3a;">
+                    <td style="padding:8px 12px; color:#e8e8e8;">${l.nome}${l.misto ? ' <span title="Unidades não conciliáveis — mostrado separado por unidade" style="color:#f59e0b;">⚠️</span>' : ''}</td>
+                    <td style="padding:8px 12px; text-align:right; color:#ccc; white-space:nowrap;">${l.qtdStr}</td>
+                    <td style="padding:8px 12px; text-align:right; color:#ccc; white-space:nowrap;">${brl(l.precoMedio)}<span style="color:#777; font-size:11px;">${l.unidadePreco}</span></td>
+                    <td style="padding:8px 12px; text-align:center; color:#aaa;">${l.nNotas}</td>
+                    <td style="padding:8px 12px; text-align:right; font-weight:700; color:#E87722; white-space:nowrap;">${brl(l.valor)}</td>
+                </tr>`).join('');
+
+            div.innerHTML = `
+                <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; overflow:hidden;">
+                    <div style="background:#1a1a1a; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:1px solid #3a3a3a;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#E87722; text-transform:uppercase; letter-spacing:0.5px;">📦 Consolidado de Insumos</div>
+                            <div style="font-size:11px; color:#aaa; margin-top:2px;">${fornLabel} · ${periodoLabel} · ${notasFiltradas.length} nota(s) · ${insumos.size} insumo(s)</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:10px; color:#777; text-transform:uppercase;">Total geral</div>
+                            <div style="font-size:20px; font-weight:700; color:#E87722;">${brl(totalGeralItens)}</div>
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <thead>
+                            <tr style="background:#222; color:#888; font-size:11px; text-transform:uppercase;">
+                                <th style="padding:8px 12px; text-align:left;">Insumo</th>
+                                <th style="padding:8px 12px; text-align:right;">Qtd total</th>
+                                <th style="padding:8px 12px; text-align:right;">Preço médio</th>
+                                <th style="padding:8px 12px; text-align:center;">Nº notas</th>
+                                <th style="padding:8px 12px; text-align:right;">Valor total</th>
+                            </tr>
+                        </thead>
+                        <tbody>${linhasHtml}</tbody>
+                    </table>
+                    </div>
+                    ${temMisto ? '<div style="padding:8px 16px; font-size:11px; color:#f59e0b; border-top:1px solid #3a3a3a;">⚠️ Insumos com unidades não conciliáveis aparecem em linhas separadas por unidade.</div>' : ''}
+                </div>`;
+            div.style.display = 'block';
+        }
+
         function renderNotasLancadas() {
             const container = document.getElementById('notasLancadas');
             if (!container) return;
@@ -6133,6 +6429,9 @@
 
             // Ordenar por data decrescente
             filtered.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+            // Painel consolidado de insumos (só com filtro de fornecedor; respeita o filtro de mês)
+            _renderConsolidadoInsumos(filtered, filtroFornecedor, filtroMes);
 
             // Atualizar dashboard
             const totalMes = filtered.reduce((s, n) => s + (n.total || 0), 0);
@@ -6459,14 +6758,28 @@
             document.getElementById('apPagasQtd').textContent = pagasMes.length + ' nota' + (pagasMes.length!==1?'s':'');
 
             const banner = document.getElementById('notasAPagarBanner');
-            if (vencidas.length) {
+            const ddmm = v => { const d = new Date(v + 'T00:00:00'); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); };
+            const rotuloVenc = (d, v) => {
+                const data = ddmm(v);
+                if (d < 0) { const k = Math.abs(d); return `<strong style="color:#f87171">VENCIDA há ${k} dia${k > 1 ? 's' : ''} (${data})</strong>`; }
+                if (d === 0) return `<strong style="color:#fbbf24">vence HOJE (${data})</strong>`;
+                if (d === 1) return `vence amanhã (${data})`;
+                return `vence em ${d} dias (${data})`;
+            };
+            const linhaBanner = n => `<div style="margin:2px 0; line-height:1.4;"><span style="font-weight:600; color:#fff;">${n.fornecedor || '—'}</span> — ${fmt(parseFloat(n.total) || 0)} — ${rotuloVenc(dias(n.vencimento), n.vencimento)}</div>`;
+            // mais urgentes primeiro: vencidas (mais antigas) → hoje → próximas (até 7 dias)
+            const atencao = [...vencidas, ...vencendo].sort((a, b) => dias(a.vencimento) - dias(b.vencimento));
+            if (atencao.length) {
+                const temVencida = vencidas.length > 0;
                 banner.style.display = 'flex';
-                banner.style.background = '#3a1414'; banner.style.border = '1px solid #E24B4A';
-                banner.innerHTML = `<span style="color:#F09595;font-weight:500">⚠ ${vencidas.length} nota(s) vencida(s) · ${fmt(soma(vencidas))} em atraso</span>`;
-            } else if (vencendo.length) {
-                banner.style.display = 'flex';
-                banner.style.background = '#3a2e14'; banner.style.border = '1px solid #EF9F27';
-                banner.innerHTML = `<span style="color:#FAC775;font-weight:500">⏰ ${vencendo.length} nota(s) vencendo em até 7 dias · ${fmt(soma(vencendo))}</span>`;
+                banner.style.background = temVencida ? '#3a1414' : '#3a2e14';
+                banner.style.border = temVencida ? '1px solid #E24B4A' : '1px solid #EF9F27';
+                const TOPN = 3;
+                let conteudo = `<div style="display:flex; align-items:flex-start; gap:8px; width:100%;"><span style="font-size:14px; line-height:1.4;">${temVencida ? '⚠' : '⏰'}</span><div style="flex:1; min-width:0;">`;
+                conteudo += atencao.slice(0, TOPN).map(linhaBanner).join('');
+                if (atencao.length > TOPN) conteudo += `<div style="margin-top:3px; font-size:11px; color:#aaa;">+${atencao.length - TOPN} outra(s) nota(s) · total ${fmt(soma(atencao))}</div>`;
+                conteudo += `</div></div>`;
+                banner.innerHTML = conteudo;
             } else {
                 banner.style.display = 'none';
             }
@@ -6508,24 +6821,33 @@
             });
             const fmtR = v => 'R$ ' + (v || 0).toFixed(2).replace('.', ',');
             const somaTot = arr => arr.reduce((s, n) => s + (n.total || 0), 0);
-            const nomes = arr => [...new Set(arr.map(n => n.fornecedor || '—'))].slice(0, 4).join(', ');
 
-            // Banner
+            // Banner — uma linha por conta, com valor, data exata e rótulo claro
             const banner = document.getElementById('contasPagarBanner');
             if (banner) {
                 const icon = document.getElementById('contasPagarBannerIcon');
                 const texto = document.getElementById('contasPagarBannerTexto');
-                if (vencidas.length > 0) {
-                    banner.style.background = '#1f0a0a';
-                    banner.style.borderColor = '#5a1a1a';
-                    if (icon) icon.textContent = '⚠️';
-                    if (texto) texto.innerHTML = `<strong>${vencidas.length} conta(s) vencida(s)</strong> · ${fmtR(somaTot(vencidas))} — ${nomes(vencidas)}`;
-                    banner.style.display = 'flex';
-                } else if (vencendo.length > 0) {
-                    banner.style.background = '#1f1400';
-                    banner.style.borderColor = '#5a3a00';
-                    if (icon) icon.textContent = '⏰';
-                    if (texto) texto.innerHTML = `<strong>${vencendo.length} conta(s) vencendo em até 3 dias</strong> · ${fmtR(somaTot(vencendo))} — ${nomes(vencendo)}`;
+                const moeda = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                const ddmm = venc => { const d = new Date(venc + 'T12:00:00'); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); };
+                const rotuloVenc = (dias, venc) => {
+                    const data = ddmm(venc);
+                    if (dias < 0) { const n = Math.abs(dias); return `<strong style="color:#f87171">VENCIDA há ${n} dia${n > 1 ? 's' : ''} (${data})</strong>`; }
+                    if (dias === 0) return `<strong style="color:#fbbf24">vence HOJE (${data})</strong>`;
+                    if (dias === 1) return `vence amanhã (${data})`;
+                    return `vence em ${dias} dias (${data})`;
+                };
+                // mais urgentes primeiro: vencidas (mais antigas) → hoje → próximas
+                const atencao = [...vencidas, ...vencendo].sort((a, b) => _diasAteVencimento(a.vencimento) - _diasAteVencimento(b.vencimento));
+                if (atencao.length > 0) {
+                    const temVencida = vencidas.length > 0;
+                    banner.style.background = temVencida ? '#1f0a0a' : '#1f1400';
+                    banner.style.borderColor = temVencida ? '#5a1a1a' : '#5a3a00';
+                    if (icon) icon.textContent = temVencida ? '⚠️' : '⏰';
+                    const TOPN = 3;
+                    const linha = n => `<div style="margin:2px 0; line-height:1.4;"><span style="font-weight:600; color:#fff;">${n.fornecedor || '—'}</span> — ${moeda(n.total)} — ${rotuloVenc(_diasAteVencimento(n.vencimento), n.vencimento)}</div>`;
+                    let conteudo = atencao.slice(0, TOPN).map(linha).join('');
+                    if (atencao.length > TOPN) conteudo += `<div style="margin-top:3px; font-size:11px; color:#aaa;">+${atencao.length - TOPN} outra(s) conta(s) · total ${moeda(somaTot(atencao))}</div>`;
+                    if (texto) texto.innerHTML = conteudo;
                     banner.style.display = 'flex';
                 } else {
                     banner.style.display = 'none';
@@ -7029,25 +7351,11 @@
             _dreDias        = _calcDreDias(dataInicio, dataFim);
             calcularDRE();
 
-            const relatorio = {
-                id: Date.now(),
-                dataInicio, dataFim,
-                arquivo: 'Pedidos Firestore',
-                faturamento: faturamentoReal,
-                custo,
-                lucro: lucroGeral,
-                unidades: totalUnidades,
-                cmv: parseFloat(cmvGeral) || 0,
-                itensSemReceita: semReceita,
-                itens: itensProcessados,
-                numPedidos,
-                ticketMedio,
-                pagamentos,
-                adicionais: adicLista
-            };
-            vendasRegistradas.unshift(relatorio);
+            // RAIZ DO BUG DE FATURAMENTO: NÃO salvar buscas por período na coleção 'vendas'.
+            // Esses relatórios sintéticos ('Pedidos Firestore') eram somados pelo híbrido em cima
+            // dos pedidos reais, inflando Faturamento Bruto e CMV. O resultado já foi exibido acima
+            // (calcularDRE) e na tabela; o histórico de Vendas mostra só imports reais do Anota AI.
             if (window._fb) {
-                window._fb.fbSave('vendas', relatorio.id, relatorio).catch(e => console.error('Erro venda:', e));
                 window._fb.fbLog('buscou', 'Vendas', `${dataInicio} a ${dataFim}`, `${numPedidos} pedidos | ${totalUnidades} un | ${semReceita} sem receita`).catch(() => {});
             }
 
@@ -7565,38 +7873,32 @@
                     lucroEl.style.color = lucro >= 0 ? '#27ae60' : '#e74c3c';
                 }
 
-                // DRE parcial
+                // DRE parcial — fonte ÚNICA (_dreDoPeriodo): taxa por método + fixos rateados, igual ao Financeiro/Análise
                 if (faturamento > 0) {
-                    const simples     = (parseFloat(document.getElementById('dreSimples')?.value) || 6) / 100;
-                    const taxaCartao  = (parseFloat(document.getElementById('dreTaxaCartao')?.value) || 1.05) / 100;
-                    const fixosMes    = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
-                    const fixosProp   = fixosMes * (diaAtual / diasNoMes);
+                    const _r   = _anaPeriodRange('mes');
+                    const _dre = await _dreDoPeriodo(_r.start, _r.end, 'mes');
+                    const _rat = _dre.fixosRateio;
 
-                    const vlSimples   = faturamento * simples;
-                    const vlCartao    = faturamento * taxaCartao;
-                    const lucroLiq    = faturamento - vlSimples - vlCartao - custo - fixosProp;
-                    const margem      = (lucroLiq / faturamento) * 100;
-
-                    const pS = (simples * 100).toFixed(2).replace('.', ',');
-                    const pC = (taxaCartao * 100).toFixed(2).replace('.', ',');
-
-                    set('rmDreFat',       formatarMoeda(faturamento));
-                    set('rmDreSimplesTxt',`(-) Simples Nacional ${pS}%`);
-                    set('rmDreSimples',   `- ${formatarMoeda(vlSimples)}`);
-                    set('rmDreCartaoTxt', `(-) Taxa Cartão ${pC}%`);
-                    set('rmDreCartao',    `- ${formatarMoeda(vlCartao)}`);
-                    set('rmDreInsumos',   `- ${formatarMoeda(custo)}`);
-                    set('rmDreFixosTxt',  `(-) Custos Fixos (${diaAtual}/${diasNoMes} dias)`);
-                    set('rmDreFixos',     `- ${formatarMoeda(fixosProp)}`);
+                    set('rmDreFat',       formatarMoeda(_dre.faturamento));
+                    set('rmDreSimplesTxt',`(-) Simples Nacional ${(_dre.cfg.simples * 100).toFixed(2).replace('.', ',')}%`);
+                    set('rmDreSimples',   `- ${formatarMoeda(_dre.simples)}`);
+                    set('rmDreCartaoTxt', `(-) Taxa Cartão (por método)`);
+                    set('rmDreCartao',    `- ${formatarMoeda(_dre.taxasCartao)}`);
+                    set('rmDreInsumos',   `- ${formatarMoeda(_dre.cmv)}`);
+                    set('rmDreFixosTxt',  `(-) Custos Fixos${_rat ? ` (${_rat.dias}/${_rat.diasNoMes} dias)` : ''}`);
+                    set('rmDreFixos',     `- ${formatarMoeda(_dre.custosFixos)}`);
 
                     const liqEl = document.getElementById('rmDreLucro');
-                    if (liqEl) { liqEl.textContent = formatarMoeda(lucroLiq); liqEl.style.color = lucroLiq >= 0 ? '#4ade80' : '#e74c3c'; }
+                    if (liqEl) { liqEl.textContent = formatarMoeda(_dre.lucroLiquido); liqEl.style.color = _dre.lucroLiquido >= 0 ? '#4ade80' : '#e74c3c'; }
                     const margEl = document.getElementById('rmDreMargem');
-                    if (margEl) { margEl.textContent = `${margem.toFixed(1).replace('.', ',')}%`; margEl.style.color = margem >= 10 ? '#4ade80' : margem >= 0 ? '#f39c12' : '#e74c3c'; }
+                    if (margEl) { margEl.textContent = `${_dre.margemLiquida.toFixed(1).replace('.', ',')}%`; margEl.style.color = _dre.margemLiquida >= 10 ? '#4ade80' : _dre.margemLiquida >= 0 ? '#f39c12' : '#e74c3c'; }
 
-                    const dre = document.getElementById('rmDRE');
-                    if (dre) dre.style.display = 'block';
+                    const dreEl = document.getElementById('rmDRE');
+                    if (dreEl) dreEl.style.display = 'block';
                 }
+
+                // Refresca a Precificação (semáforo de CMV real + blend) agora que o mês foi recalculado.
+                if (typeof calcularPrecificacao === 'function') calcularPrecificacao();
 
                 if (statusEl) {
                     const hora = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
@@ -7871,12 +8173,23 @@
             return r;
         }
 
-        function _finFixosRateado(periodo) {
+        function _finFixosRateado(periodo, periodKey) {
+            const key = (periodKey !== undefined) ? periodKey : _finPeriod;
             const totalFixo = fixedCosts.reduce((s,c) => s + (c.value || 0), 0);
-            if (!periodo || _finPeriod === 'todos') return totalFixo;
-            if (_finPeriod === 'mes' || _finPeriod === 'mesAnt') return totalFixo;
-            const dias = (periodo.end.getTime() - periodo.start.getTime()) / 86400000 + 1;
-            return totalFixo * (dias / 30);
+            if (!periodo || key === 'todos') return totalFixo;
+            // Rateio = dias decorridos do período ÷ dias reais do mês (28–31). Mês em curso = proporcional;
+            // mês fechado/passado = integral automático (dias decorridos = todos os dias do mês).
+            const inf = _finFixosDias(periodo);
+            return totalFixo * (inf.dias / inf.diasNoMes);
+        }
+
+        // Dias decorridos do período (inclusivo) e dias reais do mês de início — base do rateio dos fixos.
+        function _finFixosDias(periodo) {
+            const d0 = new Date(periodo.start.getFullYear(), periodo.start.getMonth(), periodo.start.getDate());
+            const d1 = new Date(periodo.end.getFullYear(), periodo.end.getMonth(), periodo.end.getDate());
+            const dias = Math.round((d1 - d0) / 86400000) + 1;
+            const diasNoMes = new Date(periodo.start.getFullYear(), periodo.start.getMonth() + 1, 0).getDate();
+            return { dias, diasNoMes };
         }
 
         // Calcula DRE estruturado a partir de agregados
@@ -7903,44 +8216,55 @@
             };
         }
 
+        // Pagamentos combinados (Anota pré-corte + pedidos reais pós-corte), mesma partição de _anaGetAgg.
+        async function _pagCombinado(start, end) {
+            const usaVendas  = start < _ANA_CORTE_PEDIDOS;
+            const usaPedidos = end   >= _ANA_CORTE_PEDIDOS;
+            const pagV = usaVendas
+                ? _finPagamentos(_anaFilterVendas(start, usaPedidos ? new Date(_ANA_CORTE_PEDIDOS.getTime() - 1) : end))
+                : _finPagamentos([]);
+            let pagP = _finPagamentosPedidos([]);
+            if (usaPedidos && window._fb?.fbQueryPedidos) {
+                const iniP = usaVendas ? _ANA_CORTE_PEDIDOS : start;
+                try {
+                    const pedidos = await window._fb.fbQueryPedidos(_anaDateToStr(iniP), _anaDateToStr(end));
+                    pagP = _finPagamentosPedidos(pedidos);
+                } catch (e) { console.warn('[Financeiro] Falha ao buscar pedidos para pagamentos:', e); }
+            }
+            return _finSomaPagamentos(pagV, pagP);
+        }
+
+        // FONTE ÚNICA DE VERDADE do DRE: recebe o período e devolve {faturamento, simples, cmv,
+        // taxasCartao, custosFixos, lucroLiquido, margemLiquida} (+ campos internos do _finDre).
+        // Inclui custos fixos rateados por (dias/30) e taxas de cartão por método. Usada por Financeiro E Análise.
+        async function _dreDoPeriodo(start, end, periodKey) {
+            const agg   = await _anaGetAgg(start, end);
+            const pag   = await _pagCombinado(start, end);
+            if (periodKey === 'mes') _mixCartaoMes = { debito: pag.debito || 0, credito: pag.credito || 0 };
+            const cfg   = _finReadCfg();
+            const fixos = _finFixosRateado({ start, end }, periodKey);
+            const dre   = _finDre(agg, pag, cfg, fixos);
+            if (periodKey === 'mes') _cmvRealMes = dre.fat > 0 ? (dre.cmv / dre.fat) * 100 : null;
+            dre.faturamento   = dre.fat;
+            dre.simples       = dre.simplesValor;
+            dre.taxasCartao   = dre.taxaCartao;
+            dre.custosFixos   = dre.fixos;
+            dre.lucroLiquido  = dre.lucroLiq;
+            dre.margemLiquida = dre.margemLiqPct;
+            // info de rateio dos fixos (p/ rótulo); null em 'todos' (integral, sem rateio por dias)
+            dre.fixosRateio   = (periodKey === 'todos') ? null : _finFixosDias({ start, end });
+            return dre;
+        }
+
         async function _finUpdate() {
             const cur  = _finPeriodRange(_finPeriod);
             const prev = _finPrevRange(_finPeriod);
 
-            // Aggregate: híbrido (Anota AI pré-corte + pedidos reais pós-corte)
-            const _vazio = () => ({ faturamento:0, custo:0, unidades:0, numPedidos:0, itens:{} });
-            const [aggCur, aggPrev] = await Promise.all([
-                _anaGetAgg(cur.start, cur.end),
-                prev ? _anaGetAgg(prev.start, prev.end) : Promise.resolve(_vazio())
+            // DRE pela fonte única (_dreDoPeriodo) — período corrente e anterior.
+            const [dre, drePrev] = await Promise.all([
+                _dreDoPeriodo(cur.start, cur.end, _finPeriod),
+                prev ? _dreDoPeriodo(prev.start, prev.end, _finPeriod) : Promise.resolve(null)
             ]);
-
-            // Pagamentos: combina vendasRegistradas (Anota AI, pré-corte) + pedidos reais (Firestore, pós-corte).
-            // Mesma partição por _ANA_CORTE_PEDIDOS usada em _anaGetAgg — garante que o total do breakdown bata com o faturamento do DRE.
-            async function _pagCombinado(start, end) {
-                const usaVendas  = start < _ANA_CORTE_PEDIDOS;
-                const usaPedidos = end   >= _ANA_CORTE_PEDIDOS;
-                const pagV = usaVendas
-                    ? _finPagamentos(_anaFilterVendas(start, usaPedidos ? new Date(_ANA_CORTE_PEDIDOS.getTime() - 1) : end))
-                    : _finPagamentos([]);
-                let pagP = _finPagamentosPedidos([]);
-                if (usaPedidos && window._fb?.fbQueryPedidos) {
-                    const iniP = usaVendas ? _ANA_CORTE_PEDIDOS : start;
-                    try {
-                        const pedidos = await window._fb.fbQueryPedidos(_anaDateToStr(iniP), _anaDateToStr(end));
-                        pagP = _finPagamentosPedidos(pedidos);
-                    } catch (e) { console.warn('[Financeiro] Falha ao buscar pedidos para pagamentos:', e); }
-                }
-                return _finSomaPagamentos(pagV, pagP);
-            }
-            const [pagCur, pagPrev] = await Promise.all([
-                _pagCombinado(cur.start, cur.end),
-                prev ? _pagCombinado(prev.start, prev.end) : Promise.resolve(_finPagamentos([]))
-            ]);
-            const cfg     = _finReadCfg();
-            const fixosCur  = _finFixosRateado(cur);
-            const fixosPrev = _finFixosRateado(prev);
-            const dre  = _finDre(aggCur, pagCur, cfg, fixosCur);
-            const drePrev = prev ? _finDre(aggPrev, pagPrev, cfg, fixosPrev) : null;
             _finLastDre = dre;
 
             const lbl = document.getElementById('finDreLabel');
@@ -8008,7 +8332,7 @@
                             ${linha('= Lucro Bruto', dre.lucroBruto, dre.margemBrutaPct, true, dre.lucroBruto >= 0 ? '#4ade80' : '#ff6b6b')}
                             ${linha('(−) Taxas de Cartão', dre.taxaCartao, dre.taxaPct, false, null, true, deltaInv(dre.taxaCartao, prev?.taxaCartao))}
                             ${linha('= EBITDA', dre.ebitda, dre.ebitdaPct, true, '#9b59b6')}
-                            ${linha('(−) Custos Fixos', dre.fixos, dre.fixosPct, false, null, true, deltaInv(dre.fixos, prev?.fixos))}
+                            ${linha(`(−) Custos Fixos${dre.fixosRateio ? ` (${dre.fixosRateio.dias}/${dre.fixosRateio.diasNoMes} dias)` : ''}`, dre.fixos, dre.fixosPct, false, null, true, deltaInv(dre.fixos, prev?.fixos))}
                             ${linha('= Lucro Líquido', dre.lucroLiq, dre.margemLiqPct, true, dre.lucroLiq >= 0 ? '#4ade80' : '#ff6b6b', false, delta(dre.lucroLiq, prev?.lucroLiq))}
                         </tbody>
                     </table>
