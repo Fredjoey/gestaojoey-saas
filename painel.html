@@ -256,6 +256,8 @@ textarea.fi{resize:vertical;min-height:60px}
 .modal-title{font-size:17px;font-weight:700;color:var(--text)}
 .modal-close{background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:6px;}
 .modal-close:hover{background:var(--bg3);color:var(--text)}
+.cancel-chip{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.cancel-chip:hover{border-color:var(--orange);color:var(--orange)}
 .detail-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
 .detail-row:last-child{border:none}
 .detail-key{color:var(--text2)}
@@ -1426,6 +1428,31 @@ textarea.fi{resize:vertical;min-height:60px}
 </div>
 
 <!-- MODAL HISTÓRICO DE CAIXA -->
+<div class="modal-overlay" id="cancelModal" onclick="if(event.target===this)cancelarVoltar()">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">❌ Cancelar pedido <span id="cancelPedidoId" style="color:var(--text2);font-weight:600"></span></div>
+      <button class="modal-close" onclick="cancelarVoltar()">✕</button>
+    </div>
+    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:600;">Motivo do cancelamento *</label>
+    <textarea id="cancelMotivo" class="fi" rows="3" placeholder="Descreva o motivo do cancelamento..." style="width:100%;resize:vertical;box-sizing:border-box;"></textarea>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px;">
+      <button type="button" class="cancel-chip" onclick="cancelChip('Sem estoque')">Sem estoque</button>
+      <button type="button" class="cancel-chip" onclick="cancelChip('Fora da área de entrega')">Fora da área de entrega</button>
+      <button type="button" class="cancel-chip" onclick="cancelChip('Loja fechada')">Loja fechada</button>
+      <button type="button" class="cancel-chip" onclick="cancelChip('Cliente desistiu')">Cliente desistiu</button>
+      <button type="button" class="cancel-chip" onclick="cancelChip('Outro')">Outro</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-top:14px;cursor:pointer;">
+      <input type="checkbox" id="cancelAvisar" checked style="width:auto;accent-color:var(--orange);"> Avisar o cliente no WhatsApp
+    </label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.5rem;">
+      <button onclick="cancelarVoltar()" style="padding:9px 16px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">Voltar</button>
+      <button onclick="cancelarConfirmar()" style="padding:9px 16px;border-radius:8px;border:none;background:#e74c3c;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Confirmar cancelamento</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cxHistModal" onclick="if(event.target===this)fecharHistoricoCaixa()">
   <div class="modal-box" style="max-width:640px">
     <div class="modal-header">
@@ -2971,13 +2998,51 @@ function enviarWppProntoRetirada(p) {
   notify(`📱 WhatsApp "pronto para retirar" enviado para ${nome}!`);
 }
 
-async function cancelarPedido(id) {
-  if (!confirm(`Cancelar pedido ${id}?`)) return;
+let _cancelPedidoId = null;
+
+// Abre o modal de cancelamento (em vez de cancelar direto). A lógica real fica em cancelarConfirmar().
+function cancelarPedido(id) {
+  _cancelPedidoId = id;
+  const motivoEl = document.getElementById('cancelMotivo');
+  if (motivoEl) motivoEl.value = '';
+  const avisarEl = document.getElementById('cancelAvisar');
+  if (avisarEl) avisarEl.checked = true;
+  const idEl = document.getElementById('cancelPedidoId');
+  if (idEl) idEl.textContent = '#' + id;
+  document.getElementById('cancelModal').classList.add('show');
+  setTimeout(() => { if (motivoEl) motivoEl.focus(); }, 50);
+}
+
+function cancelarVoltar() {
+  document.getElementById('cancelModal').classList.remove('show');
+}
+
+// Chips de motivo rápido preenchem o textarea; "Outro" limpa pra digitar livre.
+function cancelChip(txt) {
+  const el = document.getElementById('cancelMotivo');
+  if (!el) return;
+  el.value = (txt === 'Outro') ? '' : txt;
+  el.focus();
+}
+
+async function cancelarConfirmar() {
+  const id = _cancelPedidoId;
+  if (!id) return;
+  const motivo = (document.getElementById('cancelMotivo').value || '').trim();
+  if (!motivo) { alert('Informe o motivo do cancelamento.'); return; }
+  const avisar = document.getElementById('cancelAvisar').checked;
+  cancelarVoltar();
+
   const p = pedidos.find(x => x.id === id);
   if (p) {
     const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
-    if (!isMesa) _dispararNotif('cancelado', p);
+    p.motivoCancelamento = motivo;
     p.status = 'cancelado';
+    // Notifica o cliente — falha no WhatsApp NÃO impede o cancelamento.
+    if (avisar && !isMesa) {
+      try { _dispararNotif('cancelado', p); }
+      catch (e) { console.error('[Cancelar] falha no WhatsApp:', e); }
+    }
     renderKanban();
 
     if (isMesa && p.mesa) {
@@ -3000,7 +3065,19 @@ async function cancelarPedido(id) {
       }
     }
   }
-  atualizarStatusFb(id, 'cancelado');
+
+  // Persiste status + motivo + canceladoEm (uma escrita).
+  try {
+    await db.collection(`clientes/${slug}/pedidos`).doc(id).update({
+      status: 'cancelado',
+      motivoCancelamento: motivo,
+      canceladoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (e) {
+    console.error('[Cancelar] erro ao gravar:', e);
+    notify('Pedido cancelado, mas houve erro ao salvar o motivo.', 'error');
+  }
+
   notify('Pedido cancelado.', 'warning');
   const relPanel = document.getElementById('panel-relatorios');
   if (relPanel && relPanel.style.display !== 'none') renderRelatorioDia();
@@ -7010,6 +7087,10 @@ function _buildNotifMsg(template, p, key) {
   // Na confirmacao do pedido, anexa o resumo completo logo abaixo (mesma mensagem, nao envia duas).
   if (key === 'confirmado') {
     try { msg += '\n\n' + montarResumoPedido(p); } catch (e) { console.warn('[notif] resumo falhou:', e); }
+  }
+  // No cancelamento, anexa o motivo logo abaixo da mensagem do template.
+  if (key === 'cancelado' && p.motivoCancelamento) {
+    msg += `\n*Motivo:* ${p.motivoCancelamento}`;
   }
   return msg;
 }
