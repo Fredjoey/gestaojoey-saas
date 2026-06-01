@@ -965,10 +965,11 @@ function carregarDadosPainel() {
       if (ia === -1) return 1; if (ib === -1) return -1;
       return ia - ib;
     });
-    if (!CATEGORIAS.includes(catAtiva)) catAtiva = CATEGORIAS[0] || '';
+    if (!_catTouched || !CATEGORIAS.includes(catAtiva)) catAtiva = CATEGORIAS[0] || '';
     renderCats();
     renderProducts();
     renderPecaDeNovo();
+    if (_catTouched) requestAnimationFrame(_spyActiveCat);
   }
 
   db.collection(`clientes/${slug}/recipes`).onSnapshot(snap => {
@@ -986,7 +987,7 @@ function carregarDadosPainel() {
       if (ia === -1) return 1; if (ib === -1) return -1;
       return ia - ib;
     });
-    catAtiva = CATEGORIAS[0] || '';
+    if (!_catTouched || !CATEGORIAS.includes(catAtiva)) catAtiva = CATEGORIAS[0] || '';
     renderCats();
     renderProducts();
   });
@@ -1161,6 +1162,9 @@ let cart = [];
 let ultimoPedido = null;
 let clienteData = (function(){ try{ return JSON.parse(localStorage.getItem('joey_cliente')||'null'); }catch(e){ return null; } })();
 let catAtiva = '';
+let _catTouched = false;   // vira true quando o cliente rola ou toca numa categoria; ate la, destaque = 1a categoria
+let _spySuppressUntil = 0; // janela em que o scroll-spy fica suspenso (durante o scroll suave de um tap)
+let _spyRaf = null;
 let produtorModal = null;
 let qtyModal = 1;
 let obsModal = '';
@@ -1179,7 +1183,7 @@ function taxaEntregaAtual() {
 function renderCats() {
   const nav = document.getElementById('catNav');
   nav.innerHTML = CATEGORIAS.map(c => `
-    <button class="cat-pill ${c===catAtiva?'active':''}" onclick="setCat('${c}')">
+    <button class="cat-pill ${c===catAtiva?'active':''}" data-cat="${c}" onclick="setCat('${c}')">
       ${EMOJI_CAT[c]||'🍽️'} ${c}
     </button>
   `).join('');
@@ -1187,6 +1191,8 @@ function renderCats() {
 
 function setCat(cat) {
   catAtiva = cat;
+  _catTouched = true;
+  _spySuppressUntil = Date.now() + 800;  // nao deixa o scroll-spy brigar com o scroll suave do tap
   renderCats();
   renderProducts();
   requestAnimationFrame(() => {
@@ -1199,6 +1205,43 @@ function setCat(cat) {
     });
   });
 }
+
+// =================== SCROLL-SPY: o destaque acompanha a secao visivel ===================
+// Destaca a pill da categoria cuja secao esta logo abaixo do nav fixo. Faz so toggle de
+// classe (sem rebuild do nav) pra nao resetar o scroll horizontal das pills.
+function _highlightActivePill() {
+  const nav = document.getElementById('catNav');
+  if (!nav) return;
+  nav.querySelectorAll('.cat-pill').forEach(b => {
+    const on = b.dataset.cat === catAtiva;
+    b.classList.toggle('active', on);
+    if (on) {
+      const alvo = b.offsetLeft - (nav.clientWidth - b.offsetWidth) / 2;
+      nav.scrollTo({ left: Math.max(0, alvo), behavior: 'smooth' });
+    }
+  });
+}
+function _spyActiveCat() {
+  if (!CATEGORIAS.length || Date.now() < _spySuppressUntil) return;
+  const navH = document.getElementById('catNav')?.offsetHeight || 56;
+  const linha = navH + 12;
+  let atual = CATEGORIAS[0];
+  for (const c of CATEGORIAS) {
+    const sec = document.getElementById('cat-' + c);
+    if (!sec) continue;
+    if (sec.getBoundingClientRect().top <= linha) atual = c; else break;
+  }
+  // perto do fim da pagina: ultima categoria (secoes curtas nunca alcancam o topo)
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+    atual = CATEGORIAS[CATEGORIAS.length - 1];
+  }
+  if (atual && atual !== catAtiva) { catAtiva = atual; _highlightActivePill(); }
+}
+window.addEventListener('scroll', () => {
+  _catTouched = true;
+  if (_spyRaf) return;
+  _spyRaf = requestAnimationFrame(() => { _spyRaf = null; _spyActiveCat(); });
+}, { passive: true });
 
 // =================== RENDER PRODUTOS ===================
 function renderProducts() {
