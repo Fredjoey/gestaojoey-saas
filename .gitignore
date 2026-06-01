@@ -24,3 +24,9 @@ upload-splash.js
 
 # Claude Code (config local)
 .claude/
+
+# Backups e arquivos locais (lixo — nao versionar)
+*.backup*.html
+backup_*.json
+backup_*/
+*.ttf
