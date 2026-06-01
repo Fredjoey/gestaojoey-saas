@@ -2330,7 +2330,7 @@ async function _enviarWppConfirmadoAuto(p) {
   if (!p?.cliente?.tel) return;             // sem telefone — não conta como falha
   let tel = p.cliente.tel.replace(/\D/g, '');
   if (!tel.startsWith('55')) tel = '55' + tel;
-  const msg = _buildNotifMsg(cfg.template, p);
+  const msg = _buildNotifMsg(cfg.template, p, 'confirmado');
   const resp = await fetch(`${BOT_URL}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -6938,16 +6938,80 @@ async function salvarNotifConfig() {
   }
 }
 
-function _buildNotifMsg(template, p) {
+// Resumo completo do pedido formatado para WhatsApp (locale pt-BR). Omite linhas
+// vazias; trata pedidos sem adicionais e sem entrega.
+function montarResumoPedido(p) {
+  const fmt = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const itens = Array.isArray(p.itens) ? p.itens : [];
+
+  const linhas = [];
+  itens.forEach(it => {
+    const qty = it.qty || 1;
+    linhas.push(`${qty}x ${it.nome} — R$ ${fmt((it.preco || 0) * qty)}`);
+    (it.adicionais || []).filter(a => (a.qty || 0) > 0).forEach(a => {
+      const aQty = a.qty || 1;
+      linhas.push(`   + ${aQty > 1 ? aQty + 'x ' : ''}${a.nome} — R$ ${fmt((a.preco || 0) * aQty * qty)}`);
+    });
+    if (it.obs) linhas.push(`   _${it.obs}_`);
+  });
+
+  let subtotal = p.subtotal;
+  if (subtotal == null) {
+    subtotal = itens.reduce((s, it) => {
+      const adic = (it.adicionais || []).reduce((x, a) => x + (a.preco || 0) * (a.qty || 0), 0);
+      return s + ((it.preco || 0) + adic) * (it.qty || 1);
+    }, 0);
+  }
+  const taxa  = Number(p.taxaEntrega || 0);
+  const total = p.total != null ? p.total : subtotal + taxa;
+
+  const PAG = { pix: 'PIX', debito: 'Cartão de débito', credito: 'Cartão de crédito', dinheiro: 'Dinheiro', local: 'Pagamento no balcão' };
+  let linhaPag = '';
+  const pagLabel = PAG[p.pagamento] || p.pagamento;
+  if (pagLabel) {
+    linhaPag = `💳 ${pagLabel}`;
+    if (p.pagamento === 'dinheiro' && Number(p.troco) > 0) linhaPag += ` (troco para R$ ${fmt(p.troco)})`;
+  }
+
+  const c = p.cliente || {};
+  let linhaEntrega = '';
+  if (p.entrega === 'delivery') {
+    const end = [c.rua, c.comp].filter(Boolean).join(', ');
+    linhaEntrega = '📍 ' + (end ? end + (c.bairro ? ` — ${c.bairro}` : '') : (c.bairro || 'Entrega'));
+  } else if (p.entrega === 'retirada') {
+    linhaEntrega = '🛍 Retirada no balcão';
+  } else if (c.mesa || p.mesa) {
+    linhaEntrega = `🍽 Mesa ${c.mesa || p.mesa}`;
+  }
+
+  const out = [`📋 *Resumo do pedido #${p.id || ''}*`, ''];
+  if (linhas.length) { out.push(linhas.join('\n'), ''); }
+  out.push(`Subtotal: R$ ${fmt(subtotal)}`);
+  if (p.entrega === 'delivery' && taxa > 0) out.push(`Taxa de entrega: R$ ${fmt(taxa)}`);
+  out.push(`*Total: R$ ${fmt(total)}*`);
+  if (linhaPag || linhaEntrega) {
+    out.push('');
+    if (linhaPag) out.push(linhaPag);
+    if (linhaEntrega) out.push(linhaEntrega);
+  }
+  return out.join('\n');
+}
+
+function _buildNotifMsg(template, p, key) {
   const nome  = p.cliente?.nome?.split(' ')[0] || 'cliente';
   const id    = p.id || '';
   const loja  = config.nome || 'Joey';
   const itens = (p.itens || []).map(i => `${i.qty}× ${i.nome}`).join(', ');
-  return template
+  let msg = template
     .replace(/\{nome\}/gi, nome)
     .replace(/\{id\}/gi, id)
     .replace(/\{loja\}/gi, loja)
     .replace(/\{itens\}/gi, itens);
+  // Na confirmacao do pedido, anexa o resumo completo logo abaixo (mesma mensagem, nao envia duas).
+  if (key === 'confirmado') {
+    try { msg += '\n\n' + montarResumoPedido(p); } catch (e) { console.warn('[notif] resumo falhou:', e); }
+  }
+  return msg;
 }
 
 function _dispararNotif(key, p) {
@@ -6955,7 +7019,7 @@ function _dispararNotif(key, p) {
   if (!cfg.ativo || !cfg.template) return;
   if (!p?.cliente?.tel) return;
   const tel = p.cliente.tel.replace(/\D/g, '');
-  const msg = _buildNotifMsg(cfg.template, p);
+  const msg = _buildNotifMsg(cfg.template, p, key);
   enviarWhatsAppBot(tel, msg);
 }
 
