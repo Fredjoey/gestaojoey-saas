@@ -631,6 +631,15 @@ body{
   display:flex;
   align-items:center;
   gap:6px;
+  transition:opacity .2s ease, visibility .2s ease;
+}
+/* Enquanto QUALQUER modal/overlay (.overlay.show) estiver aberto — produto/
+   adicionais, carrinho, histórico, perfil — some com os controles de música
+   pra nunca cobrir os botões de ação (Cancelar / Adicionar ao carrinho). */
+.overlay.show ~ #musicBar{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
 }
 #musicBar button{
   display:flex;
