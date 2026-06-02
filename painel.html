@@ -523,16 +523,6 @@ textarea.fi{resize:vertical;min-height:60px}
   <div class="nav-item" onclick="showPanel('config',this)"><span class="nav-icon">⚙️</span> Configurações</div>
   <div class="nav-item" onclick="showPanel('robo',this)"><span class="nav-icon">🤖</span> Robô</div>
   <div class="nav-item" onclick="showPanel('whatsapp',this)"><span class="nav-icon">📱</span> Conexão WhatsApp</div>
-  <div id="sbContasVencidas" style="display:none; margin:8px 12px; background:#1f0a0a; border:1px solid #5a1a1a; border-radius:8px; padding:10px 12px;">
-    <div style="font-size:11px; font-weight:700; color:#f87171; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px;">⚠️ Contas vencidas</div>
-    <div id="sbContasVencidasLista" style="font-size:11px; color:#e8d0d0; line-height:1.5;"></div>
-    <a id="sbContasVencidasLink" href="#" target="_blank" rel="noopener" style="display:block; margin-top:6px; font-size:11px; color:#f97316; text-decoration:none;">Ver na aba Compras →</a>
-  </div>
-  <div id="sbContasVencendo" style="display:none; margin:8px 12px; background:#1f1400; border:1px solid #5a3a00; border-radius:8px; padding:10px 12px;">
-    <div style="font-size:11px; font-weight:700; color:#fbbf24; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px;">⏰ Vencendo em breve</div>
-    <div id="sbContasVencendoLista" style="font-size:11px; color:#e8e0d0; line-height:1.5;"></div>
-    <a id="sbContasVencendoLink" href="#" target="_blank" rel="noopener" style="display:block; margin-top:6px; font-size:11px; color:#f97316; text-decoration:none;">Ver na aba Compras →</a>
-  </div>
   <div class="sb-bottom">
     <div class="sb-store">
       <div class="sb-avatar" id="sbAvatar">J</div>
@@ -1958,59 +1948,7 @@ const CARDAPIO_URL = slug === 'joey'
   : `https://${slug}.gestaojoey.com.br`;
 const CARDAPIO_URL_DISPLAY = CARDAPIO_URL.replace(/^https?:\/\//, '');
 
-// ===== CONTAS A PAGAR — cards condicionais na sidebar =====
-(function() {
-  function _diasAteVenc(venc) {
-    if (!venc) return null;
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const d = new Date(venc + 'T12:00:00');
-    if (isNaN(d)) return null;
-    return Math.floor((d - hoje) / 86400000);
-  }
-  const fmtR = v => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
-  const linhas = arr => arr.map(n =>
-    `<div style="display:flex; justify-content:space-between; gap:6px; padding:2px 0;">
-       <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.fornecedor || '—'}</span>
-       <span style="font-weight:700; white-space:nowrap;">${fmtR(n.total)}</span>
-     </div>`).join('');
-
-  function _render(notas) {
-    const pendentes = (notas || []).filter(n => n.vencimento && n.statusPagamento !== 'pago');
-    const vencidas = [], vencendo = [];
-    pendentes.forEach(n => {
-      const dias = _diasAteVenc(n.vencimento);
-      if (dias === null) return;
-      if (dias < 0) vencidas.push(n);
-      else if (dias <= 3) vencendo.push(n);
-    });
-    const cardV = document.getElementById('sbContasVencidas');
-    if (cardV) {
-      if (vencidas.length) {
-        document.getElementById('sbContasVencidasLista').innerHTML = linhas(vencidas);
-        cardV.style.display = 'block';
-      } else { cardV.style.display = 'none'; }
-    }
-    const cardP = document.getElementById('sbContasVencendo');
-    if (cardP) {
-      if (vencendo.length) {
-        document.getElementById('sbContasVencendoLista').innerHTML = linhas(vencendo);
-        cardP.style.display = 'block';
-      } else { cardP.style.display = 'none'; }
-    }
-  }
-
-  ['sbContasVencidasLink', 'sbContasVencendoLink'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el && GESTAO_URL) el.href = GESTAO_URL;
-  });
-
-  try {
-    db.collection(`clientes/${slug}/notasLancadas`).onSnapshot(
-      snap => _render(snap.docs.map(d => d.data())),
-      err => console.error('Contas a pagar (sidebar):', err)
-    );
-  } catch (e) { console.error('Contas a pagar (sidebar) init:', e); }
-})();
+// (Cards de contas a pagar na sidebar removidos — essa informação fica na aba Compras do gestao-joey.)
 
 (function() {
   const apply = () => {
