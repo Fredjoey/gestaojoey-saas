@@ -7538,8 +7538,8 @@ function renderSalao() {
     const est = mesasData[m.id] || {};
     // Card = pedidos ATIVOS do cliente HOJE (coleção pedidos) + comandas lançadas no painel (doc de estado).
     // As duas fontes são disjuntas (cliente→pedidos; painel→comandas), então somar não duplica.
-    // O escopo "hoje" bate com o kanban e evita inflar com pedidos antigos não fechados (ex.: 'entregue' de dias atrás).
-    const ativos = _pedidosDaMesa(m.id).filter(_mesaPedidoAtivoHoje);
+    // Mesa fica aberta até a conta ser fechada (que finaliza os pedidos): conta os ativos vinculados, sem filtro de data.
+    const ativos = _pedidosDaMesa(m.id).filter(_mesaPedidoAtivo);
     const totalPedidos = ativos.reduce((s, p) => s + (Number(p.total) || 0), 0);
     const ocupada = ativos.length > 0 || Object.keys(_getComandasFromMesa(est)).length > 0;
     const status = ocupada ? (est.status === 'fechando' ? 'fechando' : 'ocupada') : 'livre';
@@ -7588,11 +7588,11 @@ function _popularSelectMesa() {
   sel.value = atual;
 }
 
-// "Pedido ativo da mesa HOJE" — alinhado ao kanban (data de hoje + != cancelado/finalizado).
-// Exclui pedidos de dias anteriores que ficaram sem fechar (ex.: 'entregue' antigo) que inflavam o total.
-function _mesaPedidoAtivoHoje(p) {
-  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  return !!p && p.data === hoje && p.status !== 'cancelado' && p.status !== 'finalizado';
+// Critério único de "pedido ativo da mesa" — usado no card (renderSalao) e na conta (_comandasDaMesa).
+function _mesaPedidoAtivo(p) {
+  // Mesa fica "aberta" até a conta ser fechada (que finaliza os pedidos) — SEM filtro de data,
+  // então atravessa a meia-noite. Órfãos antigos já foram cancelados na limpeza de dados.
+  return !!p && p.status !== 'cancelado' && p.status !== 'finalizado';
 }
 
 // Pedidos vinculados a uma mesa — casa tanto pelo id quanto pelo número (QRs antigos)
@@ -8004,8 +8004,8 @@ async function contaFechar(mesaId, mesaNome) {
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
-    // 2) finaliza os pedidos ativos de hoje da mesa (resolve a raiz dos órfãos daqui pra frente)
-    const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivoHoje);
+    // 2) finaliza os pedidos ativos da mesa (saem do "ativo" -> a mesa volta a Livre)
+    const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
     await Promise.all(ativos.map(p => db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ status: 'finalizado' }).catch(e => console.warn('[fechar conta] pedido', p.id, e))));
     // 3) zera o estado da mesa -> volta pra Livre
     await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
@@ -8306,7 +8306,7 @@ function _comandasDaMesa(mesaId) {
   const m = mesasData[mesaId] || {};
   const out = { ..._getComandasFromMesa(m) };
   _pedidosDaMesa(mesaId)
-    .filter(_mesaPedidoAtivoHoje)
+    .filter(_mesaPedidoAtivo)
     .forEach(p => {
       out['ped-' + p.id] = {
         itens: p.itens || [],
