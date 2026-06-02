@@ -907,42 +907,12 @@ textarea.fi{resize:vertical;min-height:60px}
           </div>
 
           <div style="margin-top:24px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <span style="font-size:18px">💳</span>
-              <span style="font-weight:600;font-size:15px">Pagamento PIX</span>
+              <span style="font-weight:600;font-size:15px">Pagamento Online</span>
             </div>
-
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden">
-              <div onclick="togglePixTutorial()" style="padding:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
-                <span style="font-size:13px;color:var(--muted)">📋 Como configurar o PIX? Clique para ver o passo a passo</span>
-                <span id="pixTutorialArrow">▼</span>
-              </div>
-              <div id="pixTutorialBody" style="display:none;padding:0 16px 16px;font-size:13px;line-height:1.8">
-                <p style="color:var(--orange);font-weight:600;margin:0 0 8px">Siga os passos abaixo:</p>
-                <p><b>1.</b> Crie sua conta gratuita em <a href="https://www.mercadopago.com.br" target="_blank" style="color:var(--orange)">mercadopago.com.br</a></p>
-                <p><b>2.</b> Acesse: <b>Integrações → Credenciais de produção</b></p>
-                <p><b>3.</b> Copie o <b>"Access Token"</b> (começa com APP_USR-...)</p>
-                <p><b>4.</b> Cole o token no campo abaixo e clique Salvar</p>
-                <p><b>5.</b> Acesse: <b>MP → Notificações → Webhooks → Modo de produção</b></p>
-                <p><b>6.</b> Cole esta URL e marque o evento <b>"Pagamentos"</b>:</p>
-                <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin:4px 0 8px">
-                  <span id="webhookUrlDisplay" style="font-size:12px;color:var(--muted);flex:1;word-break:break-all">https://southamerica-east1-gestaojoey.cloudfunctions.net/webhookPixMP</span>
-                  <button onclick="copiarWebhookUrl()" style="padding:4px 10px;background:var(--orange);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap">📋 Copiar</button>
-                </div>
-                <p><b>7.</b> Clique em <b>Salvar configurações</b> no MP</p>
-              </div>
-            </div>
-
-            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:16px">
-              <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:8px">Access Token Mercado Pago</label>
-              <input id="cfgMpToken" type="password" placeholder="APP_USR-..."
-                style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;box-sizing:border-box">
-              <div id="cfgMpTokenStatus" style="font-size:12px;margin-top:6px;color:var(--muted)">⚠️ Token não configurado</div>
-              <div style="display:flex;gap:8px;margin-top:10px">
-                <button onclick="salvarMpToken()" style="padding:8px 20px;background:var(--orange);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">💾 Salvar</button>
-                <button onclick="toggleMpTokenVisibility()" style="padding:8px 16px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer">👁 Mostrar</button>
-              </div>
-            </div>
+            <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Escolha por onde seus clientes pagam online. Você só precisa configurar <b>um</b>.</p>
+            <div id="pagOnline"></div>
           </div>
 
           <div class="section-lbl">⭐ Produto em Destaque</div>
@@ -3571,50 +3541,152 @@ function renderLogoPreview(url) {
 })();
 
 // ── PAGAMENTO PIX (Mercado Pago) ─────────────────────────────────────────────
-function togglePixTutorial() {
-  const body  = document.getElementById('pixTutorialBody');
-  const arrow = document.getElementById('pixTutorialArrow');
-  const aberto = body.style.display !== 'none';
-  body.style.display = aberto ? 'none' : 'block';
-  arrow.textContent  = aberto ? '▼' : '▲';
+// ── PAGAMENTO ONLINE (multi-gateway) ─────────────────────────────────────────
+// Cada gateway é um "adapter": logo, dica, campo da credencial, validação,
+// passo a passo em linguagem de leigo e (se houver) webhook. Para adicionar um
+// novo gateway (Asaas/PagBank), basta acrescentar uma entrada aqui — a tela e o
+// salvar/testar funcionam sem mudanças.
+const PAG_GATEWAYS = {
+  mercadopago: {
+    nome: 'Mercado Pago', logo: '💙',
+    bom: 'Bom se você já usa o Mercado Pago ou a maquininha deles.',
+    campo: 'mpAccessToken',
+    credLabel: 'Cole aqui sua chave do Mercado Pago (Access Token)',
+    credPlaceholder: 'APP_USR-...',
+    credExemplo: 'Começa com APP_USR- (é a credencial de produção).',
+    valida: v => /^APP_USR-/.test(v),
+    validaMsg: 'A chave deve começar com APP_USR- (credencial de produção).',
+    webhook: 'https://southamerica-east1-gestaojoey.cloudfunctions.net/webhookPixMP',
+    webhookDica: 'Cole esta URL no Mercado Pago em Notificações → Webhooks (produção) e marque o evento Pagamentos.',
+    passos: [
+      'Crie sua conta grátis em <b>mercadopago.com.br</b>.',
+      'Acesse <b>Integrações → Credenciais de produção</b>.',
+      'Copie o <b>Access Token</b> (começa com APP_USR-) e cole no campo abaixo.',
+      'Copie a URL de notificação (logo abaixo) e cole no Mercado Pago, marcando o evento <b>Pagamentos</b>.',
+      'Clique em <b>Salvar e ativar</b>.',
+    ],
+  },
+  infinitepay: {
+    nome: 'InfinitePay', logo: '🟣',
+    bom: 'Bom se você já usa a conta ou a maquininha InfinitePay.',
+    campo: 'infiniteTag',
+    credLabel: 'Cole aqui sua InfiniteTag',
+    credPlaceholder: 'sualoja',
+    credExemplo: 'É o seu @ no app InfinitePay — sem o $. Ex.: joeyburguer',
+    valida: v => v.replace(/^\$/, '').trim().length >= 2,
+    validaMsg: 'Informe sua InfiniteTag (sem o $).',
+    webhook: null,
+    webhookDica: '',
+    passos: [
+      'Crie sua conta grátis em <b>infinitepay.io</b>.',
+      'No app InfinitePay, copie sua <b>InfiniteTag</b> (canto superior esquerdo) — <b>sem o $</b>.',
+      'Cole no campo abaixo e clique em <b>Salvar e ativar</b>. Pronto: a confirmação do pagamento é automática.',
+    ],
+  },
+};
+let _pagSel = 'mercadopago';   // gateway atualmente aberto na tela
+let _pagCfg = {};              // config/pagamento carregada do Firestore
+
+function renderPagOnline() {
+  const wrap = document.getElementById('pagOnline');
+  if (!wrap) return;
+  const ativo = _pagCfg.gateway || (_pagCfg.mpAccessToken ? 'mercadopago' : '');
+
+  const cards = Object.entries(PAG_GATEWAYS).map(([k, g]) => {
+    const sel = k === _pagSel, ehAtivo = k === ativo;
+    return `<div onclick="pagSelecionarGateway('${k}')" style="flex:1;min-width:170px;cursor:pointer;background:var(--bg4);border:2px solid ${sel ? 'var(--orange)' : 'var(--border)'};border-radius:10px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:20px">${g.logo}</span>
+        <span style="font-weight:700;font-size:14px;color:var(--text)">${g.nome}</span>
+        ${ehAtivo ? '<span style="margin-left:auto;font-size:10px;font-weight:700;color:#34d399;background:rgba(52,211,153,.12);border-radius:6px;padding:2px 7px">ATIVO</span>' : ''}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4">${g.bom}</div>
+    </div>`;
+  }).join('');
+
+  const g = PAG_GATEWAYS[_pagSel];
+  const credValor = _pagCfg[g.campo] || '';
+  const configurado = ativo === _pagSel && !!credValor;
+  const passosHtml = g.passos.map((p, i) => `<p style="margin:0 0 7px"><b style="color:var(--orange)">${i + 1}.</b> ${p}</p>`).join('');
+  const webhookHtml = g.webhook ? `
+      <div style="font-size:12px;color:var(--muted);margin:12px 0 4px">${g.webhookDica}</div>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <span style="font-size:11px;color:var(--muted);flex:1;word-break:break-all">${g.webhook}</span>
+        <button onclick="pagCopiarWebhook()" style="padding:4px 10px;background:var(--orange);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap">📋 Copiar</button>
+      </div>` : `
+      <div style="font-size:12px;color:#34d399;margin:12px 0 0">✔ Sem configuração extra — a confirmação do pagamento é automática.</div>`;
+
+  wrap.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${cards}</div>
+    <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">${g.logo} Como ativar o ${g.nome}</div>
+      <div style="font-size:13px;line-height:1.7;color:var(--text2)">${passosHtml}</div>
+      ${webhookHtml}
+      <label style="font-size:13px;color:var(--muted);display:block;margin:14px 0 6px">${g.credLabel}</label>
+      <input id="pagCred" type="text" autocomplete="off" value="${_esc(credValor)}" placeholder="${g.credPlaceholder}"
+        style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;box-sizing:border-box">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${g.credExemplo}</div>
+      <div id="pagStatus" style="font-size:12px;margin-top:8px;font-weight:600;color:${configurado ? '#34d399' : 'var(--muted)'}">${configurado ? '✅ Tudo certo, configurado!' : '⚠️ Ainda não configurado'}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button onclick="pagSalvar()" style="padding:8px 20px;background:var(--orange);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">💾 Salvar e ativar</button>
+        <button onclick="pagTestar()" id="pagBtnTestar" style="padding:8px 16px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer">🔌 Testar conexão</button>
+      </div>
+      <div id="pagTesteResultado" style="font-size:12px;margin-top:8px"></div>
+    </div>`;
 }
 
-function copiarWebhookUrl() {
-  navigator.clipboard.writeText('https://southamerica-east1-gestaojoey.cloudfunctions.net/webhookPixMP');
-  notify('URL copiada!');
+function pagSelecionarGateway(k) { _pagSel = k; renderPagOnline(); }
+
+function pagCopiarWebhook() {
+  const g = PAG_GATEWAYS[_pagSel];
+  if (g.webhook) { navigator.clipboard.writeText(g.webhook); notify('URL copiada!'); }
 }
 
-function toggleMpTokenVisibility() {
-  const input = document.getElementById('cfgMpToken');
-  input.type = input.type === 'password' ? 'text' : 'password';
-}
-
-async function salvarMpToken() {
-  const token = document.getElementById('cfgMpToken').value.trim();
-  if (!token) { notify('Cole o token antes de salvar.', 'error'); return; }
-  if (!token.startsWith('APP_USR-')) { notify('Token inválido. Deve começar com APP_USR-', 'error'); return; }
+async function pagSalvar() {
+  const g = PAG_GATEWAYS[_pagSel];
+  const val = (document.getElementById('pagCred').value || '').trim();
+  if (!val) { notify('Cole a credencial antes de salvar.', 'error'); return; }
+  if (!g.valida(val)) { notify(g.validaMsg, 'error'); return; }
   try {
-    await db.doc(`clientes/${slug}/config/pagamento`).set({ mpAccessToken: token }, { merge: true });
-    const st = document.getElementById('cfgMpTokenStatus');
-    st.textContent = '✅ Token configurado';
-    st.style.color = '#4caf50';
-    notify('Token salvo com sucesso!');
+    await db.doc(`clientes/${slug}/config/pagamento`).set({ gateway: _pagSel, [g.campo]: val }, { merge: true });
+    _pagCfg.gateway = _pagSel; _pagCfg[g.campo] = val;
+    notify(`${g.nome} salvo e ativado!`);
+    renderPagOnline();
+  } catch (e) { notify('Erro ao salvar: ' + e.message, 'error'); }
+}
+
+async function pagTestar() {
+  const g   = PAG_GATEWAYS[_pagSel];
+  const val = (document.getElementById('pagCred').value || '').trim();
+  const out = document.getElementById('pagTesteResultado');
+  const btn = document.getElementById('pagBtnTestar');
+  if (!val) { notify('Cole a credencial antes de testar.', 'error'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Testando...'; }
+  if (out) { out.textContent = ''; }
+  try {
+    const r = await fetch('https://southamerica-east1-gestaojoey.cloudfunctions.net/testarGateway', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gateway: _pagSel, credencial: val }),
+    });
+    const data = await r.json().catch(() => ({ ok: false, msg: 'Resposta inválida do servidor.' }));
+    if (out) {
+      out.textContent = (data.ok ? '✅ ' : '❌ ') + (data.msg || (data.ok ? 'Conectado!' : 'Falhou.'));
+      out.style.color = data.ok ? '#34d399' : '#f87171';
+    }
   } catch (e) {
-    notify('Erro ao salvar: ' + e.message, 'error');
+    if (out) { out.textContent = '❌ Não foi possível testar agora. Tente novamente.'; out.style.color = '#f87171'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔌 Testar conexão'; }
   }
 }
 
-async function carregarMpToken() {
+async function carregarPagOnline() {
   try {
-    const snap  = await db.doc(`clientes/${slug}/config/pagamento`).get();
-    const token = snap.exists ? snap.data().mpAccessToken : null;
-    if (token) {
-      document.getElementById('cfgMpToken').value = token;
-      const st = document.getElementById('cfgMpTokenStatus');
-      st.textContent = '✅ Token configurado';
-      st.style.color = '#4caf50';
-    }
-  } catch (e) { /* silencioso */ }
+    const snap = await db.doc(`clientes/${slug}/config/pagamento`).get();
+    _pagCfg = snap.exists ? (snap.data() || {}) : {};
+  } catch (e) { _pagCfg = {}; }
+  _pagSel = _pagCfg.gateway || (_pagCfg.mpAccessToken ? 'mercadopago' : 'mercadopago');
+  renderPagOnline();
 }
 
 function carregarConfig() {
@@ -3625,7 +3697,7 @@ function carregarConfig() {
   document.getElementById('cfgEnd').value          = config.end          || '';
   _setBannerPreview(config.bannerUrl || null);
   renderLogoPreview(config.logoUrl || null);
-  carregarMpToken();
+  carregarPagOnline();
 
   // Toggle aberto/fechado manual
   const aberto = config.aberto !== false;

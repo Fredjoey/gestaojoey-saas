@@ -1888,7 +1888,7 @@ function finalizarPedido() {
       troco: troco,
       status: 'novo',
       ...(sessionStorage.getItem('mesaAtiva') ? { mesa: sessionStorage.getItem('mesaAtiva') } : {}),
-      ...(formaPag === 'pix' ? { pixStatus: 'aguardando_geracao' } : {})
+      ...(formaPag === 'pix' ? { pixStatus: 'aguardando_geracao', cardapioOrigin: location.origin } : {})
     };
     ultimoPedido = pedido;
     return db.collection(`clientes/${slug}/pedidos`).doc(pedido.id).set(pedido).then(() => pedido);
@@ -2220,7 +2220,12 @@ function renderStepPix(el) {
     if (!area) return;
 
     if (d.pixStatus === 'aguardando_geracao' || d.pixStatus === 'gerando') {
-      area.innerHTML = '<div style="font-size:14px;color:var(--text2)">⏳ Gerando seu PIX, aguarde...</div>';
+      area.innerHTML = '<div style="font-size:14px;color:var(--text2)">⏳ Gerando seu pagamento, aguarde...</div>';
+    } else if (d.pixStatus === 'redirect' && d.onlineCheckoutUrl) {
+      // Gateway de link hospedado (InfinitePay e futuros): leva o cliente p/ a página de pagamento
+      area.innerHTML = '<div style="font-size:14px;color:var(--text2)">🔗 Redirecionando para o pagamento...</div>';
+      if (pixScreenListener) { pixScreenListener(); pixScreenListener = null; }
+      window.location.href = d.onlineCheckoutUrl;
     } else if (d.pixStatus === 'pendente' && d.pixQrCodeBase64) {
       mostrarQrCodeCardapio(area, d);
     } else if (d.pixStatus === 'pago') {
@@ -2230,13 +2235,15 @@ function renderStepPix(el) {
     } else if (d.pixStatus === 'expirado' || d.status === 'cancelado') {
       if (pixExpiraTimer) { clearInterval(pixExpiraTimer); pixExpiraTimer = null; }
       area.innerHTML = `
-        <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:.5rem">⏰ PIX expirado</div>
+        <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:.5rem">⏰ Pagamento expirado</div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">O pagamento não foi realizado a tempo.</div>
         <button class="btn-secondary" onclick="closeCart()">Fechar</button>`;
-    } else if (d.pixStatus === 'erro_geracao') {
+    } else if (typeof d.pixStatus === 'string' && d.pixStatus.indexOf('erro') === 0) {
+      // erro_geracao, erro_config, erro_infinitepay, erro_mp...
+      if (pixExpiraTimer) { clearInterval(pixExpiraTimer); pixExpiraTimer = null; }
       area.innerHTML = `
-        <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:.5rem">❌ Erro ao gerar PIX</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">Entre em contato com o restaurante.</div>
+        <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:.5rem">❌ Não foi possível gerar o pagamento</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">Entre em contato com o restaurante para concluir seu pedido.</div>
         <button class="btn-secondary" onclick="closeCart()">Fechar</button>`;
     }
   });
