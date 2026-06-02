@@ -256,6 +256,7 @@ let config = {}, mesasConfig = [], mesasData = {}, pedidos = [];
 let recipes = [], adicCatalogo = {}, catalogoStatus = {};
 let _tab = 'mesas';
 let _dataReady = { config:false };
+let _mesasCarregou = false;  // 1ª leitura de mesas-config chegou (evita "Nenhuma mesa" durante o login/carga)
 
 // ===================== TOAST =====================
 let _toastT = null;
@@ -321,20 +322,37 @@ function _initPinGate(){
 // O cardápio faz signInAnonymously; o garçom faz igual. Só assina após o login,
 // senão a leitura de mesas-config (e tudo) é negada -> "Nenhuma mesa cadastrada".
 let _started = false;
+// onSnapshot resiliente: se a leitura falhar (ex.: permission-denied porque o token
+// do auth ainda não propagou) o listener MORRE e não volta sozinho. Aqui re-assinamos
+// com backoff até o auth/conexão estabilizar — some o "Nenhuma mesa" intermitente.
+function _sub(makeRef, onData, label){
+  let unsub = null, tries = 0;
+  (function attach(){
+    unsub = makeRef().onSnapshot(
+      snap => { tries = 0; onData(snap); },
+      err  => {
+        console.warn('[sub ' + label + ']', (err && err.code) || err);
+        if (unsub) { try { unsub(); } catch (_) {} unsub = null; }
+        if (tries++ < 15) setTimeout(attach, Math.min(700 * tries, 4000));
+      }
+    );
+  })();
+}
 function _iniciarDados(){
   if (_started) return; _started = true;
-  db.doc(`clientes/${slug}/config/loja`).onSnapshot(s=>{
+  _sub(() => db.doc(`clientes/${slug}/config/loja`), s=>{
     config = s.exists ? (s.data()||{}) : {};
     const lj=document.getElementById('hdrLoja'); if(lj) lj.textContent = config.nome || 'Garçom';
     if (!_dataReady.config){ _dataReady.config=true; _initPinGate(); }
-  }, e=>console.warn('config/loja',e));
-  db.collection(`clientes/${slug}/mesas-config`).orderBy('ordem').onSnapshot(s=>{ mesasConfig = s.docs.map(d=>({id:d.id,...d.data()})); if(_tab==='mesas') renderHome(); }, e=>console.warn('mesas-config',e));
-  db.collection(`clientes/${slug}/mesas`).onSnapshot(s=>{ mesasData={}; s.docs.forEach(d=>mesasData[d.id]=d.data()); renderHome(); _refreshAberta(); }, e=>console.warn('mesas',e));
-  db.collection(`clientes/${slug}/pedidos`).onSnapshot(s=>{ pedidos = s.docs.map(d=>({id:d.id,...d.data()})); renderHome(); _refreshAberta(); }, e=>console.warn('pedidos',e));
-  db.collection(`clientes/${slug}/recipes`).onSnapshot(s=>{ recipes = s.docs.map(d=>({id:d.id,...d.data()})); }, e=>console.warn('recipes',e));
-  db.collection(`clientes/${slug}/adicionais`).onSnapshot(s=>{ adicCatalogo={}; s.docs.forEach(d=>adicCatalogo[d.id]={id:d.id,...d.data()}); }, e=>console.warn('adicionais',e));
-  db.collection(`clientes/${slug}/catalogoStatus`).onSnapshot(s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, e=>console.warn('catalogoStatus',e));
+  }, 'config/loja');
+  _sub(() => db.collection(`clientes/${slug}/mesas-config`).orderBy('ordem'), s=>{ mesasConfig = s.docs.map(d=>({id:d.id,...d.data()})); _mesasCarregou = true; if(_tab==='mesas') renderHome(); }, 'mesas-config');
+  _sub(() => db.collection(`clientes/${slug}/mesas`), s=>{ mesasData={}; s.docs.forEach(d=>mesasData[d.id]=d.data()); renderHome(); _refreshAberta(); }, 'mesas');
+  _sub(() => db.collection(`clientes/${slug}/pedidos`), s=>{ pedidos = s.docs.map(d=>({id:d.id,...d.data()})); renderHome(); _refreshAberta(); }, 'pedidos');
+  _sub(() => db.collection(`clientes/${slug}/recipes`), s=>{ recipes = s.docs.map(d=>({id:d.id,...d.data()})); }, 'recipes');
+  _sub(() => db.collection(`clientes/${slug}/adicionais`), s=>{ adicCatalogo={}; s.docs.forEach(d=>adicCatalogo[d.id]={id:d.id,...d.data()}); }, 'adicionais');
+  _sub(() => db.collection(`clientes/${slug}/catalogoStatus`), s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, 'catalogoStatus');
 }
+// Subscriptions SÓ após o login (onAuthStateChanged com user != null). Nada de leitura antes do auth.
 firebase.auth().onAuthStateChanged(u=>{ if(u) _iniciarDados(); });
 firebase.auth().signInAnonymously().catch(e=>{ console.error('Auth anônimo falhou:',e); const s=document.getElementById('pinSub'); if(s) s.textContent='Erro de conexão. Recarregue a página.'; });
 
@@ -373,6 +391,7 @@ function renderHome(){
   const termo = (document.getElementById('buscaMesa')?.value||'').toLowerCase().trim();
   let ativas = mesasConfig.filter(m=>m.ativa!==false);
   if (termo) ativas = ativas.filter(m=>String(m.nome||'').toLowerCase().includes(termo));
+  if (!_mesasCarregou){ c.innerHTML=`<div class="empty">⏳ Carregando mesas...</div>`; return; }
   if (mesasConfig.length===0){ c.innerHTML=`<div class="empty">🍽️<br><br>Nenhuma mesa cadastrada.<br>Crie as mesas no painel (Salão).</div>`; return; }
   if (ativas.length===0){ c.innerHTML=`<div class="empty">Nenhuma mesa encontrada.</div>`; return; }
   c.innerHTML = `<div class="mesa-grid">${ativas.map(m=>{
