@@ -2092,17 +2092,26 @@ function contarPedidosCliente(tel) {
   ).length;
 }
 
+// Estado de bloqueio de um pedido PIX: confirmável APENAS quando pago.
+// Qualquer outro estado (gerando/pendente/redirect/erro/expirado) fica TRAVADO —
+// só o webhook (pixStatus='pago') destrava. Vale p/ Mercado Pago e InfinitePay.
+function _pixLockState(p) {
+  if (p.pagamento !== 'pix' || p.status !== 'novo' || p.pixStatus === 'pago') return { locked: false, glow: false, erro: false, badge: '' };
+  const s = p.pixStatus;
+  if (s === 'expirado') return { locked: true, glow: false, erro: true, badge: '⏰ Pix expirado — cancele o pedido' };
+  if (typeof s === 'string' && s.indexOf('erro') === 0) return { locked: true, glow: false, erro: true, badge: '⚠️ Falha ao gerar o Pix — cancele o pedido' };
+  return { locked: true, glow: true, erro: false, badge: '⏳ Aguardando pagamento Pix' };
+}
+
 function orderCardHtml(p) {
   const itensStr = (p.itens||[]).map(i => `${i.qty}× ${i.nome}`).join(', ');
 
-  // Auto-aceitar — estado visual do card
-  const _pixAguard = p.pagamento === 'pix' && p.status === 'novo'
-    && p.pixStatus !== 'pago' && p.pixStatus !== 'expirado';
-  const _pixExp30  = _pixAguard && p.ts && (Date.now() - p.ts > 30 * 60 * 1000);
-  const _cardCls   = (_autoAceitar && _pixAguard && !_pixExp30) ? ' card-aguardando-pix' : '';
-  const _badgePix  = _pixExp30
-    ? '<div class="badge-pix-expirado">⏰ PIX expirado — fluxo manual</div>'
-    : ((_autoAceitar && _pixAguard) ? '<div class="badge-aguardando-pix">⏳ AGUARDANDO PIX</div>' : '');
+  // PIX: estado visual do card (travado até o pagamento ser confirmado)
+  const _pix       = _pixLockState(p);
+  const _cardCls   = _pix.glow ? ' card-aguardando-pix' : '';
+  const _badgePix  = _pix.locked
+    ? `<div class="${_pix.erro ? 'badge-pix-expirado' : 'badge-aguardando-pix'}">${_pix.badge}</div>`
+    : '';
   const _badgeAuto = (p.autoAceito && p.status === 'producao')
     ? `<span class="badge-auto">${p.pagamento === 'pix' ? 'AUTO + PIX OK' : 'AUTO'}</span>`
     : '';
@@ -2110,10 +2119,9 @@ function orderCardHtml(p) {
   // Botões específicos por status
   let botoes = '';
   if (p.status === 'novo') {
-    const pixBloqueado = p.pagamento === 'pix' && (p.pixStatus === 'pendente' || p.pixStatus === 'aguardando_geracao' || p.pixStatus === 'gerando');
-    if (pixBloqueado) {
+    if (_pix.locked) {
       botoes = `
-      <button class="oc-btn" style="background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;flex:1;border:1px solid rgba(100,100,100,.2)" disabled>🔒 Aguardando pagamento</button>
+      <button class="oc-btn" style="background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;flex:1;border:1px solid rgba(100,100,100,.2)" disabled>🔒 Aguardando pagamento Pix</button>
       <button class="oc-btn oc-cancel" onclick="cancelarPedido('${p.id}')">Cancelar</button>`;
     } else {
       botoes = `
@@ -2392,6 +2400,8 @@ function filtrarEntregues(val) {
 function avancarStatus(id) {
   const p = pedidos.find(x => x.id === id);
   if (!p || !STATUS_NEXT[p.status]) return;
+  // Trava de segurança: pedido PIX em "novo" só avança depois do pagamento confirmado (webhook).
+  if (_pixLockState(p).locked) { notify('⏳ Pedido aguardando pagamento Pix — só avança após a confirmação.', 'error'); return; }
   const statusAnterior = p.status;
   const novoStatus = STATUS_NEXT[p.status].next;
   p.status = novoStatus;
@@ -3085,8 +3095,8 @@ function openOrderModal(id) {
     <div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">${p.pagamento?.toUpperCase()||'—'}${p.troco>0?` · troco p/ R$ ${p.troco.toFixed(2).replace('.',',')}`:''}</span></div>
     <div style="display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap">
       ${p.status==='novo'
-        ? (p.pagamento==='pix' && (p.pixStatus==='pendente'||p.pixStatus==='aguardando_geracao'||p.pixStatus==='gerando')
-            ? `<button class="btn" style="flex:1;background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;border:1px solid rgba(100,100,100,.2)" disabled>🔒 Aguardando pagamento PIX</button>`
+        ? (_pixLockState(p).locked
+            ? `<button class="btn" style="flex:1;background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;border:1px solid rgba(100,100,100,.2)" disabled>🔒 ${_pixLockState(p).badge}</button>`
             : `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Confirmar → Produção</button>`)
         : p.status==='producao'
         ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">🚀 Marcar pronto</button>

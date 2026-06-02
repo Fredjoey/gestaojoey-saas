@@ -60,12 +60,14 @@
           "headers": [{"key": "Cache-Control", "value": "no-cache"}]
         },
         {
+          "source": "/cardapio.html",
+          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+        },
+        {
           "source": "/**",
           "headers": [
-            {
-              "key": "X-Frame-Options",
-              "value": "SAMEORIGIN"
-            }
+            { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
           ]
         }
       ],
@@ -138,6 +140,14 @@
         {
           "source": "/painel.html",
           "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+        },
+        {
+          "source": "/cardapio.html",
+          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+        },
+        {
+          "source": "/**",
+          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
         }
       ],
       "rewrites": [
@@ -203,7 +213,9 @@
       ],
       "headers": [
         { "source": "/painel.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
-        { "source": "/gestao-joey.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] }
+        { "source": "/cardapio.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
+        { "source": "/gestao-joey.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
+        { "source": "/**", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] }
       ],
       "rewrites": [
         { "source": "/pedidos",          "destination": "/painel.html" },
