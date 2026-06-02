@@ -7878,7 +7878,34 @@ function abrirPagtoItens(mesaId) {
   _pagtoRender('Pagar itens selecionados');
 }
 function abrirPagtoAvulso(mesaId) { _pagtoCtx = { mesaId, tipo: 'avulso', valor: 0, descricao: 'Pagamento avulso', forma: '' }; _pagtoRender('Valor avulso'); }
-function abrirPagtoIgual(mesaId) { _pagtoCtx = { mesaId, tipo: 'igual', pessoas: 2, fracoes: 1, forma: '', baseTotal: _contaTotais(mesaId).total }; _pagtoRender('Dividir conta igualmente'); }
+function abrirPagtoIgual(mesaId) {
+  const saldoCents = Math.max(0, Math.round(_contaTotais(mesaId).saldoRaw * 100));
+  if (saldoCents <= 0) { notify('Conta já está quitada', 'warning'); return; }
+  const m = mesasData[mesaId] || {};
+  const div = m.conta && m.conta.divisao;
+  if (div && div.pessoas >= 1 && (div.pagas || 0) < div.pessoas && div.perPessoaCents) {
+    // continua uma divisão já iniciada — mantém o MESMO valor por pessoa (não re-divide o que sobrou)
+    _pagtoCtx = { mesaId, tipo: 'igual', pessoas: div.pessoas, pagas: div.pagas || 0, perPessoaCents: div.perPessoaCents, fracoes: 1, forma: '', saldoCents };
+  } else {
+    const N = 2;
+    _pagtoCtx = { mesaId, tipo: 'igual', pessoas: N, pagas: 0, perPessoaCents: Math.round(saldoCents / N), fracoes: 1, forma: '', saldoCents };
+  }
+  _pagtoRender('Dividir conta igualmente');
+}
+// Divisão ANCORADA do saldo (centavos): perPessoa fixo no início da divisão. Cada fração paga
+// perPessoa; a fração que FECHA (paga todos os restantes) registra exatamente o saldo atual —
+// absorve o centavo residual e nunca excede o saldo.
+function _pagtoCalcIgual() {
+  const c = _pagtoCtx;
+  const N = Math.max(1, c.pessoas || 1);
+  const restantes = Math.max(1, N - (c.pagas || 0));
+  const K = Math.max(1, Math.min(c.fracoes || 1, restantes));
+  let registroCents;
+  if (K >= restantes) registroCents = c.saldoCents;                          // fecha → exatamente o saldo
+  else registroCents = Math.min((c.perPessoaCents || 0) * K, c.saldoCents);
+  registroCents = Math.max(0, Math.min(registroCents, c.saldoCents));
+  return { perPessoaCents: c.perPessoaCents || 0, registroCents, K };
+}
 function _pagtoRender(titulo) {
   const c = _pagtoCtx; if (!c) return;
   const fmt = v => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
@@ -7891,12 +7918,14 @@ function _pagtoRender(titulo) {
     corpo = `<label class="fl" style="display:block;margin-bottom:6px">Valor recebido (R$)</label>
       <input id="pagtoValor" type="number" step="0.01" min="0" placeholder="0,00" value="${c.valor || ''}" oninput="_pagtoCtx.valor = parseFloat(this.value) || 0" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:15px;box-sizing:border-box">`;
   } else {
-    const vpp = c.pessoas > 0 ? c.baseTotal / c.pessoas : 0; c.vpp = vpp; c.valor = vpp * (c.fracoes || 1);
+    const ci = _pagtoCalcIgual(); c.vpp = ci.perPessoaCents / 100; c.valor = ci.registroCents / 100;
     corpo = `<div style="display:flex;gap:8px;margin-bottom:8px">
         <div style="flex:1"><label class="fl" style="display:block;margin-bottom:4px">Pessoas</label><input id="pagtoPessoas" type="number" min="1" value="${c.pessoas}" oninput="_pagtoSetPessoas(this.value)" style="width:100%;padding:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
         <div style="flex:1"><label class="fl" style="display:block;margin-bottom:4px">Frações a pagar</label><input id="pagtoFracoes" type="number" min="1" value="${c.fracoes}" oninput="_pagtoSetFracoes(this.value)" style="width:100%;padding:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
       </div>
-      <div class="detail-row"><span class="detail-key">Valor por pessoa</span><span class="detail-val">${fmt(vpp)}</span></div>
+      <div class="detail-row"><span class="detail-key">Saldo restante</span><span class="detail-val">${fmt(c.saldoCents / 100)}</span></div>
+      ${(c.pagas || 0) > 0 ? `<div class="detail-row"><span class="detail-key">Já pagas</span><span class="detail-val">${c.pagas}/${c.pessoas} pessoa(s)</span></div>` : ''}
+      <div class="detail-row"><span class="detail-key">Valor por pessoa</span><span class="detail-val" id="pagtoVpp">${fmt(c.vpp)}</span></div>
       <div class="detail-row"><span class="detail-key">Total a registrar</span><span class="detail-val" id="pagtoIgualTot" style="color:var(--orange);font-size:16px">${fmt(c.valor)}</span></div>`;
   }
   document.getElementById('pagtoBody').innerHTML = `${corpo}
@@ -7908,27 +7937,36 @@ function _pagtoRender(titulo) {
     </div>`;
   document.getElementById('pagtoModal').classList.add('show');
 }
-function _pagtoSetPessoas(v) { if (!_pagtoCtx) return; _pagtoCtx.pessoas = Math.max(1, parseInt(v) || 1); _pagtoRecalcIgual(); }
+function _pagtoSetPessoas(v) { if (!_pagtoCtx) return; _pagtoCtx.pessoas = Math.max(1, parseInt(v) || 1); _pagtoCtx.pagas = 0; _pagtoCtx.perPessoaCents = Math.round(_pagtoCtx.saldoCents / _pagtoCtx.pessoas); _pagtoRecalcIgual(); }
 function _pagtoSetFracoes(v) { if (!_pagtoCtx) return; _pagtoCtx.fracoes = Math.max(1, parseInt(v) || 1); _pagtoRecalcIgual(); }
-function _pagtoRecalcIgual() { const c = _pagtoCtx; if (!c) return; const vpp = c.pessoas > 0 ? c.baseTotal / c.pessoas : 0; c.vpp = vpp; c.valor = vpp * c.fracoes; const el = document.getElementById('pagtoIgualTot'); if (el) el.textContent = 'R$ ' + c.valor.toFixed(2).replace('.', ','); }
+function _pagtoRecalcIgual() { const c = _pagtoCtx; if (!c) return; const ci = _pagtoCalcIgual(); c.vpp = ci.perPessoaCents / 100; c.valor = ci.registroCents / 100; const _ev = document.getElementById('pagtoVpp'); if (_ev) _ev.textContent = 'R$ ' + c.vpp.toFixed(2).replace('.', ','); const el = document.getElementById('pagtoIgualTot'); if (el) el.textContent = 'R$ ' + c.valor.toFixed(2).replace('.', ','); }
 function fecharPagtoModal() { document.getElementById('pagtoModal').classList.remove('show'); _pagtoCtx = null; }
 async function _pagtoConfirmar() {
   const c = _pagtoCtx; if (!c) return;
   if (!c.forma) { notify('Escolha a forma de pagamento', 'warning'); return; }
-  const valor = Math.round((Number(c.valor) || 0) * 100) / 100;
+  let valor = Math.round((Number(c.valor) || 0) * 100) / 100;
   if (valor <= 0) { notify('Informe um valor válido', 'warning'); return; }
   const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
   const st = _contaState(c.mesaId);
   let descricao = c.descricao || '';
+  let _igualK = 0;
   if (c.tipo === 'igual') {
-    const jaPagas = (st.divisao && st.divisao.pessoas === c.pessoas) ? (st.divisao.pagas || 0) : 0;
-    const novasPagas = Math.min(c.pessoas, jaPagas + c.fracoes);
+    // recapa ao SALDO ATUAL em centavos (nunca excede; absorve o residual quando fecha a conta)
+    const saldoAtualCents = Math.max(0, Math.round(_contaTotais(c.mesaId).saldoRaw * 100));
+    c.saldoCents = saldoAtualCents;
+    const calc = _pagtoCalcIgual();
+    _igualK = calc.K;
+    valor = Math.min(calc.registroCents, saldoAtualCents) / 100;
+    if (valor <= 0) { notify('Conta já está quitada', 'warning'); fecharPagtoModal(); return; }
+    const novasPagas = Math.min(c.pessoas, (c.pagas || 0) + calc.K);
     descricao = `Divisão: ${novasPagas}/${c.pessoas} pessoa(s)`;
-    st.divisao = { pessoas: c.pessoas, pagas: novasPagas };
+    // se zerou o saldo, encerra a divisão; senão guarda o progresso (perPessoa fixo)
+    const zerou = (saldoAtualCents - Math.round(valor * 100)) <= 0;
+    st.divisao = zerou ? null : { pessoas: c.pessoas, pagas: novasPagas, perPessoaCents: c.perPessoaCents };
   }
   const pagamento = { id: 'pg' + Date.now(), valor, forma: c.forma, descricao, tipo: c.tipo, hora };
   if (c.tipo === 'item') pagamento.itens = c.itens;
-  if (c.tipo === 'igual') pagamento.fracoes = c.fracoes;
+  if (c.tipo === 'igual') pagamento.fracoes = _igualK;
   st.pagamentos.push(pagamento);
   if (c.tipo === 'item' && c.itens) c.itens.forEach(k => { if (!st.itensPagos.includes(k)) st.itensPagos.push(k); });
   try {
