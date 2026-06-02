@@ -7497,9 +7497,10 @@ function renderSalao() {
 
   grid.innerHTML = ativas.map(m => {
     const est = mesasData[m.id] || {};
-    // Card = pedidos ATIVOS do cliente (coleção pedidos) + comandas lançadas no painel (doc de estado).
+    // Card = pedidos ATIVOS do cliente HOJE (coleção pedidos) + comandas lançadas no painel (doc de estado).
     // As duas fontes são disjuntas (cliente→pedidos; painel→comandas), então somar não duplica.
-    const ativos = _pedidosDaMesa(m.id).filter(p => p.status !== 'cancelado' && p.status !== 'finalizado');
+    // O escopo "hoje" bate com o kanban e evita inflar com pedidos antigos não fechados (ex.: 'entregue' de dias atrás).
+    const ativos = _pedidosDaMesa(m.id).filter(_mesaPedidoAtivoHoje);
     const totalPedidos = ativos.reduce((s, p) => s + (Number(p.total) || 0), 0);
     const ocupada = ativos.length > 0 || Object.keys(_getComandasFromMesa(est)).length > 0;
     const status = ocupada ? (est.status === 'fechando' ? 'fechando' : 'ocupada') : 'livre';
@@ -7545,6 +7546,13 @@ function _popularSelectMesa() {
     mesasConfig.filter(m => m.ativa !== false)
       .map(m => `<option value="${m.id}">${m.nome}</option>`).join('');
   sel.value = atual;
+}
+
+// "Pedido ativo da mesa HOJE" — alinhado ao kanban (data de hoje + != cancelado/finalizado).
+// Exclui pedidos de dias anteriores que ficaram sem fechar (ex.: 'entregue' antigo) que inflavam o total.
+function _mesaPedidoAtivoHoje(p) {
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  return !!p && p.data === hoje && p.status !== 'cancelado' && p.status !== 'finalizado';
 }
 
 // Pedidos vinculados a uma mesa — casa tanto pelo id quanto pelo número (QRs antigos)
@@ -8070,7 +8078,7 @@ function _comandasDaMesa(mesaId) {
   const m = mesasData[mesaId] || {};
   const out = { ..._getComandasFromMesa(m) };
   _pedidosDaMesa(mesaId)
-    .filter(p => p.status !== 'cancelado' && p.status !== 'finalizado')
+    .filter(_mesaPedidoAtivoHoje)
     .forEach(p => {
       out['ped-' + p.id] = {
         itens: p.itens || [],
