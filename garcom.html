@@ -7,6 +7,7 @@
 <title>App Garçom</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
 :root{
   --bg:#0f0f0f; --bg2:#141414; --bg3:#1c1c1c; --bg4:#242424;
@@ -237,12 +238,13 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const hostname = window.location.hostname;
+// Slug: EXATAMENTE a mesma lógica do cardapio.html (não inventar)
 const slug = (
   hostname === 'pedidos.hamburgueriajoey.com.br' ||
   hostname === 'hamburgueriajoey.com.br' ||
-  hostname === 'pedidos-joey-painel.web.app' ||
-  hostname === 'gestaojoey-painel.web.app' ||
+  hostname === 'www.hamburgueriajoey.com.br' ||
   hostname === 'pedidos-joey.web.app' ||
+  hostname === 'pedidos-joey-painel.web.app' ||
   hostname === 'localhost' ||
   hostname === '127.0.0.1'
 ) ? 'joey' : hostname.split('.')[0];
@@ -314,18 +316,27 @@ function _initPinGate(){
   _renderPinDots();
 }
 
-// ===================== SUBSCRIPTIONS =====================
-db.doc(`clientes/${slug}/config/loja`).onSnapshot(s=>{
-  config = s.exists ? (s.data()||{}) : {};
-  const lj=document.getElementById('hdrLoja'); if(lj) lj.textContent = config.nome || 'Garçom';
-  if (!_dataReady.config){ _dataReady.config=true; _initPinGate(); }
-});
-db.collection(`clientes/${slug}/mesas-config`).orderBy('ordem').onSnapshot(s=>{ mesasConfig = s.docs.map(d=>({id:d.id,...d.data()})); if(_tab==='mesas') renderHome(); }, e=>console.warn('mesas-config',e));
-db.collection(`clientes/${slug}/mesas`).onSnapshot(s=>{ mesasData={}; s.docs.forEach(d=>mesasData[d.id]=d.data()); renderHome(); _refreshAberta(); }, e=>console.warn('mesas',e));
-db.collection(`clientes/${slug}/pedidos`).onSnapshot(s=>{ pedidos = s.docs.map(d=>({id:d.id,...d.data()})); renderHome(); _refreshAberta(); }, e=>console.warn('pedidos',e));
-db.collection(`clientes/${slug}/recipes`).onSnapshot(s=>{ recipes = s.docs.map(d=>({id:d.id,...d.data()})); }, e=>console.warn('recipes',e));
-db.collection(`clientes/${slug}/adicionais`).onSnapshot(s=>{ adicCatalogo={}; s.docs.forEach(d=>adicCatalogo[d.id]={id:d.id,...d.data()}); }, e=>console.warn('adicionais',e));
-db.collection(`clientes/${slug}/catalogoStatus`).onSnapshot(s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, e=>console.warn('catalogoStatus',e));
+// ===================== AUTH (anônimo) + SUBSCRIPTIONS =====================
+// As regras do Firestore exigem request.auth != null em clientes/{slug}/...
+// O cardápio faz signInAnonymously; o garçom faz igual. Só assina após o login,
+// senão a leitura de mesas-config (e tudo) é negada -> "Nenhuma mesa cadastrada".
+let _started = false;
+function _iniciarDados(){
+  if (_started) return; _started = true;
+  db.doc(`clientes/${slug}/config/loja`).onSnapshot(s=>{
+    config = s.exists ? (s.data()||{}) : {};
+    const lj=document.getElementById('hdrLoja'); if(lj) lj.textContent = config.nome || 'Garçom';
+    if (!_dataReady.config){ _dataReady.config=true; _initPinGate(); }
+  }, e=>console.warn('config/loja',e));
+  db.collection(`clientes/${slug}/mesas-config`).orderBy('ordem').onSnapshot(s=>{ mesasConfig = s.docs.map(d=>({id:d.id,...d.data()})); if(_tab==='mesas') renderHome(); }, e=>console.warn('mesas-config',e));
+  db.collection(`clientes/${slug}/mesas`).onSnapshot(s=>{ mesasData={}; s.docs.forEach(d=>mesasData[d.id]=d.data()); renderHome(); _refreshAberta(); }, e=>console.warn('mesas',e));
+  db.collection(`clientes/${slug}/pedidos`).onSnapshot(s=>{ pedidos = s.docs.map(d=>({id:d.id,...d.data()})); renderHome(); _refreshAberta(); }, e=>console.warn('pedidos',e));
+  db.collection(`clientes/${slug}/recipes`).onSnapshot(s=>{ recipes = s.docs.map(d=>({id:d.id,...d.data()})); }, e=>console.warn('recipes',e));
+  db.collection(`clientes/${slug}/adicionais`).onSnapshot(s=>{ adicCatalogo={}; s.docs.forEach(d=>adicCatalogo[d.id]={id:d.id,...d.data()}); }, e=>console.warn('adicionais',e));
+  db.collection(`clientes/${slug}/catalogoStatus`).onSnapshot(s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, e=>console.warn('catalogoStatus',e));
+}
+firebase.auth().onAuthStateChanged(u=>{ if(u) _iniciarDados(); });
+firebase.auth().signInAnonymously().catch(e=>{ console.error('Auth anônimo falhou:',e); const s=document.getElementById('pinSub'); if(s) s.textContent='Erro de conexão. Recarregue a página.'; });
 
 // ===================== LÓGICA DE MESA (mesma do Salão) =====================
 function _mesaPedidoAtivo(p){ return !!p && p.status!=='cancelado' && p.status!=='finalizado'; }
