@@ -2094,7 +2094,7 @@ function contarPedidosCliente(tel) {
 
 // Estado de bloqueio de um pedido PIX: confirmável APENAS quando pago.
 // Qualquer outro estado (gerando/pendente/redirect/erro/expirado) fica TRAVADO —
-// só o webhook (pixStatus='pago') destrava. Vale p/ Mercado Pago e InfinitePay.
+// só o webhook (pixStatus='pago') destrava. Vale p/ Mercado Pago (e futuros gateways).
 function _pixLockState(p) {
   if (p.pagamento !== 'pix' || p.status !== 'novo' || p.pixStatus === 'pago') return { locked: false, glow: false, erro: false, badge: '' };
   const s = p.pixStatus;
@@ -3576,23 +3576,8 @@ const PAG_GATEWAYS = {
       'Clique em <b>Salvar e ativar</b>.',
     ],
   },
-  infinitepay: {
-    nome: 'InfinitePay', logo: '🟣',
-    bom: 'Bom se você já usa a conta ou a maquininha InfinitePay.',
-    campo: 'infiniteTag',
-    credLabel: 'Cole aqui sua InfiniteTag',
-    credPlaceholder: 'sualoja',
-    credExemplo: 'É o seu @ no app InfinitePay — sem o $. Ex.: joeyburguer',
-    valida: v => v.replace(/^\$/, '').trim().length >= 2,
-    validaMsg: 'Informe sua InfiniteTag (sem o $).',
-    webhook: null,
-    webhookDica: '',
-    passos: [
-      'Crie sua conta grátis em <b>infinitepay.io</b>.',
-      'No app InfinitePay, copie sua <b>InfiniteTag</b> (canto superior esquerdo) — <b>sem o $</b>.',
-      'Cole no campo abaixo e clique em <b>Salvar e ativar</b>. Pronto: a confirmação do pagamento é automática.',
-    ],
-  },
+  // Para adicionar um novo gateway (ex.: Asaas/PagBank), acrescente uma entrada aqui
+  // no mesmo formato do mercadopago. A tela, o salvar e o testar funcionam sem mudanças.
 };
 let _pagSel = 'mercadopago';   // gateway atualmente aberto na tela
 let _pagCfg = {};              // config/pagamento carregada do Firestore
@@ -3600,7 +3585,9 @@ let _pagCfg = {};              // config/pagamento carregada do Firestore
 function renderPagOnline() {
   const wrap = document.getElementById('pagOnline');
   if (!wrap) return;
-  const ativo = _pagCfg.gateway || (_pagCfg.mpAccessToken ? 'mercadopago' : '');
+  // Compat: gateway salvo que não existe mais no adapter (ex.: 'infinitepay' antigo)
+  // é tratado como não configurado — não aparece como ativo.
+  const ativo = (_pagCfg.gateway && PAG_GATEWAYS[_pagCfg.gateway]) ? _pagCfg.gateway : (_pagCfg.mpAccessToken ? 'mercadopago' : '');
 
   const cards = Object.entries(PAG_GATEWAYS).map(([k, g]) => {
     const sel = k === _pagSel, ehAtivo = k === ativo;
@@ -3626,8 +3613,11 @@ function renderPagOnline() {
       </div>` : `
       <div style="font-size:12px;color:#34d399;margin:12px 0 0">✔ Sem configuração extra — a confirmação do pagamento é automática.</div>`;
 
+  // Com 1 só gateway, mostra ele direto (sem o passo de "escolher gateway").
+  // A estrutura de seleção (cards) volta automaticamente quando houver 2+.
+  const _temSeletor = Object.keys(PAG_GATEWAYS).length > 1;
   wrap.innerHTML = `
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${cards}</div>
+    ${_temSeletor ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${cards}</div>` : ''}
     <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:16px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">${g.logo} Como ativar o ${g.nome}</div>
       <div style="font-size:13px;line-height:1.7;color:var(--text2)">${passosHtml}</div>
@@ -3695,7 +3685,8 @@ async function carregarPagOnline() {
     const snap = await db.doc(`clientes/${slug}/config/pagamento`).get();
     _pagCfg = snap.exists ? (snap.data() || {}) : {};
   } catch (e) { _pagCfg = {}; }
-  _pagSel = _pagCfg.gateway || (_pagCfg.mpAccessToken ? 'mercadopago' : 'mercadopago');
+  // Gateway salvo inexistente no adapter (ex.: 'infinitepay' removido) cai no Mercado Pago.
+  _pagSel = (_pagCfg.gateway && PAG_GATEWAYS[_pagCfg.gateway]) ? _pagCfg.gateway : 'mercadopago';
   renderPagOnline();
 }
 

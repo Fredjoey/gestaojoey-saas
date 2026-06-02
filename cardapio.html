@@ -2221,11 +2221,6 @@ function renderStepPix(el) {
 
     if (d.pixStatus === 'aguardando_geracao' || d.pixStatus === 'gerando') {
       area.innerHTML = '<div style="font-size:14px;color:var(--text2)">⏳ Gerando seu pagamento, aguarde...</div>';
-    } else if (d.pixStatus === 'redirect' && d.onlineCheckoutUrl) {
-      // Gateway de link hospedado (InfinitePay e futuros): leva o cliente p/ a página de pagamento
-      area.innerHTML = '<div style="font-size:14px;color:var(--text2)">🔗 Redirecionando para o pagamento...</div>';
-      if (pixScreenListener) { pixScreenListener(); pixScreenListener = null; }
-      window.location.href = d.onlineCheckoutUrl;
     } else if (d.pixStatus === 'pendente' && d.pixQrCodeBase64) {
       mostrarQrCodeCardapio(area, d);
     } else if (d.pixStatus === 'pago') {
@@ -2239,7 +2234,7 @@ function renderStepPix(el) {
         <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">O pagamento não foi realizado a tempo.</div>
         <button class="btn-secondary" onclick="closeCart()">Fechar</button>`;
     } else if (typeof d.pixStatus === 'string' && d.pixStatus.indexOf('erro') === 0) {
-      // erro_geracao, erro_config, erro_infinitepay, erro_mp...
+      // erro_geracao, erro_config, erro_mp...
       if (pixExpiraTimer) { clearInterval(pixExpiraTimer); pixExpiraTimer = null; }
       area.innerHTML = `
         <div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:.5rem">❌ Não foi possível gerar o pagamento</div>
