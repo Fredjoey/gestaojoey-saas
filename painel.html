@@ -6915,7 +6915,6 @@ function setBotToggle(ativo) {
 }
 
 async function carregarRobo() {
-  renderNotifConfig(); // não depende de Promises — roda imediatamente com config global
   try {
     const [lojaSnap, botSnap] = await Promise.all([
       db.doc(`clientes/${slug}/config/loja`).get(),
@@ -6923,6 +6922,13 @@ async function carregarRobo() {
     ]);
 
     const loja = lojaSnap.exists ? lojaSnap.data() : {};
+    // Sincroniza o estado salvo dos toggles de notificação ANTES de renderizar.
+    // Antes, renderNotifConfig() rodava antes de o config/loja terminar de carregar
+    // e usava o DEFAULT — deixando só o "Pedido Cancelado" (defaultAtivo:false)
+    // desligado e ignorando o valor salvo; ao salvar, esse "desligado" sobrescrevia
+    // o valor real. Carregando primeiro, os 4 toggles refletem o que está salvo.
+    if (loja.wppNotifs) config.wppNotifs = loja.wppNotifs;
+    renderNotifConfig();
     setBotToggle(loja.botAtivo !== false);
 
     const saved = {};
@@ -6956,6 +6962,7 @@ async function carregarRobo() {
 
   } catch (e) {
     console.error('[carregarRobo]', e);
+    renderNotifConfig(); // fallback: renderiza com o config global disponível
   }
 }
 
