@@ -353,8 +353,31 @@ function _iniciarDados(){
   _sub(() => db.collection(`clientes/${slug}/catalogoStatus`), s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, 'catalogoStatus');
 }
 // Subscriptions SÓ após o login (onAuthStateChanged com user != null). Nada de leitura antes do auth.
-firebase.auth().onAuthStateChanged(u=>{ if(u) _iniciarDados(); });
-firebase.auth().signInAnonymously().catch(e=>{ console.error('Auth anônimo falhou:',e); const s=document.getElementById('pinSub'); if(s) s.textContent='Erro de conexão. Recarregue a página.'; });
+function _boot(){
+  firebase.auth().onAuthStateChanged(u=>{ if(u) _iniciarDados(); });
+  firebase.auth().signInAnonymously().catch(e=>{ console.error('Auth anônimo falhou:',e); const s=document.getElementById('pinSub'); if(s) s.textContent='Erro de conexão. Recarregue a página.'; });
+}
+
+// ── AUTO-LIMPEZA DE SERVICE WORKER (garcom é ONLINE-ONLY) ────────────────────
+// Qualquer SW antigo (o do painel é escopo / e gruda no device) intercepta e quebra
+// as chamadas de auth/Firestore. Desregistra TODOS e recarrega 1x ANTES de autenticar,
+// pra o app se auto-resolver sem o garçom precisar limpar nada na mão.
+// Guard anti-loop: sessionStorage 'garcom_sw_reload' garante no MÁXIMO 1 reload por sessão.
+(function _semServiceWorker(){
+  if (!('serviceWorker' in navigator)) { _boot(); return; }
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    var tinhaSW = (regs && regs.length > 0) || !!navigator.serviceWorker.controller;
+    return Promise.all((regs || []).map(function(r){ return r.unregister().catch(function(){}); }))
+      .then(function(){ return tinhaSW; });
+  }).then(function(tinhaSW){
+    if (tinhaSW && !sessionStorage.getItem('garcom_sw_reload')) {
+      sessionStorage.setItem('garcom_sw_reload', '1');  // só recarrega 1x por sessão (anti-loop)
+      location.reload();
+      return;                                            // não inicia o Firebase — a página vai recarregar limpa
+    }
+    _boot();                                             // sem SW (ou já limpo) -> segue normal
+  }).catch(function(){ _boot(); });                      // se a API de SW falhar, não trava o app
+})();
 
 // ===================== LÓGICA DE MESA (mesma do Salão) =====================
 function _mesaPedidoAtivo(p){ return !!p && p.status!=='cancelado' && p.status!=='finalizado'; }
