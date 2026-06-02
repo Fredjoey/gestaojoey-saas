@@ -395,6 +395,23 @@ textarea.fi{resize:vertical;min-height:60px}
 .pag-btn{flex:1;padding:10px 6px;border-radius:10px;border:2px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;text-align:center;}
 .pag-btn:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-dim)}
 .pag-btn.active{border-color:var(--orange);background:var(--orange-dim);color:var(--orange)}
+/* CONTA DA MESA */
+.conta-tot{display:flex;gap:8px;margin-bottom:14px}
+.conta-tot-card{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 8px;text-align:center}
+.conta-tot-card .lbl{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
+.conta-tot-card .val{font-size:16px;font-weight:700;margin-top:3px}
+.conta-item{display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--bg4);border:1px solid var(--border);border-radius:9px;margin-bottom:7px;cursor:pointer}
+.conta-item.pago{opacity:.6;cursor:default}
+.conta-item.pago .conta-item-nome{text-decoration:line-through}
+.conta-item-nome{font-size:13px;font-weight:600;color:var(--text)}
+.conta-item-add{font-size:11px;color:var(--text3);margin-top:1px}
+.conta-item-val{font-size:13px;font-weight:700;color:var(--orange);white-space:nowrap}
+.conta-chk{width:18px;height:18px;accent-color:var(--orange);cursor:pointer;flex-shrink:0}
+.conta-pago-badge{font-size:10px;font-weight:700;color:#34d399;background:rgba(52,211,153,.12);border-radius:6px;padding:3px 8px;white-space:nowrap}
+.conta-acao{padding:11px;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
+.conta-acao:disabled{opacity:.45;cursor:not-allowed}
+.conta-pg-item{display:flex;align-items:center;gap:8px;font-size:12px;padding:7px 0;border-bottom:1px dashed var(--border)}
+.conta-pg-item:last-child{border-bottom:none}
 .fc-item-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg4);border-radius:8px;margin-bottom:6px;font-size:13px;}
 .fc-item-check{width:18px;height:18px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;}
 .fc-item-nome{flex:1;color:var(--text);font-weight:500}
@@ -1428,6 +1445,17 @@ textarea.fi{resize:vertical;min-height:60px}
 </div>
 
 <!-- MODAL HISTÓRICO DE CAIXA -->
+<!-- MODAL REGISTRAR PAGAMENTO (conta da mesa) -->
+<div class="modal-overlay" id="pagtoModal" style="z-index:700" onclick="if(event.target===this)fecharPagtoModal()">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="pagtoTitle">Registrar pagamento</div>
+      <button class="modal-close" onclick="fecharPagtoModal()">✕</button>
+    </div>
+    <div id="pagtoBody"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cancelModal" onclick="if(event.target===this)cancelarVoltar()">
   <div class="modal-box" style="max-width:460px">
     <div class="modal-header">
@@ -7326,6 +7354,17 @@ async function renderCaixa() {
     if (_cxEsperado[forma] !== undefined) _cxEsperado[forma] += (p.total||0);
   });
 
+  // + pagamentos de contas de mesa (coleção fechamentos de hoje) entram na reconciliação por forma.
+  // Pedidos de mesa têm pagamento 'local' (fora das 4 formas), então isto NÃO duplica.
+  try {
+    const fechSnap = await db.collection(`clientes/${slug}/fechamentos`).where('data', '==', hoje).get();
+    fechSnap.forEach(d => {
+      const f = d.data();
+      const forma = (f.pagamento || '').toLowerCase();
+      if (_cxEsperado[forma] !== undefined) _cxEsperado[forma] += (Number(f.total) || 0);
+    });
+  } catch (e) { console.warn('[CAIXA] fechamentos de mesa:', e); }
+
   // Carrega doc do caixa do dia
   let dados = null;
   try {
@@ -7530,9 +7569,10 @@ function renderSalao() {
         <div class="mesa-status-lbl">${statusLabel}</div>
         <div class="mesa-total">R$&nbsp;${total.toFixed(2).replace('.',',')}</div>
         <div class="mesa-actions">
-          <button class="mesa-btn mesa-btn-ver" onclick="abrirVerMesa('${m.id}','${nomeEsc}')">👁️ Ver mesa</button>
+          <button class="mesa-btn mesa-btn-ver" onclick="abrirVerMesa('${m.id}','${nomeEsc}')">🧾 Conta</button>
           <button class="mesa-btn mesa-btn-add" onclick="abrirPedidoMesa('${m.id}','${nomeEsc}')">+ Pedido</button>
         </div>
+        ${status !== 'livre' ? `<button class="mesa-btn" style="width:100%;margin-top:6px;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3)" onclick="abrirVerMesa('${m.id}','${nomeEsc}')">💰 Fechar conta</button>` : ''}
       </div>`;
   }).join('');
 }
@@ -7694,6 +7734,7 @@ document.addEventListener('click', () => {
 });
 
 let _mesaModalId = null, _mesaModalNome = null;
+let _contaSel = new Set();  // seleção transitória de itens para "pagar por item"
 
 function refreshVerMesaModal() {
   if (!_mesaModalId || !document.getElementById('orderModal').classList.contains('show')) return;
@@ -7705,88 +7746,237 @@ function refreshVerMesaModal() {
 function abrirVerMesa(mesaId, mesaNome) {
   _mesaModalId = mesaId;
   _mesaModalNome = mesaNome;
+  _contaSel.clear();
   const m = mesasData[mesaId] || {};
   document.getElementById('modalTitle').textContent = mesaNome;
   renderModalMesaBody(mesaId, mesaNome, m);
   document.getElementById('orderModal').classList.add('show');
 }
 
+// ===================== CONTA DA MESA (unificada: pedidos QR de hoje + comandas do painel) =====================
 function renderModalMesaBody(mesaId, mesaNome, m) {
-  const comandas = _comandasDaMesa(mesaId);
-  const total    = Object.values(comandas).reduce((s, c) => s + (c.total || 0), 0);
-  const status   = m.status === 'fechando' ? 'fechando' : (Object.keys(comandas).length > 0 ? 'ocupada' : 'livre');
-  const entries  = Object.entries(comandas).sort(([a], [b]) => a.localeCompare(b));
+  const fmt = v => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
+  const { total, pago, saldoRaw, itens, pagamentos } = _contaTotais(mesaId);
+  const ocupada = itens.length > 0 || pagamentos.length > 0;
 
-  const statusOpts = [
-    {val:'livre',    label:'🟢 Livre'},
-    {val:'ocupada',  label:'🟡 Ocupada'},
-    {val:'fechando', label:'🔴 Fechando conta'},
-  ];
-
-  const temItens = Object.keys(_getComandasFromMesa(m)).length > 0; // Fechar/Dividir conta operam só sobre comandas lançadas no painel
-
-  const comandasHtml = entries.length === 0
-    ? '<div style="text-align:center;color:var(--text3);padding:1.5rem 0;font-size:13px">Nenhum item lançado</div>'
-    : entries.map(([cId, c]) => {
-        const itens    = c.itens || [];
-        const subtotal = c.total || 0;
-        const hora     = c.hora  || '';
-        const itensHtml = itens.map(it => {
-          const adicsHtml = (it.adicionais || []).map(a =>
-            `<div style="font-size:11px;color:var(--text3);padding-left:16px">+ ${a.nome}${a.preco>0?' (+R$'+a.preco.toFixed(2).replace('.',',')+')':''}</div>`
-          ).join('');
-          return `<div style="padding:4px 0">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:13px;font-weight:600;color:var(--text);flex:1">${it.qty}× ${it.nome}</span>
-              <span style="font-size:13px;font-weight:700;color:var(--orange);white-space:nowrap">R$&nbsp;${((it.preco||0)*(it.qty||1)).toFixed(2).replace('.',',')}</span>
-            </div>
-            ${adicsHtml}
-            ${it.obs ? `<div style="font-size:11px;color:var(--text3);padding-left:4px">📝 ${it.obs}</div>` : ''}
+  const itensHtml = itens.length === 0
+    ? '<div style="text-align:center;color:var(--text3);padding:1.5rem 0;font-size:13px">Nenhum item na conta</div>'
+    : itens.map(it => {
+        const adic = (it.adicionais || []).filter(a => (a.qty || 1) > 0)
+          .map(a => `+ ${(a.qty || 1) > 1 ? (a.qty + '× ') : ''}${_contaEsc(a.nome)}`).join(', ');
+        const adicHtml = adic ? `<div class="conta-item-add">${adic}</div>` : '';
+        const obsHtml  = it.obs ? `<div class="conta-item-add">📝 ${_contaEsc(it.obs)}</div>` : '';
+        if (it.pago) {
+          return `<div class="conta-item pago">
+            <span style="font-size:14px;color:#34d399">✓</span>
+            <div style="flex:1"><div class="conta-item-nome">${it.qty}× ${_contaEsc(it.nome)}</div>${adicHtml}</div>
+            <span class="conta-pago-badge">PAGO</span>
           </div>`;
-        }).join('');
-
-        const isPed = !!c._pedidoId;
-        const acoesHtml = isPed
-          ? `<span style="font-size:10px;font-weight:600;color:var(--text3);background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:7px;padding:4px 8px">🛒 via Kanban</span>`
-          : `<button onclick="imprimirComandaPorId('${mesaId}','${cId}','${mesaNome}')" style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:7px;color:var(--text2);cursor:pointer;font-family:inherit">🖨️</button>`
-            + `<button onclick="abrirEditarComanda('${mesaId}','${mesaNome}','${cId}')" style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:7px;color:#60a5fa;cursor:pointer;font-family:inherit">✏️ Editar</button>`
-            + `<button onclick="cancelarComanda('${mesaId}','${mesaNome}','${cId}')" style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.25);border-radius:7px;color:#ff6b6b;cursor:pointer;font-family:inherit">✕ Cancelar</button>`;
-        const cabecalho = isPed ? `🛒 Pedido #${c._pedidoId}${hora ? ' · 🕐 ' + hora : ''}` : `🕐 ${hora}`;
-
-        return `<div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px 13px;margin-bottom:9px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
-            <span style="font-size:11px;color:var(--text3)">${cabecalho}</span>
-            <div style="display:flex;gap:6px">${acoesHtml}</div>
-          </div>
-          <div style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:8px">${itensHtml}</div>
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:11px;color:var(--text2)">Subtotal</span>
-            <span style="font-size:13px;font-weight:700;color:var(--orange)">R$&nbsp;${subtotal.toFixed(2).replace('.',',')}</span>
-          </div>
-        </div>`;
+        }
+        return `<label class="conta-item">
+          <input type="checkbox" class="conta-chk" ${_contaSel.has(it.key) ? 'checked' : ''} onclick="_contaToggleSel('${it.key}')">
+          <div style="flex:1"><div class="conta-item-nome">${it.qty}× ${_contaEsc(it.nome)}</div>${adicHtml}${obsHtml}</div>
+          <span class="conta-item-val">${fmt(it.linha)}</span>
+        </label>`;
       }).join('');
 
-  const btnHtml = temItens ? `
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button onclick="abrirFecharConta('${mesaId}','${mesaNome}')" style="flex:1;padding:11px;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.3);border-radius:9px;color:#34d399;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💰 Fechar Conta</button>
-      <button onclick="abrirDividirConta('${mesaId}','${mesaNome}')" style="flex:1;padding:11px;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.25);border-radius:9px;color:#60a5fa;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">👥 Dividir Conta</button>
-    </div>` : '';
+  const FORMAS_LBL = { pix: 'PIX', dinheiro: 'Dinheiro', debito: 'Débito', credito: 'Crédito' };
+  const pagHtml = pagamentos.length === 0 ? '' : `
+    <div class="section-lbl">Pagamentos recebidos</div>
+    ${pagamentos.map((p, i) => `<div class="conta-pg-item">
+      <span style="color:var(--text3)">${p.hora || ''}</span>
+      <span style="color:var(--text);flex:1">${_contaEsc(p.descricao || '')}</span>
+      <span style="color:var(--text3)">${FORMAS_LBL[p.forma] || p.forma || ''}</span>
+      <span style="font-weight:700;color:#34d399">${fmt(p.valor)}</span>
+      <button onclick="contaEstornar('${mesaId}', ${i})" title="Estornar pagamento" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:13px;line-height:1">✕</button>
+    </div>`).join('')}`;
+
+  const selTot = itens.filter(i => !i.pago && _contaSel.has(i.key)).reduce((s, i) => s + i.linha, 0);
+  const temNaoPago = itens.some(i => !i.pago);
+  const nomeJs = _contaEsc(mesaNome).replace(/'/g, "\\'");
 
   document.getElementById('modalBody').innerHTML = `
-    <div style="margin-bottom:14px">
-      <div class="fl" style="margin-bottom:8px">Status da mesa</div>
-      <div style="display:flex;gap:6px">
-        ${statusOpts.map(s => `<div class="filter-btn${status===s.val?' active':''}" style="flex:1;font-size:11px;text-align:center;cursor:default;pointer-events:none">${s.label}</div>`).join('')}
-      </div>
+    <div class="conta-tot">
+      <div class="conta-tot-card"><div class="lbl">Total</div><div class="val" style="color:var(--text)">${fmt(total)}</div></div>
+      <div class="conta-tot-card"><div class="lbl">Pago</div><div class="val" style="color:#34d399">${fmt(pago)}</div></div>
+      <div class="conta-tot-card"><div class="lbl">Saldo</div><div class="val" style="color:${saldoRaw > 0.005 ? 'var(--orange)' : '#34d399'}">${fmt(Math.max(0, saldoRaw))}</div></div>
     </div>
-    <div class="section-lbl">Comandas</div>
-    <div style="max-height:42vh;overflow-y:auto">${comandasHtml}</div>
-    <div class="detail-row" style="margin-top:8px">
-      <span class="detail-key">Total acumulado</span>
-      <span class="detail-val" style="color:var(--orange);font-size:16px">R$&nbsp;${total.toFixed(2).replace('.',',')}</span>
+    <div class="section-lbl">Itens da conta</div>
+    <div style="max-height:32vh;overflow-y:auto">${itensHtml}</div>
+    ${temNaoPago ? `<button id="contaBtnPagarItens" onclick="abrirPagtoItens('${mesaId}')" class="conta-acao" style="width:100%;margin-top:8px;background:var(--orange-dim);border:1px solid var(--orange);color:var(--orange)" ${selTot <= 0 ? 'disabled' : ''}>💳 Pagar itens selecionados <span id="contaSelTot">${selTot > 0 ? '· ' + fmt(selTot) : ''}</span></button>` : ''}
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="abrirPagtoIgual('${mesaId}')" class="conta-acao" style="flex:1;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);color:#60a5fa">👥 Dividir igual</button>
+      <button onclick="abrirPagtoAvulso('${mesaId}')" class="conta-acao" style="flex:1;background:rgba(255,255,255,.06);border:1px solid var(--border2);color:var(--text)">💵 Valor avulso</button>
     </div>
-    ${btnHtml}
+    ${pagHtml}
+    ${ocupada
+      ? `<button onclick="contaFechar('${mesaId}','${nomeJs}')" class="conta-acao" style="width:100%;margin-top:16px;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);color:#34d399">💰 Fechar conta</button>`
+      : `<div style="text-align:center;color:var(--text3);padding:1.25rem;font-size:13px">🟢 Mesa livre — nenhuma conta aberta.</div>`}
   `;
+}
+
+function _contaEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// Itens unificados da conta (pedidos do cliente HOJE + comandas do painel), chave estável + flag pago.
+function _contaItens(mesaId) {
+  const comandas = _comandasDaMesa(mesaId);
+  const m = mesasData[mesaId] || {};
+  const pagos = new Set(((m.conta && m.conta.itensPagos) || []));
+  const out = [];
+  Object.entries(comandas).sort(([a], [b]) => a.localeCompare(b)).forEach(([cId, c]) => {
+    (c.itens || []).forEach((it, idx) => {
+      const adicSum = (it.adicionais || []).reduce((s, a) => s + (Number(a.preco) || 0) * (Number(a.qty) || 1), 0);
+      const linha = ((Number(it.preco) || 0) + adicSum) * (Number(it.qty) || 1);
+      const key = cId + '#' + idx;
+      out.push({ key, nome: it.nome, qty: it.qty || 1, adicionais: it.adicionais || [], obs: it.obs || '', linha, pago: pagos.has(key) });
+    });
+  });
+  return out;
+}
+
+function _contaTotais(mesaId) {
+  const itens = _contaItens(mesaId);
+  const m = mesasData[mesaId] || {};
+  const pagamentos = (m.conta && m.conta.pagamentos) || [];
+  const total = itens.reduce((s, i) => s + i.linha, 0);
+  const pago = pagamentos.reduce((s, p) => s + (Number(p.valor) || 0), 0);
+  return { total, pago, saldoRaw: total - pago, itens, pagamentos };
+}
+
+function _contaState(mesaId) {
+  const m = mesasData[mesaId] || {};
+  const c = m.conta || {};
+  return { pagamentos: [...(c.pagamentos || [])], itensPagos: [...(c.itensPagos || [])], divisao: c.divisao || null };
+}
+
+function _contaToggleSel(key) {
+  if (_contaSel.has(key)) _contaSel.delete(key); else _contaSel.add(key);
+  _contaAtualizarSelecao();
+}
+function _contaAtualizarSelecao() {
+  if (!_mesaModalId) return;
+  const itens = _contaItens(_mesaModalId);
+  const tot = itens.filter(i => !i.pago && _contaSel.has(i.key)).reduce((s, i) => s + i.linha, 0);
+  const fmt = v => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
+  const el = document.getElementById('contaSelTot'); if (el) el.textContent = tot > 0 ? '· ' + fmt(tot) : '';
+  const btn = document.getElementById('contaBtnPagarItens'); if (btn) btn.disabled = tot <= 0;
+}
+
+// ---------- registrar pagamento (mini-modal) ----------
+let _pagtoCtx = null;
+function _pagtoFormaBtns() {
+  const L = { pix: 'PIX', dinheiro: 'Dinheiro', debito: 'Débito', credito: 'Crédito' };
+  return Object.keys(L).map(f => `<button class="pag-btn${_pagtoCtx && _pagtoCtx.forma === f ? ' active' : ''}" data-f="${f}" onclick="_pagtoSetForma('${f}')">${L[f]}</button>`).join('');
+}
+function _pagtoSetForma(f) { if (!_pagtoCtx) return; _pagtoCtx.forma = f; document.querySelectorAll('#pagtoFormas .pag-btn').forEach(b => b.classList.toggle('active', b.dataset.f === f)); }
+function abrirPagtoItens(mesaId) {
+  const sel = _contaItens(mesaId).filter(i => !i.pago && _contaSel.has(i.key));
+  if (!sel.length) { notify('Selecione ao menos um item', 'warning'); return; }
+  _pagtoCtx = { mesaId, tipo: 'item', valor: sel.reduce((s, i) => s + i.linha, 0), itens: sel.map(i => i.key), descricao: 'Itens: ' + sel.map(i => `${i.qty}× ${i.nome}`).join(', '), forma: '' };
+  _pagtoRender('Pagar itens selecionados');
+}
+function abrirPagtoAvulso(mesaId) { _pagtoCtx = { mesaId, tipo: 'avulso', valor: 0, descricao: 'Pagamento avulso', forma: '' }; _pagtoRender('Valor avulso'); }
+function abrirPagtoIgual(mesaId) { _pagtoCtx = { mesaId, tipo: 'igual', pessoas: 2, fracoes: 1, forma: '', baseTotal: _contaTotais(mesaId).total }; _pagtoRender('Dividir conta igualmente'); }
+function _pagtoRender(titulo) {
+  const c = _pagtoCtx; if (!c) return;
+  const fmt = v => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
+  document.getElementById('pagtoTitle').textContent = titulo;
+  let corpo = '';
+  if (c.tipo === 'item') {
+    corpo = `<div class="detail-row"><span class="detail-key">Valor</span><span class="detail-val" style="color:var(--orange);font-size:18px">${fmt(c.valor)}</span></div>
+      <div style="font-size:12px;color:var(--text2);margin:6px 0 2px">${_contaEsc(c.descricao)}</div>`;
+  } else if (c.tipo === 'avulso') {
+    corpo = `<label class="fl" style="display:block;margin-bottom:6px">Valor recebido (R$)</label>
+      <input id="pagtoValor" type="number" step="0.01" min="0" placeholder="0,00" value="${c.valor || ''}" oninput="_pagtoCtx.valor = parseFloat(this.value) || 0" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:15px;box-sizing:border-box">`;
+  } else {
+    const vpp = c.pessoas > 0 ? c.baseTotal / c.pessoas : 0; c.vpp = vpp; c.valor = vpp * (c.fracoes || 1);
+    corpo = `<div style="display:flex;gap:8px;margin-bottom:8px">
+        <div style="flex:1"><label class="fl" style="display:block;margin-bottom:4px">Pessoas</label><input id="pagtoPessoas" type="number" min="1" value="${c.pessoas}" oninput="_pagtoSetPessoas(this.value)" style="width:100%;padding:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+        <div style="flex:1"><label class="fl" style="display:block;margin-bottom:4px">Frações a pagar</label><input id="pagtoFracoes" type="number" min="1" value="${c.fracoes}" oninput="_pagtoSetFracoes(this.value)" style="width:100%;padding:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);box-sizing:border-box"></div>
+      </div>
+      <div class="detail-row"><span class="detail-key">Valor por pessoa</span><span class="detail-val">${fmt(vpp)}</span></div>
+      <div class="detail-row"><span class="detail-key">Total a registrar</span><span class="detail-val" id="pagtoIgualTot" style="color:var(--orange);font-size:16px">${fmt(c.valor)}</span></div>`;
+  }
+  document.getElementById('pagtoBody').innerHTML = `${corpo}
+    <label class="fl" style="display:block;margin:14px 0 6px">Forma de pagamento</label>
+    <div style="display:flex;gap:6px" id="pagtoFormas">${_pagtoFormaBtns()}</div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button onclick="fecharPagtoModal()" style="flex:1;padding:11px;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-weight:600;cursor:pointer;font-family:inherit">Cancelar</button>
+      <button onclick="_pagtoConfirmar()" style="flex:1;padding:11px;background:var(--orange);border:none;border-radius:9px;color:#fff;font-weight:700;cursor:pointer;font-family:inherit">✓ Registrar pagamento</button>
+    </div>`;
+  document.getElementById('pagtoModal').classList.add('show');
+}
+function _pagtoSetPessoas(v) { if (!_pagtoCtx) return; _pagtoCtx.pessoas = Math.max(1, parseInt(v) || 1); _pagtoRecalcIgual(); }
+function _pagtoSetFracoes(v) { if (!_pagtoCtx) return; _pagtoCtx.fracoes = Math.max(1, parseInt(v) || 1); _pagtoRecalcIgual(); }
+function _pagtoRecalcIgual() { const c = _pagtoCtx; if (!c) return; const vpp = c.pessoas > 0 ? c.baseTotal / c.pessoas : 0; c.vpp = vpp; c.valor = vpp * c.fracoes; const el = document.getElementById('pagtoIgualTot'); if (el) el.textContent = 'R$ ' + c.valor.toFixed(2).replace('.', ','); }
+function fecharPagtoModal() { document.getElementById('pagtoModal').classList.remove('show'); _pagtoCtx = null; }
+async function _pagtoConfirmar() {
+  const c = _pagtoCtx; if (!c) return;
+  if (!c.forma) { notify('Escolha a forma de pagamento', 'warning'); return; }
+  const valor = Math.round((Number(c.valor) || 0) * 100) / 100;
+  if (valor <= 0) { notify('Informe um valor válido', 'warning'); return; }
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  const st = _contaState(c.mesaId);
+  let descricao = c.descricao || '';
+  if (c.tipo === 'igual') {
+    const jaPagas = (st.divisao && st.divisao.pessoas === c.pessoas) ? (st.divisao.pagas || 0) : 0;
+    const novasPagas = Math.min(c.pessoas, jaPagas + c.fracoes);
+    descricao = `Divisão: ${novasPagas}/${c.pessoas} pessoa(s)`;
+    st.divisao = { pessoas: c.pessoas, pagas: novasPagas };
+  }
+  const pagamento = { id: 'pg' + Date.now(), valor, forma: c.forma, descricao, tipo: c.tipo, hora };
+  if (c.tipo === 'item') pagamento.itens = c.itens;
+  if (c.tipo === 'igual') pagamento.fracoes = c.fracoes;
+  st.pagamentos.push(pagamento);
+  if (c.tipo === 'item' && c.itens) c.itens.forEach(k => { if (!st.itensPagos.includes(k)) st.itensPagos.push(k); });
+  try {
+    await db.collection(`clientes/${slug}/mesas`).doc(c.mesaId).set({ conta: st, status: 'ocupada' }, { merge: true });
+    _contaSel.clear();
+    fecharPagtoModal();
+    notify('Pagamento registrado: R$ ' + valor.toFixed(2).replace('.', ','));
+  } catch (e) { console.error('[conta pagamento]', e); notify('Erro ao registrar: ' + e.message, 'error'); }
+}
+async function contaEstornar(mesaId, idx) {
+  const st = _contaState(mesaId);
+  const pg = st.pagamentos[idx]; if (!pg) return;
+  if (!confirm('Estornar o pagamento de R$ ' + (Number(pg.valor) || 0).toFixed(2).replace('.', ',') + '?')) return;
+  st.pagamentos.splice(idx, 1);
+  if (pg.tipo === 'item' && pg.itens) st.itensPagos = st.itensPagos.filter(k => !pg.itens.includes(k));
+  if (pg.tipo === 'igual' && st.divisao) st.divisao.pagas = Math.max(0, (st.divisao.pagas || 0) - (pg.fracoes || 1));
+  try { await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ conta: st }, { merge: true }); notify('Pagamento estornado'); }
+  catch (e) { console.error('[estornar]', e); notify('Erro ao estornar', 'error'); }
+}
+async function contaFechar(mesaId, mesaNome) {
+  const { total, pago, saldoRaw, pagamentos } = _contaTotais(mesaId);
+  if (total <= 0 && pagamentos.length === 0) { notify('Conta vazia', 'warning'); return; }
+  if (saldoRaw > 0.005) {
+    if (!confirm('Ainda falta R$ ' + saldoRaw.toFixed(2).replace('.', ',') + ' para quitar a conta.\nFechar a mesa mesmo assim?')) return;
+  }
+  try {
+    const now = new Date();
+    const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const hora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+    // 1) registra cada pagamento no Fechamento de Caixa (reconciliação por forma)
+    for (const pg of pagamentos) {
+      await db.collection(`clientes/${slug}/fechamentos`).add({
+        mesa: mesaId, mesaNome, total: Number(pg.valor) || 0, pagamento: pg.forma,
+        descricao: pg.descricao || '', data, hora, tipo: 'mesa-conta',
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    // 2) finaliza os pedidos ativos de hoje da mesa (resolve a raiz dos órfãos daqui pra frente)
+    const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivoHoje);
+    await Promise.all(ativos.map(p => db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ status: 'finalizado' }).catch(e => console.warn('[fechar conta] pedido', p.id, e))));
+    // 3) zera o estado da mesa -> volta pra Livre
+    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
+      { status: 'livre', comandas: {}, pedidos: [], total: 0, conta: { pagamentos: [], itensPagos: [], divisao: null } },
+      { merge: false }
+    );
+    closeOrderModal();
+    notify(`Conta da ${mesaNome} fechada! Recebido R$ ` + pago.toFixed(2).replace('.', ','));
+  } catch (e) { console.error('[contaFechar]', e); notify('Erro ao fechar conta: ' + e.message, 'error'); }
 }
 
 async function alterarStatusMesa(mesaId, novoStatus, btn) {
