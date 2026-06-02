@@ -5926,6 +5926,9 @@ function iniciarListenersFirestore() {
     renderKanban();
     startPixTimers();
     verificarAniversariantes();
+    // Salão reflete pedidos de mesa em tempo real (entrar/sair pedido atualiza o card na hora)
+    if (document.getElementById('panel-salao') && document.getElementById('panel-salao').style.display !== 'none') renderSalao();
+    if (_mesaModalId && document.getElementById('orderModal') && document.getElementById('orderModal').classList.contains('show')) refreshVerMesaModal();
   });
 
   db.collection(`clientes/${slug}/mesas`).onSnapshot(snap => {
@@ -7494,8 +7497,13 @@ function renderSalao() {
 
   grid.innerHTML = ativas.map(m => {
     const est = mesasData[m.id] || {};
-    const status = est.status || 'livre';
-    const total = est.total || 0;
+    // Card = pedidos ATIVOS do cliente (coleção pedidos) + comandas lançadas no painel (doc de estado).
+    // As duas fontes são disjuntas (cliente→pedidos; painel→comandas), então somar não duplica.
+    const ativos = _pedidosDaMesa(m.id).filter(p => p.status !== 'cancelado' && p.status !== 'finalizado');
+    const totalPedidos = ativos.reduce((s, p) => s + (Number(p.total) || 0), 0);
+    const ocupada = ativos.length > 0 || Object.keys(_getComandasFromMesa(est)).length > 0;
+    const status = ocupada ? (est.status === 'fechando' ? 'fechando' : 'ocupada') : 'livre';
+    const total = totalPedidos + (Number(est.total) || 0);
     const statusLabel = status === 'livre' ? '🟢 Livre' : status === 'ocupada' ? '🟡 Ocupada' : '🔴 Fechando conta';
     const qrParam = String(m.id).replace(/^mesa-/, '');
     const nomeEsc = String(m.nome || '').replace(/'/g, "\\'");
@@ -7696,9 +7704,9 @@ function abrirVerMesa(mesaId, mesaNome) {
 }
 
 function renderModalMesaBody(mesaId, mesaNome, m) {
-  const status  = m.status || 'livre';
-  const total   = m.total  || 0;
-  const comandas = _getComandasFromMesa(m);
+  const comandas = _comandasDaMesa(mesaId);
+  const total    = Object.values(comandas).reduce((s, c) => s + (c.total || 0), 0);
+  const status   = m.status === 'fechando' ? 'fechando' : (Object.keys(comandas).length > 0 ? 'ocupada' : 'livre');
   const entries  = Object.entries(comandas).sort(([a], [b]) => a.localeCompare(b));
 
   const statusOpts = [
@@ -7707,7 +7715,7 @@ function renderModalMesaBody(mesaId, mesaNome, m) {
     {val:'fechando', label:'🔴 Fechando conta'},
   ];
 
-  const temItens = entries.length > 0;
+  const temItens = Object.keys(_getComandasFromMesa(m)).length > 0; // Fechar/Dividir conta operam só sobre comandas lançadas no painel
 
   const comandasHtml = entries.length === 0
     ? '<div style="text-align:center;color:var(--text3);padding:1.5rem 0;font-size:13px">Nenhum item lançado</div>'
@@ -7729,17 +7737,18 @@ function renderModalMesaBody(mesaId, mesaNome, m) {
           </div>`;
         }).join('');
 
-        const printBtn  = `<button onclick="imprimirComandaPorId('${mesaId}','${cId}','${mesaNome}')"
-               style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:7px;color:var(--text2);cursor:pointer;font-family:inherit">🖨️</button>`;
-        const editBtn   = `<button onclick="abrirEditarComanda('${mesaId}','${mesaNome}','${cId}')"
-               style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:7px;color:#60a5fa;cursor:pointer;font-family:inherit">✏️ Editar</button>`;
-        const cancelBtn = `<button onclick="cancelarComanda('${mesaId}','${mesaNome}','${cId}')"
-               style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.25);border-radius:7px;color:#ff6b6b;cursor:pointer;font-family:inherit">✕ Cancelar</button>`;
+        const isPed = !!c._pedidoId;
+        const acoesHtml = isPed
+          ? `<span style="font-size:10px;font-weight:600;color:var(--text3);background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:7px;padding:4px 8px">🛒 via Kanban</span>`
+          : `<button onclick="imprimirComandaPorId('${mesaId}','${cId}','${mesaNome}')" style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:7px;color:var(--text2);cursor:pointer;font-family:inherit">🖨️</button>`
+            + `<button onclick="abrirEditarComanda('${mesaId}','${mesaNome}','${cId}')" style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3);border-radius:7px;color:#60a5fa;cursor:pointer;font-family:inherit">✏️ Editar</button>`
+            + `<button onclick="cancelarComanda('${mesaId}','${mesaNome}','${cId}')" style="padding:5px 10px;font-size:11px;font-weight:600;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.25);border-radius:7px;color:#ff6b6b;cursor:pointer;font-family:inherit">✕ Cancelar</button>`;
+        const cabecalho = isPed ? `🛒 Pedido #${c._pedidoId}${hora ? ' · 🕐 ' + hora : ''}` : `🕐 ${hora}`;
 
         return `<div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px 13px;margin-bottom:9px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
-            <span style="font-size:11px;color:var(--text3)">🕐 ${hora}</span>
-            <div style="display:flex;gap:6px">${printBtn}${editBtn}${cancelBtn}</div>
+            <span style="font-size:11px;color:var(--text3)">${cabecalho}</span>
+            <div style="display:flex;gap:6px">${acoesHtml}</div>
           </div>
           <div style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:8px">${itensHtml}</div>
           <div style="display:flex;justify-content:space-between;align-items:center">
@@ -8053,6 +8062,25 @@ function _getComandasFromMesa(m) {
     result['leg-' + idx] = { itens: ped.itens || [], total: ped.subtotal || 0, hora: ped.hora || '', status: 'ativo' };
   });
   return result;
+}
+
+// Comandas exibidas no "Ver mesa": comandas lançadas no painel (doc de estado) +
+// pedidos ATIVOS do cliente (coleção pedidos) derivados como comandas read-only ('ped-<id>').
+function _comandasDaMesa(mesaId) {
+  const m = mesasData[mesaId] || {};
+  const out = { ..._getComandasFromMesa(m) };
+  _pedidosDaMesa(mesaId)
+    .filter(p => p.status !== 'cancelado' && p.status !== 'finalizado')
+    .forEach(p => {
+      out['ped-' + p.id] = {
+        itens: p.itens || [],
+        total: (p.total != null ? p.total : p.subtotal) || 0,
+        hora: p.hora || '',
+        status: 'ativo',
+        _pedidoId: p.id
+      };
+    });
+  return out;
 }
 
 function abrirPedidoMesa(mesaId, mesaNome) {
