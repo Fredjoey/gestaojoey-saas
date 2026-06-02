@@ -2731,7 +2731,7 @@ function gerarHtmlComandaMesa(comanda, mesaNome) {
 
   const itensHtml = (comanda.itens || []).map(i => {
     const adics = (i.adicionais || []).filter(a => a && a.nome)
-      .map(a => `<div class="sub">+ ${a.nome}</div>`).join('');
+      .map(a => `<div class="sub">${a.grupo ? a.grupo + ': ' + a.nome : '+ ' + a.nome}</div>`).join('');
     const obs = i.obs ? `<div class="sub">Obs: ${i.obs}</div>` : '';
     return `<div>${i.qty}x ${i.nome}</div>${adics}${obs}`;
   }).join('');
@@ -2773,7 +2773,8 @@ function gerarHtmlPedidoProducao(p) {
     const val = 'R$ ' + (unitPrice * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
       const aVal = a.preco > 0 ? `<span>R$ ${(a.preco).toFixed(2).replace('.', ',')}</span>` : '';
-      return `<div class="adic"><span>+ ${a.nome}</span>${aVal}</div>`;
+      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${a.nome}`;
+      return `<div class="adic"><span>${rotulo}</span>${aVal}</div>`;
     }).join('');
     const obs = i.obs ? `<div class="adic"><span>Obs: ${i.obs}</span></div>` : '';
     return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
@@ -3064,9 +3065,11 @@ function openOrderModal(id) {
   const itensHtml=(p.itens||[]).map(i=>{
     const adicionaisUnit=(i.adicionais||[]).reduce((s,a)=>s+(a.preco||0)*(a.qty||0),0);
     const itemTotal=(i.preco+adicionaisUnit)*i.qty;
-    const adicionaisHtml=(i.adicionais||[]).filter(a=>a.qty>0).map(a=>
-      `<div style="font-size:11px;color:var(--text2);padding-left:20px;margin-top:2px">+ ${a.qty}× ${a.nome} — R$ ${((a.preco||0)*(a.qty||0)).toFixed(2).replace('.',',')}</div>`
-    ).join('');
+    const adicionaisHtml=(i.adicionais||[]).filter(a=>a.qty>0).map(a=>{
+      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${a.qty}× ${a.nome}`;
+      const val = (a.preco||0) > 0 ? ` — R$ ${((a.preco||0)*(a.qty||0)).toFixed(2).replace('.',',')}` : ' — incluso';
+      return `<div style="font-size:11px;color:var(--text2);padding-left:20px;margin-top:2px">${rotulo}${val}</div>`;
+    }).join('');
     return `
     <div class="detail-row" style="flex-direction:column;align-items:stretch">
       <div style="display:flex;justify-content:space-between;align-items:baseline">

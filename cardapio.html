@@ -547,6 +547,22 @@ body{
 /* ADICIONAIS */
 .adicionais-section{margin-bottom:1.25rem}
 .adicionais-title{font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px}
+/* GRUPOS DE OPÇÕES (monte sua marmita) */
+.grupo-sec{margin-bottom:1.25rem}
+.grupo-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.grupo-title{font-size:15px;font-weight:700;color:var(--text)}
+.grupo-rule{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.grupo-obrig{display:inline-block;background:var(--orange,#ff6b35);color:#fff;font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:.3px}
+.grupo-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:7px;cursor:pointer;transition:border-color .15s,background .15s}
+.grupo-item.sel{border-color:var(--orange,#ff6b35);background:rgba(255,107,53,.08)}
+.grupo-item.dis{opacity:.4;cursor:not-allowed}
+.grupo-mark{width:20px;height:20px;flex-shrink:0;border:2px solid var(--border2,#555);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;line-height:1}
+.grupo-mark.radio{border-radius:50%}
+.grupo-mark.check{border-radius:6px}
+.grupo-item.sel .grupo-mark{background:var(--orange,#ff6b35);border-color:var(--orange,#ff6b35)}
+.grupo-item-nome{flex:1;font-size:14px;color:var(--text)}
+.grupo-item-preco{font-size:13px;font-weight:600;color:var(--success,#34d399)}
+.grupo-item-preco.incl{color:var(--text3,#888);font-weight:500}
 .adicional-row{
   display:flex;align-items:center;gap:10px;
   padding:9px 0;border-bottom:1px solid var(--border);
@@ -952,7 +968,8 @@ function carregarDadosPainel() {
         desc:       r.desc || r.descricao || '',
         emoji:      r.emoji || EMOJI_CAT[r.categoria] || '🍽️',
         foto:       _catalogoStatusMap[r.id]?.foto || r.foto || r.image || null,
-        adicionais: r.adicionais || []
+        adicionais: r.adicionais || [],
+        adicionaisGrupos: r.adicionaisGrupos || []
       });
     });
     CATEGORIAS.length = 0;
@@ -1335,16 +1352,44 @@ function renderProductModal() {
     ? `<div class="prod-modal-img"><img src="${p.foto}" alt="${p.nome}"></div>`
     : `<div class="prod-modal-img">${p.emoji}</div>`;
 
-  // Adicionais disponíveis para este produto
-  const idsAdicionais = Array.isArray(p.adicionais) ? p.adicionais : [];
-  const adicionaisDisponiveis = idsAdicionais
-    .map(id => _adicionaisCatalogo[id])
-    .filter(Boolean);
+  // Grupos de opções (monte sua marmita)
+  const grupos = Array.isArray(p.adicionaisGrupos) ? p.adicionaisGrupos : [];
+  const idsEmGrupos = new Set();
+  grupos.forEach(g => (g.itens || []).forEach(id => idsEmGrupos.add(String(id))));
 
-  const adicionaisTotal = adicionaisDisponiveis.reduce((s, a) => {
-    return s + (adicionaisModal[a.id] || 0) * (a.preco || 0);
-  }, 0);
-  const totalModal = (p.preco + adicionaisTotal) * qtyModal;
+  const gruposHtml = grupos.map(g => {
+    const itens = (g.itens || []).map(id => _adicionaisCatalogo[id]).filter(Boolean);
+    if (!itens.length) return '';
+    const tipo = (Number(g.min) === 1 && Number(g.max) === 1) ? 'radio' : 'check';
+    const max  = Math.max(1, Number(g.max) || 1);
+    const obrig = !!g.obrigatorio || (Number(g.min) || 0) >= 1;
+    const selCount = itens.filter(a => (adicionaisModal[a.id] || 0) > 0).length;
+    const itensHtml = itens.map(a => {
+      const sel  = (adicionaisModal[a.id] || 0) > 0;
+      const pago = Number(a.preco || 0) > 0;
+      const precoTxt = pago ? `+ R$ ${(a.preco).toFixed(2).replace('.', ',')}` : 'Incluso';
+      const atMax = tipo === 'check' && !sel && selCount >= max;
+      const acao  = tipo === 'radio' ? `selGrupoRadio('${g.id}','${a.id}')` : `toggleGrupoCheck('${g.id}','${a.id}')`;
+      return `
+        <label class="grupo-item${sel ? ' sel' : ''}${atMax ? ' dis' : ''}" onclick="${atMax ? '' : acao}">
+          <span class="grupo-mark ${tipo}">${sel ? (tipo === 'radio' ? '●' : '✓') : ''}</span>
+          <span class="grupo-item-nome">${a.nome}</span>
+          <span class="grupo-item-preco${pago ? '' : ' incl'}">${precoTxt}</span>
+        </label>`;
+    }).join('');
+    return `
+      <div class="grupo-sec">
+        <div class="grupo-head">
+          <div class="grupo-title">${g.nome}</div>
+          <div class="grupo-rule">${_grupoRegraCardapio(g)}${obrig ? ' <span class="grupo-obrig">Obrigatório</span>' : ''}</div>
+        </div>
+        ${itensHtml}
+      </div>`;
+  }).join('');
+
+  // Adicionais avulsos (legado) — exclui os que já estão em grupos
+  const idsAdicionais = (Array.isArray(p.adicionais) ? p.adicionais : []).filter(id => !idsEmGrupos.has(String(id)));
+  const adicionaisDisponiveis = idsAdicionais.map(id => _adicionaisCatalogo[id]).filter(Boolean);
 
   const adicionaisHtml = adicionaisDisponiveis.length ? `
     <div class="adicionais-section">
@@ -1352,11 +1397,12 @@ function renderProductModal() {
       ${adicionaisDisponiveis.map(a => {
         const qty = adicionaisModal[a.id] || 0;
         const max = a.qtdMax || 10;
+        const pago = Number(a.preco || 0) > 0;
         return `
           <div class="adicional-row">
             <div class="adicional-info">
               <div class="adicional-nome">${a.nome}</div>
-              <div class="adicional-preco">+ R$ ${(a.preco||0).toFixed(2).replace('.',',')}</div>
+              <div class="adicional-preco">${pago ? `+ R$ ${(a.preco).toFixed(2).replace('.',',')}` : 'Incluso'}</div>
             </div>
             <div class="adicional-qty">
               <button class="qty-btn" onclick="changeAdicionalQty('${a.id}',-1)" ${qty===0?'disabled':''}>−</button>
@@ -1369,6 +1415,18 @@ function renderProductModal() {
     </div>
   ` : '';
 
+  // Preço: soma TODOS os selecionados (inclusos = 0, não somam)
+  const adicionaisTotal = Object.entries(adicionaisModal).reduce((s, [id, qty]) =>
+    s + (qty || 0) * (_adicionaisCatalogo[id]?.preco || 0), 0);
+  const totalModal = (p.preco + adicionaisTotal) * qtyModal;
+
+  // Validação: grupos obrigatórios que ainda não atingiram o mínimo
+  const pendentes = _gruposPendentes(p);
+  const podeAdd = pendentes.length === 0;
+  const btnLabel = podeAdd
+    ? `Adicionar ao carrinho · R$ ${totalModal.toFixed(2).replace('.',',')}`
+    : `Escolha: ${pendentes.join(', ')}`;
+
   document.getElementById('productContent').innerHTML = `
     ${imgHtml}
     <div class="prod-modal-name">${p.nome}</div>
@@ -1379,6 +1437,7 @@ function renderProductModal() {
       <span class="qty-num">${qtyModal}</span>
       <button class="qty-btn" onclick="changeQtyModal(1)">+</button>
     </div>
+    ${gruposHtml}
     ${adicionaisHtml}
     <div class="form-group">
       <label class="form-label">Observações (opcional)</label>
@@ -1386,8 +1445,8 @@ function renderProductModal() {
     </div>
   `;
   document.getElementById('productFooter').innerHTML = `
-    <button class="btn-main" onclick="addToCartFromModal()">
-      Adicionar ao carrinho · R$ ${totalModal.toFixed(2).replace('.',',')}
+    <button class="btn-main" onclick="addToCartFromModal()" ${podeAdd ? '' : 'disabled style="opacity:.5;cursor:not-allowed"'}>
+      ${btnLabel}
     </button>
     <button class="btn-secondary" onclick="closeProduct()">Cancelar</button>
   `;
@@ -1401,6 +1460,58 @@ function changeAdicionalQty(id, d) {
   renderProductModal();
 }
 
+// ---- Grupos de opções (monte sua marmita) ----
+function _grupoRegraCardapio(g) {
+  const min = Math.max(0, Number(g.min) || 0), max = Math.max(1, Number(g.max) || 1);
+  if (min === max) return 'Escolha ' + min;
+  if (min > 0)     return 'Escolha ' + min + ' a ' + max;
+  return 'Escolha até ' + max;
+}
+
+// Grupos obrigatórios que ainda não atingiram o mínimo (retorna os nomes)
+function _gruposPendentes(p) {
+  const grupos = Array.isArray(p?.adicionaisGrupos) ? p.adicionaisGrupos : [];
+  const faltam = [];
+  grupos.forEach(g => {
+    const itens = (g.itens || []).map(id => _adicionaisCatalogo[id]).filter(Boolean);
+    if (!itens.length) return;
+    const min = (!!g.obrigatorio) ? Math.max(1, Number(g.min) || 0) : (Number(g.min) || 0);
+    if (min <= 0) return;
+    const count = itens.filter(a => (adicionaisModal[a.id] || 0) > 0).length;
+    if (count < min) faltam.push(g.nome || 'opção');
+  });
+  return faltam;
+}
+
+function _grupoById(gid) {
+  const grupos = Array.isArray(produtorModal?.adicionaisGrupos) ? produtorModal.adicionaisGrupos : [];
+  return grupos.find(g => String(g.id) === String(gid));
+}
+
+// Escolha única (radio): seleciona um item e zera os demais do grupo
+function selGrupoRadio(gid, id) {
+  const g = _grupoById(gid);
+  if (!g) return;
+  (g.itens || []).forEach(itId => { adicionaisModal[itId] = 0; });
+  adicionaisModal[id] = 1;
+  renderProductModal();
+}
+
+// Múltipla (checkbox): alterna respeitando o máximo do grupo
+function toggleGrupoCheck(gid, id) {
+  const g = _grupoById(gid);
+  if (!g) return;
+  const max = Math.max(1, Number(g.max) || 1);
+  if ((adicionaisModal[id] || 0) > 0) {
+    adicionaisModal[id] = 0;
+  } else {
+    const count = (g.itens || []).filter(itId => (adicionaisModal[itId] || 0) > 0).length;
+    if (count >= max) return; // impede ultrapassar o máximo
+    adicionaisModal[id] = 1;
+  }
+  renderProductModal();
+}
+
 function changeQtyModal(d) {
   qtyModal = Math.max(1, qtyModal + d);
   renderProductModal();
@@ -1408,12 +1519,21 @@ function changeQtyModal(d) {
 
 function addToCartFromModal() {
   const p = produtorModal;
+  // bloqueia se algum grupo obrigatório não atingiu o mínimo
+  const pendentes = _gruposPendentes(p);
+  if (pendentes.length) { alert('Escolha as opções obrigatórias: ' + pendentes.join(', ')); return; }
+  // mapa item -> nome do grupo (para a cozinha ler agrupado)
+  const grupoDoItem = {};
+  (Array.isArray(p.adicionaisGrupos) ? p.adicionaisGrupos : []).forEach(g =>
+    (g.itens || []).forEach(id => { grupoDoItem[String(id)] = g.nome; }));
   const adicionaisSelecionados = Object.entries(adicionaisModal)
     .filter(([, qty]) => qty > 0)
     .map(([id, qty]) => {
       const a = _adicionaisCatalogo[id];
       if (!a) return null;
-      return { id, nome: a.nome, preco: a.preco || 0, qty };
+      const item = { id, nome: a.nome, preco: a.preco || 0, qty };
+      if (grupoDoItem[String(id)]) item.grupo = grupoDoItem[String(id)];
+      return item;
     })
     .filter(Boolean);
   const temAdicionais = adicionaisSelecionados.length > 0;
@@ -1917,7 +2037,7 @@ function atualizarMesaComPedido(pedido, mesaNum) {
     nome: i.nome,
     preco: i.preco,
     qty: i.qty,
-    adicionais: (i.adicionais || []).map(a => ({ id: a.id, nome: a.nome, preco: a.preco || 0, qty: a.qty || 1 })),
+    adicionais: (i.adicionais || []).map(a => ({ id: a.id, nome: a.nome, preco: a.preco || 0, qty: a.qty || 1, ...(a.grupo ? { grupo: a.grupo } : {}) })),
     obs: i.obs || ''
   }));
   const subtotal = pedido.subtotal || 0;
@@ -1937,7 +2057,7 @@ function enviarWhatsApp(pedido) {
     const adicionaisUnit = (i.adicionais || []).reduce((a, x) => a + x.preco * x.qty, 0);
     let linha = `• ${i.qty}x ${i.nome}${i.obs ? ` (${i.obs})` : ''} — R$ ${((i.preco + adicionaisUnit) * i.qty).toFixed(2).replace('.', ',')}`;
     if (i.adicionais && i.adicionais.length > 0) {
-      linha += '\n' + i.adicionais.map(a => `  + ${a.qty}x ${a.nome}`).join('\n');
+      linha += '\n' + i.adicionais.map(a => `  + ${a.grupo ? a.grupo + ': ' + a.nome : a.qty + 'x ' + a.nome}`).join('\n');
     }
     return linha;
   }).join('\n');

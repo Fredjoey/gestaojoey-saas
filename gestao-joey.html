@@ -918,7 +918,7 @@
                             style="padding:9px 10px; border:1px solid var(--border2); border-radius:6px; font-size:13px; background:var(--bg3); color:var(--text); width:100%;">
                     </div>
                     <div>
-                        <div style="font-size:10px; color:var(--text3); text-transform:uppercase; font-weight:600; margin-bottom:4px;">Preço (R$)</div>
+                        <div style="font-size:10px; color:var(--text3); text-transform:uppercase; font-weight:600; margin-bottom:4px;">Preço (R$) · 0 = incluso</div>
                         <input type="number" id="novoAdicPreco" placeholder="0,00" min="0" step="0.01"
                             style="padding:9px 10px; border:1px solid var(--border2); border-radius:6px; font-size:13px; background:var(--bg3); color:var(--text); width:100%;">
                     </div>
@@ -3252,45 +3252,155 @@
         }
 
         let _modalAdicionaisRecipeId = null;
+        let _modalGrupos = [];  // cópia de trabalho dos grupos enquanto o modal está aberto
+
+        function _genGrupoId() { return 'g' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
+        // Tipo de seleção derivado da regra: min e máx = 1 -> única (radio); senão múltipla (checkbox)
+        function _grupoTipo(g) { return (Number(g.min) === 1 && Number(g.max) === 1) ? 'radio' : 'check'; }
+        function _grupoRegraTexto(g) {
+            const min = Math.max(0, parseInt(g.min) || 0), max = Math.max(1, parseInt(g.max) || 1);
+            if (min === max) return 'Escolha ' + min;
+            if (min > 0)     return 'Escolha ' + min + ' a ' + max;
+            return 'Escolha até ' + max;
+        }
 
         function abrirModalAdicionais(recipeId) {
             const recipe = recipes.find(r => r.id === recipeId);
             if (!recipe) return;
             _modalAdicionaisRecipeId = recipeId;
-            const atribuidos = (recipe.adicionais || []).filter(x => typeof x !== 'object');
             const titulo = document.getElementById('modalAdicionaisTitulo');
             if (titulo) titulo.textContent = 'Adicionais — ' + recipe.name;
+            // cópia de trabalho dos grupos (não muta a receita até confirmar)
+            _modalGrupos = (recipe.adicionaisGrupos || []).map(g => ({
+                id: g.id || _genGrupoId(),
+                nome: g.nome || '',
+                min: g.min != null ? g.min : 0,
+                max: g.max != null ? g.max : 1,
+                obrigatorio: !!g.obrigatorio,
+                itens: Array.isArray(g.itens) ? g.itens.slice() : [],
+            }));
             const lista = document.getElementById('modalAdicionaisLista');
             if (!lista) return;
+            const atribuidos = (recipe.adicionais || []).filter(x => typeof x !== 'object');
+            lista.innerHTML =
+                  '<div id="modalGruposWrap"></div>'
+                + '<div style="margin:18px 0 8px; font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.5px;">Adicionais avulsos (sem grupo)</div>'
+                + '<div id="modalFlatWrap"></div>';
+            const flat = document.getElementById('modalFlatWrap');
             if (adicionaisBiblioteca.length === 0) {
-                lista.innerHTML = '<div style="font-size:13px; color:var(--text3); padding:8px 0;">Nenhum adicional na biblioteca. Cadastre na seção acima da aba Receitas.</div>';
+                flat.innerHTML = '<div style="font-size:13px; color:var(--text3); padding:8px 0;">Nenhum adicional na biblioteca. Cadastre na seção acima da aba Receitas.</div>';
             } else {
-                lista.innerHTML = adicionaisBiblioteca.map(a => {
+                flat.innerHTML = adicionaisBiblioteca.map(a => {
                     const chk = atribuidos.includes(a.id) ? 'checked' : '';
+                    const pago = Number(a.preco || 0) > 0;
+                    const precoTxt = pago ? '+R$ ' + Number(a.preco).toFixed(2).replace('.', ',') : 'Incluso';
                     return '<label style="display:flex; align-items:center; gap:10px; padding:9px 6px; cursor:pointer; border-bottom:1px solid var(--border);">'
-                        + '<input type="checkbox" value="' + a.id + '" ' + chk + ' style="width:16px; height:16px; cursor:pointer; accent-color:#27ae60;">'
+                        + '<input type="checkbox" class="adicFlat" value="' + a.id + '" ' + chk + ' style="width:16px; height:16px; cursor:pointer; accent-color:#27ae60;">'
                         + '<span style="flex:1; font-size:13px; color:var(--text);">' + a.nome + '</span>'
-                        + '<span style="font-size:12px; color:#27ae60; font-weight:600;">+R$ ' + Number(a.preco||0).toFixed(2).replace('.',',') + '</span>'
-                        + '<span style="font-size:11px; color:var(--text3); margin-left:4px;">máx ' + (a.qtdMax||1) + '</span>'
+                        + '<span style="font-size:12px; color:' + (pago ? '#27ae60' : 'var(--text3)') + '; font-weight:600;">' + precoTxt + '</span>'
+                        + '<span style="font-size:11px; color:var(--text3); margin-left:4px;">máx ' + (a.qtdMax || 1) + '</span>'
                         + '</label>';
                 }).join('');
             }
+            _renderModalGrupos();
             document.getElementById('modalAdicionais').style.display = 'flex';
+        }
+
+        function _renderModalGrupos() {
+            const wrap = document.getElementById('modalGruposWrap');
+            if (!wrap) return;
+            const lib = adicionaisBiblioteca;
+            const gruposHtml = _modalGrupos.map((g, gi) => {
+                const tipo = _grupoTipo(g);
+                const itensHtml = lib.length === 0
+                    ? '<div style="font-size:12px; color:var(--text3);">Cadastre adicionais na biblioteca primeiro.</div>'
+                    : lib.map(a => {
+                        const chk = (g.itens || []).includes(a.id) ? 'checked' : '';
+                        const pago = Number(a.preco || 0) > 0;
+                        const precoTxt = pago ? '+R$ ' + Number(a.preco).toFixed(2).replace('.', ',') : 'Incluso';
+                        return '<label style="display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; font-size:12px; color:var(--text);">'
+                            + '<input type="checkbox" class="gItem" value="' + a.id + '" ' + chk + ' onchange="_grupoLerDOM()" style="width:15px; height:15px; accent-color:#a78bfa;">'
+                            + '<span style="flex:1;">' + a.nome + '</span>'
+                            + '<span style="font-size:11px; color:' + (pago ? '#27ae60' : 'var(--text3)') + ';">' + precoTxt + '</span>'
+                            + '</label>';
+                    }).join('');
+                return '<div class="grupoCard" data-gi="' + gi + '" style="border:1px solid #3a2a6a; background:#1a1626; border-radius:10px; padding:12px; margin-bottom:10px;">'
+                    + '<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">'
+                        + '<input type="text" class="gNome" value="' + (g.nome || '').replace(/"/g, '&quot;') + '" placeholder="Nome do grupo (ex.: Proteína)" oninput="_modalGrupos[' + gi + '].nome=this.value" style="flex:1; padding:7px 9px; border:1px solid var(--border2); border-radius:6px; font-size:13px; background:var(--bg3); color:var(--text);">'
+                        + '<button onclick="_grupoRemover(' + gi + ')" title="Remover grupo" style="background:#3a1a1a; color:#e74c3c; border:1px solid #5a2a2a; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:13px;">🗑</button>'
+                    + '</div>'
+                    + '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">'
+                        + '<label style="font-size:11px; color:var(--text3);">Mín <input type="number" class="gMin" min="0" step="1" value="' + (g.min != null ? g.min : 0) + '" onchange="_grupoLerDOM();_renderModalGrupos()" style="width:52px; padding:5px; border:1px solid var(--border2); border-radius:5px; background:var(--bg3); color:var(--text); font-size:12px;"></label>'
+                        + '<label style="font-size:11px; color:var(--text3);">Máx <input type="number" class="gMax" min="1" step="1" value="' + (g.max != null ? g.max : 1) + '" onchange="_grupoLerDOM();_renderModalGrupos()" style="width:52px; padding:5px; border:1px solid var(--border2); border-radius:5px; background:var(--bg3); color:var(--text); font-size:12px;"></label>'
+                        + '<label style="font-size:12px; color:var(--text); display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="gObrig" ' + (g.obrigatorio ? 'checked' : '') + ' onchange="_grupoLerDOM();_renderModalGrupos()" style="accent-color:#a78bfa;"> Obrigatório</label>'
+                        + '<span style="font-size:11px; color:#a78bfa; font-weight:600;">' + _grupoRegraTexto(g) + ' · ' + (tipo === 'radio' ? 'escolha única' : 'múltipla') + '</span>'
+                    + '</div>'
+                    + '<div style="border-top:1px solid #2a2438; padding-top:6px; max-height:160px; overflow-y:auto;">' + itensHtml + '</div>'
+                + '</div>';
+            }).join('');
+            wrap.innerHTML =
+                  '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">'
+                    + '<span style="font-size:11px; font-weight:700; color:#a78bfa; text-transform:uppercase; letter-spacing:.5px;">Grupos de opções (monte sua marmita)</span>'
+                    + '<button onclick="_grupoAddNovo()" style="background:#1e2a3a; color:#a78bfa; border:1px solid #3a2a6a; border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; font-weight:600;">+ Novo grupo</button>'
+                + '</div>'
+                + (gruposHtml || '<div style="font-size:12px; color:var(--text3); padding:4px 0 8px;">Sem grupos. Use grupos para "escolha 1 proteína", "escolha 2 acompanhamentos" etc.</div>');
+        }
+
+        function _grupoLerDOM() {
+            const cards = document.querySelectorAll('#modalGruposWrap .grupoCard');
+            const novo = [];
+            cards.forEach(card => {
+                const gi = Number(card.getAttribute('data-gi'));
+                const old = _modalGrupos[gi] || {};
+                novo.push({
+                    id: old.id || _genGrupoId(),
+                    nome: (card.querySelector('.gNome')?.value || '').trim(),
+                    min: parseInt(card.querySelector('.gMin')?.value) || 0,
+                    max: Math.max(1, parseInt(card.querySelector('.gMax')?.value) || 1),
+                    obrigatorio: !!card.querySelector('.gObrig')?.checked,
+                    itens: [...card.querySelectorAll('.gItem:checked')].map(cb => Number(cb.value)),
+                });
+            });
+            _modalGrupos = novo;
+        }
+
+        function _grupoAddNovo() {
+            _grupoLerDOM();
+            _modalGrupos.push({ id: _genGrupoId(), nome: '', min: 1, max: 1, obrigatorio: true, itens: [] });
+            _renderModalGrupos();
+        }
+
+        function _grupoRemover(gi) {
+            _grupoLerDOM();
+            _modalGrupos.splice(gi, 1);
+            _renderModalGrupos();
         }
 
         function fecharModalAdicionais() {
             document.getElementById('modalAdicionais').style.display = 'none';
             _modalAdicionaisRecipeId = null;
+            _modalGrupos = [];
         }
 
         function confirmarModalAdicionais() {
             const recipeId = _modalAdicionaisRecipeId;
             if (recipeId == null) { fecharModalAdicionais(); return; }
-            const lista = document.getElementById('modalAdicionaisLista');
-            const checked = [...lista.querySelectorAll('input[type=checkbox]:checked')].map(cb => Number(cb.value));
             const recipe = recipes.find(r => r.id === recipeId);
             if (!recipe) { fecharModalAdicionais(); return; }
-            recipe.adicionais = checked;
+            _grupoLerDOM();
+            // avulsos (lista plana legada)
+            const flat = document.getElementById('modalFlatWrap');
+            recipe.adicionais = flat ? [...flat.querySelectorAll('input.adicFlat:checked')].map(cb => Number(cb.value)) : [];
+            // grupos: só os que têm nome e ao menos 1 item; normaliza min/máx/obrigatório
+            recipe.adicionaisGrupos = _modalGrupos
+                .filter(g => (g.nome || '').trim() && (g.itens || []).length > 0)
+                .map(g => {
+                    let min = Math.max(0, parseInt(g.min) || 0);
+                    let max = Math.max(1, parseInt(g.max) || 1);
+                    if (min > max) min = max;
+                    if (g.obrigatorio && min < 1) min = 1;
+                    return { id: g.id, nome: g.nome.trim(), min, max, obrigatorio: !!g.obrigatorio, itens: g.itens };
+                });
             if (window._fb) window._fb.fbSave('recipes', recipe.id, recipe).catch(e => console.error(e));
             fecharModalAdicionais();
         }
@@ -3393,6 +3503,7 @@
                         const marginPct = ((margin / recipe.price) * 100).toFixed(1);
                         const cmv = ((recipe.cost / recipe.price) * 100).toFixed(1);
                         const adicionaisAtribuidos = (recipe.adicionais||[]).filter(x => typeof x !== 'object');
+                        const _nAdicTotal = adicionaisAtribuidos.length + (recipe.adicionaisGrupos||[]).length;
                         return `
                             <div class="recipe-card">
                                 <div class="recipe-header">
@@ -3405,7 +3516,7 @@
                                         </select>
                                         <button onclick="duplicarReceita(${recipe.id})" style="background:#2c7a4b; color:#4ade80; border:1px solid #3a8a5a; padding:6px 12px; font-size:12px;">⧉ Duplicar</button>
                                         <button onclick="transformarEmInsumo(${recipe.id})" style="background:#1a2a3a; color:#60a5fa; border:1px solid #2a4a6a; padding:6px 12px; font-size:12px;">📦 → Insumo</button>
-                                        <button id="btn-adicionais-${recipe.id}" onclick="abrirModalAdicionais(${recipe.id})" style="background:#1e2a3a; color:#a78bfa; border:1px solid #3a2a6a; padding:6px 12px; font-size:12px;">➕ Adicionais${adicionaisAtribuidos.length > 0 ? ' (' + adicionaisAtribuidos.length + ')' : ''}</button>
+                                        <button id="btn-adicionais-${recipe.id}" onclick="abrirModalAdicionais(${recipe.id})" style="background:#1e2a3a; color:#a78bfa; border:1px solid #3a2a6a; padding:6px 12px; font-size:12px;">➕ Adicionais${_nAdicTotal > 0 ? ' (' + _nAdicTotal + ')' : ''}</button>
                                         <button class="danger" onclick="deleteRecipe(${recipe.id})">🗑 Remover</button>
                                     </div>
                                 </div>
@@ -3869,17 +3980,32 @@
                         <h4 style="font-size:14px; font-weight:600; color:#e8e8e8; margin-bottom:10px;">Adicionais</h4>
                         ${(() => {
                             const ids = (recipe.adicionais || []).filter(x => typeof x !== 'object');
-                            if (ids.length === 0) return '<div style="font-size:13px; color:#555; padding:4px 0;">Nenhum adicional atribuído. Use o botão ➕ Adicionais no card da receita.</div>';
-                            const chips = ids.map(id => {
-                                const a = adicionaisBiblioteca.find(x => x.id == id);
-                                if (!a) return '';
-                                return '<span style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; background:rgba(39,174,96,0.15); border:1px solid rgba(39,174,96,0.4); border-radius:999px; margin-right:6px; margin-bottom:6px;">'
-                                    + '<span style="font-size:13px; color:#fff; font-weight:500;">' + a.nome + '</span>'
-                                    + '<span style="color:#555; font-size:12px;">·</span>'
-                                    + '<span style="font-size:13px; color:#27ae60; font-weight:600;">+R$ ' + Number(a.preco||0).toFixed(2).replace('.',',') + '</span>'
-                                    + '</span>';
-                            }).join('');
-                            return '<div style="display:flex; flex-wrap:wrap;">' + chips + '</div>';
+                            const grupos = recipe.adicionaisGrupos || [];
+                            if (ids.length === 0 && grupos.length === 0) return '<div style="font-size:13px; color:#555; padding:4px 0;">Nenhum adicional atribuído. Use o botão ➕ Adicionais no card da receita.</div>';
+                            let html = '';
+                            if (ids.length) {
+                                const chips = ids.map(id => {
+                                    const a = adicionaisBiblioteca.find(x => x.id == id);
+                                    if (!a) return '';
+                                    const pago = Number(a.preco||0) > 0;
+                                    return '<span style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; background:rgba(39,174,96,0.15); border:1px solid rgba(39,174,96,0.4); border-radius:999px; margin-right:6px; margin-bottom:6px;">'
+                                        + '<span style="font-size:13px; color:#fff; font-weight:500;">' + a.nome + '</span>'
+                                        + '<span style="color:#555; font-size:12px;">·</span>'
+                                        + '<span style="font-size:13px; color:' + (pago?'#27ae60':'#888') + '; font-weight:600;">' + (pago ? '+R$ ' + Number(a.preco).toFixed(2).replace('.',',') : 'Incluso') + '</span>'
+                                        + '</span>';
+                                }).join('');
+                                html += '<div style="display:flex; flex-wrap:wrap;">' + chips + '</div>';
+                            }
+                            if (grupos.length) {
+                                html += grupos.map(g => {
+                                    const nomes = (g.itens||[]).map(id => { const a = adicionaisBiblioteca.find(x => x.id == id); return a ? a.nome : ''; }).filter(Boolean).join(', ');
+                                    return '<div style="margin-top:8px; padding:8px 10px; background:#1a1626; border:1px solid #3a2a6a; border-radius:8px;">'
+                                        + '<div style="font-size:13px;"><b style="color:#a78bfa;">' + (g.nome||'Grupo') + '</b> <span style="color:#888; font-size:11px;">(' + _grupoRegraTexto(g) + (g.obrigatorio ? ' · obrigatório' : '') + ')</span></div>'
+                                        + '<div style="color:#aaa; font-size:12px; margin-top:3px;">' + (nomes || '—') + '</div>'
+                                        + '</div>';
+                                }).join('');
+                            }
+                            return html;
                         })()}
                     </div>
                 `;
