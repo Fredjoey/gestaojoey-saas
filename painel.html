@@ -104,6 +104,8 @@ body{background:var(--bg);color:var(--text);display:flex;overflow:hidden}
 .sr-total{font-size:13px;font-weight:700;color:var(--text);grid-column:3;grid-row:1;white-space:nowrap}
 .sr-badge{grid-column:3;grid-row:2;text-align:right}
 .sr-empty{color:var(--text2);font-size:13px;text-align:center;padding:40px 0}
+.sr-refazer{grid-column:3;grid-row:3;justify-self:end;align-self:end;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap}
+.sr-refazer:hover{background:rgba(249,115,22,.28)}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .tb-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:none;transition:all 0.15s;}
 .tb-btn-primary{background:var(--orange);color:#fff}
@@ -2365,11 +2367,13 @@ function renderBusca() {
   const container = document.getElementById('busca-results');
   if (!t) { container.innerHTML = ''; return; }
 
+  const tDigits = t.replace(/\D/g, '');   // só dígitos (telefone) — vazio quando o termo não tem número
+  const tId     = t.replace(/^#/, '');    // número do pedido, com ou sem "#"
   const resultados = pedidos.filter(p => {
     return (p.cliente?.nome || '').toLowerCase().includes(t) ||
-           (p.cliente?.tel  || '').replace(/\D/g,'').includes(t.replace(/\D/g,'')) ||
-           (p.id || '').toLowerCase().includes(t) ||
-           (p.endereco || '').toLowerCase().includes(t) ||
+           (tDigits.length > 0 && (p.cliente?.tel || '').replace(/\D/g, '').includes(tDigits)) ||  // sem dígitos: não casa por telefone (evita .includes("") = todos)
+           (p.id || '').toLowerCase().includes(tId) ||
+           (p.cliente?.rua || p.endereco || '').toLowerCase().includes(t) ||
            (p.itens || []).some(i => (i.nome || '').toLowerCase().includes(t));
   }).sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 60);
 
@@ -2392,6 +2396,7 @@ function renderBusca() {
         <div class="sr-data">${p.data || ''}${p.hora ? ' · ' + p.hora : ''}</div>
         <div class="sr-badge"><span class="chip ${st.cls}">${st.label}</span></div>
         <div class="sr-itens">${_esc(itensStr)}</div>
+        <button class="sr-refazer" onclick="event.stopPropagation(); pedirNovamente('${p.id}')" title="Refazer este pedido (abre Novo Pedido pré-preenchido)">🔁 Refazer pedido</button>
       </div>`;
     }).join('');
 }
@@ -3148,6 +3153,7 @@ function pedirNovamente(id) {
   const tipoMap = { delivery: 'npTipoDelivery', local: 'npTipoLocal', retirada: 'npTipoParaLevar' };
   const btnEl = document.getElementById(tipoMap[p.entrega] || 'npTipoParaLevar');
   if (btnEl) npSetTipo(p.entrega || 'retirada', btnEl);
+  if ((p.entrega || '') === 'delivery' && p.cliente) _npAplicarEndereco({ rua: p.cliente.rua, bairro: p.cliente.bairro });
   npRenderCart();
 }
 
