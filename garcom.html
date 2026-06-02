@@ -352,31 +352,44 @@ function _iniciarDados(){
   _sub(() => db.collection(`clientes/${slug}/adicionais`), s=>{ adicCatalogo={}; s.docs.forEach(d=>adicCatalogo[d.id]={id:d.id,...d.data()}); }, 'adicionais');
   _sub(() => db.collection(`clientes/${slug}/catalogoStatus`), s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, 'catalogoStatus');
 }
-// Subscriptions SÓ após o login (onAuthStateChanged com user != null). Nada de leitura antes do auth.
+// Auth no DEFAULT app (o mesmo firebase.auth() que funciona no console). signInAnonymously
+// é SEMPRE chamado aqui; os listeners (_iniciarDados) só montam dentro do onAuthStateChanged
+// com user != null — nenhuma leitura do Firestore antes do auth. _boot é idempotente.
+let _booted = false;
 function _boot(){
-  firebase.auth().onAuthStateChanged(u=>{ if(u) _iniciarDados(); });
-  firebase.auth().signInAnonymously().catch(e=>{ console.error('Auth anônimo falhou:',e); const s=document.getElementById('pinSub'); if(s) s.textContent='Erro de conexão. Recarregue a página.'; });
+  if (_booted) return; _booted = true;
+  console.log('[garcom] _boot — projeto:', firebase.app().options.projectId, '· iniciando signInAnonymously()');
+  firebase.auth().onAuthStateChanged(function(u){
+    if (u) { console.log('[garcom] auth pronto:', u.uid); _iniciarDados(); }
+    else   { console.log('[garcom] auth: ainda sem usuário'); }
+  });
+  firebase.auth().signInAnonymously()
+    .then(function(c){ console.log('[garcom] signInAnonymously OK:', c && c.user && c.user.uid); })
+    .catch(function(e){ console.error('AUTH FALHOU', e && e.code, e && e.message); const s=document.getElementById('pinSub'); if(s) s.textContent='Erro de login ('+((e&&e.code)||'?')+'). Recarregue.'; });
 }
 
 // ── AUTO-LIMPEZA DE SERVICE WORKER (garcom é ONLINE-ONLY) ────────────────────
-// Qualquer SW antigo (o do painel é escopo / e gruda no device) intercepta e quebra
-// as chamadas de auth/Firestore. Desregistra TODOS e recarrega 1x ANTES de autenticar,
-// pra o app se auto-resolver sem o garçom precisar limpar nada na mão.
-// Guard anti-loop: sessionStorage 'garcom_sw_reload' garante no MÁXIMO 1 reload por sessão.
+// O SW do painel (escopo /) gruda no device e quebra auth/Firestore. Desregistra TODOS;
+// se a página estiver SOB CONTROLE de um SW, recarrega 1x pra escapar do controlador.
+// O _boot SEMPRE roda: após a limpeza, quando não há SW, ou por timeout de segurança
+// (se a API de SW travar). Guard anti-loop: sessionStorage garante no MÁXIMO 1 reload/sessão.
 (function _semServiceWorker(){
-  if (!('serviceWorker' in navigator)) { _boot(); return; }
+  const _safety = setTimeout(_boot, 3000);   // nunca deixa o app sem auth se o SW travar
+  if (!('serviceWorker' in navigator)) { clearTimeout(_safety); _boot(); return; }
   navigator.serviceWorker.getRegistrations().then(function(regs){
-    var tinhaSW = (regs && regs.length > 0) || !!navigator.serviceWorker.controller;
+    const controlado = !!navigator.serviceWorker.controller;   // a página está sendo controlada AGORA?
     return Promise.all((regs || []).map(function(r){ return r.unregister().catch(function(){}); }))
-      .then(function(){ return tinhaSW; });
-  }).then(function(tinhaSW){
-    if (tinhaSW && !sessionStorage.getItem('garcom_sw_reload')) {
-      sessionStorage.setItem('garcom_sw_reload', '1');  // só recarrega 1x por sessão (anti-loop)
+      .then(function(){ return controlado; });
+  }).then(function(controlado){
+    clearTimeout(_safety);
+    if (controlado && !sessionStorage.getItem('garcom_sw_reload')) {
+      console.log('[garcom] página sob controle de service worker — recarregando 1x p/ escapar');
+      sessionStorage.setItem('garcom_sw_reload', '1');  // anti-loop: só 1 reload por sessão
       location.reload();
-      return;                                            // não inicia o Firebase — a página vai recarregar limpa
+      return;                                            // _boot vai rodar na recarga (página limpa)
     }
-    _boot();                                             // sem SW (ou já limpo) -> segue normal
-  }).catch(function(){ _boot(); });                      // se a API de SW falhar, não trava o app
+    _boot();                                             // sem SW controlando -> autentica já
+  }).catch(function(){ clearTimeout(_safety); _boot(); });  // erro na API de SW -> não trava
 })();
 
 // ===================== LÓGICA DE MESA (mesma do Salão) =====================
