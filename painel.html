@@ -878,6 +878,13 @@ textarea.fi{resize:vertical;min-height:60px}
             <div class="fg"><label class="fl">Valor mínimo do pedido (Delivery)</label><input class="fi" id="cfgPedidoMinimo" placeholder="0.00" type="number" step="0.01" min="0"></div>
             <div class="fg"><label class="fl">Endereço</label><input class="fi" id="cfgEnd" placeholder="Rua das Pizzas, 123 — Centro"></div>
           </div>
+          <div class="form-grid">
+            <div class="fg">
+              <label class="fl">🔑 PIN do App Garçom</label>
+              <input class="fi" id="cfgGarcomPin" placeholder="Ex: 1234" inputmode="numeric" maxlength="4">
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">PIN de 4 dígitos pro app de mesas/balcão do garçom · <a href="/garcom" target="_blank" style="color:var(--orange)">abrir /garcom</a></div>
+            </div>
+          </div>
 
           <div class="section-lbl">🖼️ Foto do Banner do Cardápio</div>
           <div style="display:flex;align-items:center;gap:16px;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:1rem">
@@ -3699,6 +3706,7 @@ function carregarConfig() {
   document.getElementById('cfgTaxa').value         = config.taxa         || '5.00';
   document.getElementById('cfgPedidoMinimo').value = config.pedidoMinimo > 0 ? config.pedidoMinimo : '';
   document.getElementById('cfgEnd').value          = config.end          || '';
+  const _gp = document.getElementById('cfgGarcomPin'); if (_gp) _gp.value = config.garcomPin || '';
   _setBannerPreview(config.bannerUrl || null);
   renderLogoPreview(config.logoUrl || null);
   carregarPagOnline();
@@ -3745,7 +3753,10 @@ function salvarConfig() {
     viasImpressao:    parseInt(document.getElementById('cfgViasImpressao').value) || 1,
     impressoraNome:   (document.getElementById('cfgImpressoraNome')?.value || '').trim(),
     destaque:       document.getElementById('cfgDestaque').value || null,
-    bannerUrl:      config.bannerUrl || null
+    bannerUrl:      config.bannerUrl || null,
+    // Preserva campos salvos por outras telas (saveConfig faz set total): PIN do garçom e notificações
+    garcomPin:      ((document.getElementById('cfgGarcomPin')?.value || '').trim() || config.garcomPin || ''),
+    wppNotifs:      config.wppNotifs || {}
   };
   saveConfig();
   db.doc(`clientes/${slug}/config/configuracoes`).set({ valorMinimoPedido: config.pedidoMinimo || 0 }, { merge: true });
@@ -5928,7 +5939,22 @@ function iniciarListenersFirestore() {
     if (_knownPedidoIds === null) {
       // Primeira carga — apenas inicializa, sem disparar som
       _knownPedidoIds = novosIds;
+      _garcomVistos = new Set(snap.docs.filter(d => (d.data().origem) === 'garcom').map(d => d.id));
     } else {
+      // App Garçom: pedidos (origem 'garcom') chegam como 'producao' — o painel imprime a comanda
+      // na chegada (mesa = comanda de mesa; balcão/retirada = comanda de produção). Reusa as funções existentes.
+      snap.docs.forEach(d => {
+        const ped = d.data();
+        if (ped.origem === 'garcom' && _garcomVistos && !_garcomVistos.has(d.id)) {
+          _garcomVistos.add(d.id);
+          try {
+            if (ped.tipo === 'mesa' || ped.mesa) imprimirComandaMesa({ itens: ped.itens || [], hora: ped.hora }, ped.mesaNome || ('Mesa ' + String(ped.mesa || '').replace('mesa-', '')));
+            else imprimirPedidoProducao(ped);
+          } catch (e) { console.warn('[garcom print]', e); }
+          notify('🧑‍🍳 Pedido do garçom #' + d.id + (ped.mesaNome ? ' — ' + ped.mesaNome : ''));
+          if (_somAtivo) tocarSomPedido();
+        }
+      });
       const chegaram = snap.docs.filter(d => !_knownPedidoIds.has(d.id) && d.data().status === 'novo');
       if (chegaram.length > 0) {
         const qtd = chegaram.length;
@@ -6878,6 +6904,7 @@ async function enviarParabens(tel, nome) {
 // ────────────────────────────────────────────────────────────────────────────
 let _pedidosAnt = [];
 let _knownPedidoIds = null; // null = primeira carga, não dispara som
+let _garcomVistos = null;   // ids de pedidos do App Garçom já impressos (evita reimprimir)
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');

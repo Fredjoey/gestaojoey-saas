@@ -83,6 +83,10 @@
           "region": "us-central1"
         },
         {
+          "source": "/garcom",
+          "destination": "/garcom.html"
+        },
+        {
           "source": "/",
           "destination": "/cardapio.html"
         }
@@ -162,6 +166,10 @@
           "region": "us-central1"
         },
         {
+          "source": "/garcom",
+          "destination": "/garcom.html"
+        },
+        {
           "source": "/",
           "destination": "/painel.html"
         }
@@ -222,6 +230,7 @@
         { "source": "/pedidos/**",       "destination": "/painel.html" },
         { "source": "/gestao",           "destination": "/gestao-joey.html" },
         { "source": "/gestao/**",        "destination": "/gestao-joey.html" },
+        { "source": "/garcom",           "destination": "/garcom.html" },
         { "source": "**",                "destination": "/cardapio.html" }
       ]
     }

@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f0f">
+<title>App Garçom</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --bg:#0f0f0f; --bg2:#141414; --bg3:#1c1c1c; --bg4:#242424;
+  --border:#2a2a2a; --border2:#3a3a3a;
+  --text:#f2f2f2; --text2:#b8b8b8; --text3:#777;
+  --orange:#E87722; --orange-dim:rgba(232,119,34,.15);
+  --green:#34d399; --red:#ef4444; --blue:#60a5fa;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overscroll-behavior:none}
+body{padding-bottom:env(safe-area-inset-bottom)}
+button{font-family:inherit}
+.hidden{display:none!important}
+
+/* PIN GATE */
+#pinGate{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.pin-logo{font-size:46px;margin-bottom:10px}
+.pin-title{font-size:19px;font-weight:800;margin-bottom:4px}
+.pin-sub{font-size:13px;color:var(--text2);margin-bottom:26px;text-align:center}
+.pin-dots{display:flex;gap:14px;margin-bottom:8px;height:18px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2)}
+.pin-dot.on{background:var(--orange);border-color:var(--orange)}
+.pin-err{color:var(--red);font-size:12px;height:16px;margin-bottom:14px}
+.pin-pad{display:grid;grid-template-columns:repeat(3,72px);gap:14px}
+.pin-key{height:72px;border-radius:50%;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:26px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pin-key:active{background:var(--orange);border-color:var(--orange)}
+.pin-key.flat{background:none;border:none;font-size:15px;color:var(--text2)}
+
+/* HEADER */
+#app{display:flex;flex-direction:column;min-height:100vh}
+.hdr{position:sticky;top:0;z-index:50;background:var(--bg2);border-bottom:1px solid var(--border);padding:calc(env(safe-area-inset-top) + 12px) 16px 0}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.hdr-title{font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px}
+.hdr-title .dot{color:var(--orange)}
+.hdr-loja{font-size:11px;color:var(--text3)}
+.tabs{display:flex;gap:6px}
+.tab{flex:1;padding:11px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);font-size:14px;font-weight:700;cursor:pointer}
+.tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+.busca-wrap{padding:12px 16px 4px}
+.busca{width:100%;padding:11px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;outline:none}
+.busca:focus{border-color:var(--orange)}
+
+/* CONTENT */
+.content{flex:1;padding:12px 16px 96px}
+.mesa-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.mcard{background:var(--bg3);border:1px solid var(--border);border-top:3px solid var(--border2);border-radius:14px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:transform .1s}
+.mcard:active{transform:scale(.97)}
+.mcard.livre{border-top-color:var(--green)}
+.mcard.ocupada{border-top-color:var(--orange)}
+.mcard.fechando{border-top-color:var(--red)}
+.mcard-nome{font-size:15px;font-weight:700}
+.mcard-meta{font-size:10px;color:var(--text3)}
+.mcard-status{font-size:12px;font-weight:600;color:var(--text2);margin-top:2px}
+.mcard-total{font-size:20px;font-weight:800;color:var(--orange);margin-top:auto}
+.empty{grid-column:1/-1;text-align:center;color:var(--text2);padding:3rem 1rem;font-size:14px}
+
+/* COMANDA list item */
+.cmd{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:10px}
+.cmd-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.cmd-tit{font-size:14px;font-weight:700}
+.cmd-tot{font-size:15px;font-weight:800;color:var(--orange)}
+.cmd-itens{font-size:12px;color:var(--text2);line-height:1.5}
+.cmd-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:7px;background:var(--orange-dim);color:var(--orange);margin-left:6px}
+
+/* BOTTOM BAR */
+.bottombar{position:fixed;left:0;right:0;bottom:0;z-index:60;padding:12px 16px calc(env(safe-area-inset-bottom) + 12px);background:linear-gradient(transparent,var(--bg) 22%)}
+.btn-balcao{width:100%;padding:15px;background:var(--orange);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(232,119,34,.35)}
+
+/* SHEET / MODAL */
+.sheet-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:flex-end;justify-content:center}
+.sheet-ov.show{display:flex}
+.sheet{background:var(--bg2);width:100%;max-width:560px;max-height:92vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;animation:up .22s ease}
+@keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);border-radius:18px 18px 0 0}
+.sheet-hd h3{margin:0;font-size:16px;font-weight:800}
+.sheet-x{background:none;border:none;color:var(--text3);font-size:26px;cursor:pointer;line-height:1;padding:0 4px}
+.sheet-bd{padding:16px 18px;overflow-y:auto;flex:1}
+.sheet-ft{padding:14px 18px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.fl{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.btn{width:100%;padding:14px;border:none;border-radius:11px;font-size:15px;font-weight:800;cursor:pointer}
+.btn-orange{background:var(--orange);color:#fff}
+.btn-orange:disabled{opacity:.45}
+.btn-ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border2)}
+.btn-green{background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.35)}
+.btn-blue{background:rgba(96,165,250,.12);color:var(--blue);border:1px solid rgba(96,165,250,.3)}
+
+/* PROD LIST */
+.prow{display:flex;align-items:center;gap:12px;padding:12px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:11px;margin-bottom:8px;cursor:pointer}
+.prow:active{border-color:var(--orange)}
+.prow-emoji{font-size:1.5rem;width:34px;text-align:center;flex-shrink:0}
+.prow-nome{font-size:14px;font-weight:600;line-height:1.25}
+.prow-tag{font-size:10px;color:var(--text3);margin-top:2px}
+.prow-preco{font-size:14px;font-weight:800;color:var(--orange);white-space:nowrap}
+
+/* QTY */
+.qrow{display:flex;align-items:center;gap:16px;margin:6px 0 18px}
+.qbtn{width:42px;height:42px;border-radius:11px;border:1px solid var(--border2);background:var(--bg4);color:var(--text);font-size:24px;cursor:pointer;line-height:1}
+.qval{font-size:24px;font-weight:800;min-width:34px;text-align:center}
+
+/* GRUPOS */
+.gsec{margin-bottom:18px}
+.ghead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px;flex-wrap:wrap}
+.gtit{font-size:15px;font-weight:800}
+.grule{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.gobrig{background:var(--orange);color:#fff;font-size:10px;font-weight:800;padding:1px 8px;border-radius:8px;text-transform:uppercase}
+.gitem{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid var(--border);border-radius:11px;margin-bottom:7px;cursor:pointer}
+.gitem.sel{border-color:var(--orange);background:var(--orange-dim)}
+.gitem.dis{opacity:.4}
+.gmark{width:21px;height:21px;flex-shrink:0;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;line-height:1}
+.gmark.radio{border-radius:50%}
+.gmark.check{border-radius:6px}
+.gitem.sel .gmark{background:var(--orange);border-color:var(--orange)}
+.gnome{flex:1;font-size:14px}
+.gpreco{font-size:13px;font-weight:700;color:var(--green)}
+.gpreco.incl{color:var(--text3);font-weight:500}
+
+/* ADIC FLAT row */
+.arow{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:11px;margin-bottom:7px}
+.arow-nome{flex:1;font-size:14px}
+.arow-preco{font-size:13px;font-weight:700;color:var(--green)}
+.arow-preco.incl{color:var(--text3);font-weight:500}
+.aqty{display:flex;align-items:center;gap:8px}
+.aqty .qbtn{width:30px;height:30px;font-size:18px;border-radius:8px}
+
+.fld{width:100%;padding:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:15px;outline:none}
+.fld:focus{border-color:var(--orange)}
+
+/* CART */
+.cart{margin-top:14px;border-top:2px solid var(--border2);padding-top:14px}
+.citem{display:flex;gap:10px;padding:10px 12px;background:var(--bg4);border-radius:10px;margin-bottom:7px}
+.citem-nome{font-size:14px;font-weight:600}
+.citem-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.citem-tot{font-size:14px;font-weight:800;color:var(--orange);white-space:nowrap}
+.crm{font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;padding:3px 0;margin-top:2px}
+
+/* CONTA */
+.ctot{display:flex;gap:8px;margin-bottom:14px}
+.ctot-card{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:11px;text-align:center}
+.ctot-card .l{font-size:10px;color:var(--text3);text-transform:uppercase}
+.ctot-card .v{font-size:17px;font-weight:800;margin-top:3px}
+.citm{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border)}
+.citm-nome{font-size:13px;font-weight:600}
+.citm-add{font-size:11px;color:var(--text2)}
+.citm-val{font-size:13px;font-weight:700;color:var(--text2)}
+.cpaid{opacity:.6}
+.cbadge{font-size:9px;font-weight:800;color:var(--green);border:1px solid var(--green);border-radius:6px;padding:1px 6px}
+.pag-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:7px 0;border-bottom:1px dashed var(--border)}
+.formas{display:flex;gap:6px;flex-wrap:wrap}
+.fbtn{flex:1;min-width:64px;padding:11px;border:1px solid var(--border2);border-radius:9px;background:var(--bg3);color:var(--text);font-size:13px;font-weight:700;cursor:pointer}
+.fbtn.active{background:var(--orange);border-color:var(--orange);color:#fff}
+
+/* TOAST */
+#toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:#000;border:1px solid var(--border2);color:#fff;padding:11px 18px;border-radius:11px;font-size:13px;font-weight:600;z-index:500;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ===== PIN GATE ===== -->
+<div id="pinGate">
+  <div class="pin-logo">🧑‍🍳</div>
+  <div class="pin-title">App Garçom</div>
+  <div class="pin-sub" id="pinSub">Digite o PIN de acesso</div>
+  <div class="pin-dots" id="pinDots"></div>
+  <div class="pin-err" id="pinErr"></div>
+  <div class="pin-pad">
+    <button class="pin-key" onclick="pinPress('1')">1</button>
+    <button class="pin-key" onclick="pinPress('2')">2</button>
+    <button class="pin-key" onclick="pinPress('3')">3</button>
+    <button class="pin-key" onclick="pinPress('4')">4</button>
+    <button class="pin-key" onclick="pinPress('5')">5</button>
+    <button class="pin-key" onclick="pinPress('6')">6</button>
+    <button class="pin-key" onclick="pinPress('7')">7</button>
+    <button class="pin-key" onclick="pinPress('8')">8</button>
+    <button class="pin-key" onclick="pinPress('9')">9</button>
+    <button class="pin-key flat" onclick="pinClear()">limpar</button>
+    <button class="pin-key" onclick="pinPress('0')">0</button>
+    <button class="pin-key flat" onclick="pinBack()">⌫</button>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app" class="hidden">
+  <div class="hdr">
+    <div class="hdr-top">
+      <div class="hdr-title"><span class="dot">●</span> <span id="hdrLoja">Garçom</span></div>
+      <button onclick="sair()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer">sair</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" id="tabMesas" onclick="setTab('mesas')">Mesas</button>
+      <button class="tab" id="tabComandas" onclick="setTab('comandas')">Comandas</button>
+    </div>
+  </div>
+  <div class="busca-wrap" id="buscaWrap">
+    <input class="busca" id="buscaMesa" placeholder="🔍 Buscar mesa..." oninput="renderHome()">
+  </div>
+  <div class="content" id="content"></div>
+  <div class="bottombar">
+    <button class="btn-balcao" onclick="abrirBalcao()">🥡 Para Levar / Balcão</button>
+  </div>
+</div>
+
+<!-- ===== SHEETS ===== -->
+<div class="sheet-ov" id="mesaSheet"><div class="sheet"><div class="sheet-hd"><h3 id="mesaSheetT">Mesa</h3><button class="sheet-x" onclick="fechar('mesaSheet')">×</button></div><div class="sheet-bd" id="mesaSheetB"></div><div class="sheet-ft" id="mesaSheetF"></div></div></div>
+
+<div class="sheet-ov" id="cardapioSheet"><div class="sheet"><div class="sheet-hd"><h3 id="cardapioT">Adicionar item</h3><button class="sheet-x" onclick="fechar('cardapioSheet')">×</button></div>
+  <div style="padding:10px 18px 0"><input class="busca" id="prodBusca" placeholder="🔍 Buscar produto..." oninput="renderProdList()"></div>
+  <div class="sheet-bd" id="prodListB"></div></div></div>
+
+<div class="sheet-ov" id="prodSheet"><div class="sheet"><div class="sheet-hd"><h3 id="prodT">Produto</h3><button class="sheet-x" onclick="fechar('prodSheet')">×</button></div><div class="sheet-bd" id="prodB"></div><div class="sheet-ft" id="prodF"></div></div></div>
+
+<div class="sheet-ov" id="contaSheet"><div class="sheet"><div class="sheet-hd"><h3 id="contaT">Conta</h3><button class="sheet-x" onclick="fechar('contaSheet')">×</button></div><div class="sheet-bd" id="contaB"></div><div class="sheet-ft" id="contaF"></div></div></div>
+
+<div class="sheet-ov" id="pagSheet"><div class="sheet"><div class="sheet-hd"><h3 id="pagT">Pagamento</h3><button class="sheet-x" onclick="fechar('pagSheet')">×</button></div><div class="sheet-bd" id="pagB"></div><div class="sheet-ft" id="pagF"></div></div></div>
+
+<div id="toast"></div>
+
+<script>
+// ===================== FIREBASE =====================
+const firebaseConfig = {
+  apiKey: "AIzaSyA8yx0BXHDZee_RyLteJbSuQDzInj-GpFM",
+  authDomain: "gestaojoey.firebaseapp.com",
+  projectId: "gestaojoey",
+  storageBucket: "gestaojoey.firebasestorage.app",
+  messagingSenderId: "372331148907",
+  appId: "1:372331148907:web:aa5eb48d309a167ad1a32e"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const hostname = window.location.hostname;
+const slug = (
+  hostname === 'pedidos.hamburgueriajoey.com.br' ||
+  hostname === 'hamburgueriajoey.com.br' ||
+  hostname === 'pedidos-joey-painel.web.app' ||
+  hostname === 'gestaojoey-painel.web.app' ||
+  hostname === 'pedidos-joey.web.app' ||
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1'
+) ? 'joey' : hostname.split('.')[0];
+
+const EMOJI_CAT = {Pizza:'🍕',Burger:'🍔',Bebida:'🥤','Porção':'🍟',Sobremesa:'🍰',Marmita:'🍱',Outro:'🍽️',Outros:'🍽️'};
+
+// ===================== ESTADO =====================
+let config = {}, mesasConfig = [], mesasData = {}, pedidos = [];
+let recipes = [], adicCatalogo = {}, catalogoStatus = {};
+let _tab = 'mesas';
+let _dataReady = { config:false };
+
+// ===================== TOAST =====================
+let _toastT = null;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmt(v){ return 'R$ ' + (Number(v)||0).toFixed(2).replace('.',','); }
+function fechar(id){ document.getElementById(id).classList.remove('show'); }
+
+// ===================== PIN =====================
+const PIN_KEY = 'garcom_ok_' + slug;
+let _pinBuf = '', _pinMode = 'enter'; // enter | create | confirm
+let _pinFirst = '';
+function _renderPinDots(){
+  const n = _pinMode === 'enter' ? 4 : 4;
+  document.getElementById('pinDots').innerHTML = Array.from({length:n}).map((_,i)=>`<div class="pin-dot ${i<_pinBuf.length?'on':''}"></div>`).join('');
+}
+function pinPress(d){
+  document.getElementById('pinErr').textContent='';
+  if (_pinBuf.length >= 4) return;
+  _pinBuf += d; _renderPinDots();
+  if (_pinBuf.length === 4) setTimeout(_pinSubmit, 120);
+}
+function pinBack(){ _pinBuf = _pinBuf.slice(0,-1); _renderPinDots(); }
+function pinClear(){ _pinBuf=''; _renderPinDots(); }
+function _pinSubmit(){
+  const pinSalvo = String(config.garcomPin || '');
+  if (!pinSalvo) {
+    // primeira vez — garçom/lojista define o PIN
+    if (_pinMode === 'create') {
+      _pinFirst = _pinBuf; _pinBuf=''; _pinMode='confirm';
+      document.getElementById('pinSub').textContent = 'Confirme o PIN';
+      _renderPinDots(); return;
+    }
+    if (_pinMode === 'confirm') {
+      if (_pinBuf !== _pinFirst) { _pinErr('Os PINs não coincidem'); _pinMode='create'; _pinFirst=''; _pinBuf=''; document.getElementById('pinSub').textContent='Crie um PIN de acesso'; _renderPinDots(); return; }
+      db.doc(`clientes/${slug}/config/loja`).set({ garcomPin: _pinBuf }, { merge:true })
+        .then(()=>{ config.garcomPin=_pinBuf; _liberar(); })
+        .catch(e=>_pinErr('Erro ao salvar: '+e.message));
+      return;
+    }
+  }
+  if (_pinBuf === pinSalvo) { _liberar(); }
+  else { _pinErr('PIN incorreto'); _pinBuf=''; _renderPinDots(); }
+}
+function _pinErr(m){ document.getElementById('pinErr').textContent=m; }
+function _liberar(){
+  sessionStorage.setItem(PIN_KEY,'1');
+  document.getElementById('pinGate').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  renderHome();
+}
+function sair(){ sessionStorage.removeItem(PIN_KEY); location.reload(); }
+function _initPinGate(){
+  const pinSalvo = String(config.garcomPin || '');
+  if (sessionStorage.getItem(PIN_KEY) === '1') { _liberar(); return; }
+  if (!pinSalvo) { _pinMode='create'; document.getElementById('pinSub').textContent='Crie um PIN de acesso (primeira vez)'; }
+  else { _pinMode='enter'; document.getElementById('pinSub').textContent='Digite o PIN de acesso'; }
+  _renderPinDots();
+}
+
+// ===================== SUBSCRIPTIONS =====================
+db.doc(`clientes/${slug}/config/loja`).onSnapshot(s=>{
+  config = s.exists ? (s.data()||{}) : {};
+  const lj=document.getElementById('hdrLoja'); if(lj) lj.textContent = config.nome || 'Garçom';
+  if (!_dataReady.config){ _dataReady.config=true; _initPinGate(); }
+});
+db.collection(`clientes/${slug}/mesas-config`).orderBy('ordem').onSnapshot(s=>{ mesasConfig = s.docs.map(d=>({id:d.id,...d.data()})); if(_tab==='mesas') renderHome(); }, e=>console.warn('mesas-config',e));
+db.collection(`clientes/${slug}/mesas`).onSnapshot(s=>{ mesasData={}; s.docs.forEach(d=>mesasData[d.id]=d.data()); renderHome(); _refreshAberta(); }, e=>console.warn('mesas',e));
+db.collection(`clientes/${slug}/pedidos`).onSnapshot(s=>{ pedidos = s.docs.map(d=>({id:d.id,...d.data()})); renderHome(); _refreshAberta(); }, e=>console.warn('pedidos',e));
+db.collection(`clientes/${slug}/recipes`).onSnapshot(s=>{ recipes = s.docs.map(d=>({id:d.id,...d.data()})); }, e=>console.warn('recipes',e));
+db.collection(`clientes/${slug}/adicionais`).onSnapshot(s=>{ adicCatalogo={}; s.docs.forEach(d=>adicCatalogo[d.id]={id:d.id,...d.data()}); }, e=>console.warn('adicionais',e));
+db.collection(`clientes/${slug}/catalogoStatus`).onSnapshot(s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, e=>console.warn('catalogoStatus',e));
+
+// ===================== LÓGICA DE MESA (mesma do Salão) =====================
+function _mesaPedidoAtivo(p){ return !!p && p.status!=='cancelado' && p.status!=='finalizado'; }
+function _pedidosDaMesa(mesaId){
+  const num = String(mesaId).replace(/^mesa-/,'');
+  return pedidos.filter(p=>{ const pm=String(p.mesa||''); return pm && (pm===mesaId || pm===num || pm==='mesa-'+num); });
+}
+function _getComandasFromMesa(m){
+  if (m.comandas && Object.keys(m.comandas).length>0) return m.comandas;
+  const r={}; (m.pedidos||[]).forEach((ped,idx)=>{ r['leg-'+idx]={itens:ped.itens||[],total:ped.subtotal||0,hora:ped.hora||'',status:'ativo'}; }); return r;
+}
+function _comandasDaMesa(mesaId){
+  const m = mesasData[mesaId]||{};
+  const out = { ..._getComandasFromMesa(m) };
+  _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo).forEach(p=>{ out['ped-'+p.id]={itens:p.itens||[],total:(p.total!=null?p.total:p.subtotal)||0,hora:p.hora||'',status:'ativo',_pedidoId:p.id}; });
+  return out;
+}
+function _mesaEstado(m, mesaId){
+  const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
+  const totalPedidos = ativos.reduce((s,p)=>s+(Number(p.total)||0),0);
+  const ocupada = ativos.length>0 || Object.keys(_getComandasFromMesa(m)).length>0;
+  const status = ocupada ? (m.status==='fechando'?'fechando':'ocupada') : 'livre';
+  const total = totalPedidos + (Number(m.total)||0);
+  return { status, total, ocupada };
+}
+
+// ===================== HOME =====================
+function setTab(t){ _tab=t; document.getElementById('tabMesas').classList.toggle('active',t==='mesas'); document.getElementById('tabComandas').classList.toggle('active',t==='comandas'); document.getElementById('buscaWrap').style.display = t==='mesas'?'':'none'; renderHome(); }
+
+function renderHome(){
+  const c = document.getElementById('content');
+  if (!c) return;
+  if (_tab === 'comandas') return renderComandas();
+  const termo = (document.getElementById('buscaMesa')?.value||'').toLowerCase().trim();
+  let ativas = mesasConfig.filter(m=>m.ativa!==false);
+  if (termo) ativas = ativas.filter(m=>String(m.nome||'').toLowerCase().includes(termo));
+  if (mesasConfig.length===0){ c.innerHTML=`<div class="empty">🍽️<br><br>Nenhuma mesa cadastrada.<br>Crie as mesas no painel (Salão).</div>`; return; }
+  if (ativas.length===0){ c.innerHTML=`<div class="empty">Nenhuma mesa encontrada.</div>`; return; }
+  c.innerHTML = `<div class="mesa-grid">${ativas.map(m=>{
+    const est = _mesaEstado(mesasData[m.id]||{}, m.id);
+    const lbl = est.status==='livre'?'🟢 Livre':est.status==='ocupada'?'🟡 Ocupada':'🔴 Em pagamento';
+    const meta=[m.localizacao,m.capacidade?m.capacidade+' lug.':''].filter(Boolean).join(' · ');
+    return `<div class="mcard ${est.status}" onclick="abrirMesa('${m.id}')">
+      <div class="mcard-nome">${_esc(m.nome)}</div>
+      ${meta?`<div class="mcard-meta">${_esc(meta)}</div>`:''}
+      <div class="mcard-status">${lbl}</div>
+      <div class="mcard-total">${fmt(est.total)}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderComandas(){
+  const c = document.getElementById('content');
+  const ativos = pedidos.filter(_mesaPedidoAtivo).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if (!ativos.length){ c.innerHTML=`<div class="empty">Nenhuma comanda aberta.</div>`; return; }
+  c.innerHTML = ativos.map(p=>{
+    const itens=(p.itens||[]).map(i=>`${i.qty}× ${_esc(i.nome)}`).join(', ');
+    const tag = p.tipo==='mesa'||p.mesa ? (p.mesaNome||('Mesa '+String(p.mesa||'').replace('mesa-',''))) : (p.entrega==='retirada'?'Para levar':(p.entrega==='delivery'?'Delivery':'Balcão'));
+    return `<div class="cmd">
+      <div class="cmd-top"><div class="cmd-tit">#${p.id} <span class="cmd-badge">${_esc(tag)}</span></div><div class="cmd-tot">${fmt(p.total)}</div></div>
+      <div class="cmd-itens">${itens}</div>
+    </div>`;
+  }).join('');
+}
+
+// ===================== MESA ABERTA =====================
+let _mesaId=null, _mesaNome=null;
+function abrirMesa(mesaId){
+  const m = mesasConfig.find(x=>x.id===mesaId); if(!m) return;
+  _mesaId=mesaId; _mesaNome=m.nome;
+  document.getElementById('mesaSheetT').textContent = m.nome;
+  _renderMesaAberta();
+  document.getElementById('mesaSheet').classList.add('show');
+}
+function _refreshAberta(){
+  if (document.getElementById('mesaSheet')?.classList.contains('show')) _renderMesaAberta();
+  if (document.getElementById('contaSheet')?.classList.contains('show')) _renderConta();
+}
+function _renderMesaAberta(){
+  if (!_mesaId) return;
+  const comandas = _comandasDaMesa(_mesaId);
+  const linhas = [];
+  Object.values(comandas).forEach(c=>(c.itens||[]).forEach(it=>linhas.push(it)));
+  const total = _contaTotais(_mesaId).total;
+  const b = document.getElementById('mesaSheetB');
+  b.innerHTML = linhas.length===0
+    ? `<div class="empty" style="padding:2rem 0">Mesa livre — nenhum item lançado.</div>`
+    : linhas.map(it=>{
+        const adic=(it.adicionais||[]).filter(a=>(a.qty||1)>0).map(a=>a.grupo?`${_esc(a.grupo)}: ${_esc(a.nome)}`:`+ ${_esc(a.nome)}`).join(' · ');
+        const linhaVal=((Number(it.preco)||0)+(it.adicionais||[]).reduce((s,a)=>s+(Number(a.preco)||0)*(Number(a.qty)||1),0))*(Number(it.qty)||1);
+        return `<div class="citm"><div style="flex:1"><div class="citm-nome">${it.qty}× ${_esc(it.nome)}</div>${adic?`<div class="citm-add">${adic}</div>`:''}${it.obs?`<div class="citm-add">📝 ${_esc(it.obs)}</div>`:''}</div><div class="citm-val">${fmt(linhaVal)}</div></div>`;
+      }).join('') + `<div style="display:flex;justify-content:space-between;padding:12px 4px 0;font-weight:800"><span>Total</span><span style="color:var(--orange);font-size:18px">${fmt(total)}</span></div>`;
+  const f = document.getElementById('mesaSheetF');
+  f.innerHTML = `<button class="btn btn-orange" onclick="abrirCardapio('mesa')">+ Adicionar item</button>`
+    + (linhas.length>0 ? `<button class="btn btn-green" onclick="abrirConta()">💰 Fechar conta</button>` : '');
+}
+
+// ===================== CARDÁPIO (lançar item) =====================
+let _modo='mesa'; // mesa | balcao
+let _cart=[];     // itens do pedido sendo montado
+function abrirCardapio(modo){
+  _modo = modo;
+  document.getElementById('cardapioT').textContent = modo==='mesa' ? ('Adicionar — '+_mesaNome) : 'Para Levar / Balcão';
+  const pb=document.getElementById('prodBusca'); if(pb) pb.value='';
+  renderProdList();
+  document.getElementById('cardapioSheet').classList.add('show');
+}
+function abrirBalcao(){ _mesaId=null; _mesaNome=null; _cart=[]; abrirCardapio('balcao'); }
+
+function _prodAtivos(){
+  return recipes.filter(r=>{ const st=catalogoStatus[r.id]; return st===undefined ? true : st.ativo===true; });
+}
+function renderProdList(){
+  const termo=(document.getElementById('prodBusca')?.value||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  let prods=_prodAtivos();
+  if(termo) prods=prods.filter(p=>String(p.name||p.nome||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(termo));
+  const listHtml = prods.length===0
+    ? `<div class="empty">${termo?'Nenhum produto encontrado':'Nenhum produto disponível'}</div>`
+    : prods.map(p=>{
+        const preco=p.price||p.preco||0;
+        const temOp=(p.adicionais||[]).length>0 || (p.adicionaisGrupos||[]).length>0;
+        return `<div class="prow" onclick="abrirProd('${p.id}')">
+          <div class="prow-emoji">${EMOJI_CAT[p.categoria||'Outros']||'🍽️'}</div>
+          <div style="flex:1;min-width:0"><div class="prow-nome">${_esc(p.name||p.nome||'—')}</div>${temOp?'<div class="prow-tag">✦ opções disponíveis</div>':''}</div>
+          <div class="prow-preco">${fmt(preco)}</div>
+        </div>`;
+      }).join('');
+  let cartHtml='';
+  if(_cart.length){
+    const tot=_cart.reduce((s,i)=>s+i.total,0);
+    cartHtml=`<div class="cart"><div class="fl" style="margin-bottom:8px">🛒 Pedido (${_cart.length})</div>
+      ${_cart.map((it,idx)=>`<div class="citem"><div style="flex:1"><div class="citem-nome">${it.qty}× ${_esc(it.nome)}</div>${(it.adicionais||[]).map(a=>`<div class="citem-sub">${a.grupo?_esc(a.grupo)+': '+_esc(a.nome):'+ '+_esc(a.nome)}${a.preco>0?' (+'+fmt(a.preco)+')':''}</div>`).join('')}${it.obs?`<div class="citem-sub">📝 ${_esc(it.obs)}</div>`:''}</div><div style="text-align:right"><div class="citem-tot">${fmt(it.total)}</div><button class="crm" onclick="event.stopPropagation();_rmCart(${idx})">✕ remover</button></div></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding:10px 4px;font-weight:800"><span>Total</span><span style="color:var(--orange);font-size:17px">${fmt(tot)}</span></div>
+      <button class="btn btn-orange" onclick="confirmarPedido()">✓ ${_modo==='mesa'?'Lançar na '+_esc(_mesaNome):'Enviar para produção'}</button></div>`;
+  }
+  document.getElementById('prodListB').innerHTML = listHtml + cartHtml;
+}
+function _rmCart(idx){ _cart.splice(idx,1); renderProdList(); }
+
+// ----- detalhe do produto (qty + grupos + adicionais avulsos) -----
+let _pdId=null, _pdQty=1, _pdSel={};
+function abrirProd(id){
+  const p=recipes.find(r=>String(r.id)===String(id)); if(!p) return;
+  _pdId=String(id); _pdQty=1; _pdSel={};
+  document.getElementById('prodT').textContent = p.name||p.nome||'Produto';
+  _renderProd();
+  document.getElementById('prodSheet').classList.add('show');
+}
+function _grupoRegra(g){ const mn=Math.max(0,Number(g.min)||0),mx=Math.max(1,Number(g.max)||1); if(mn===mx)return'Escolha '+mn; if(mn>0)return'Escolha '+mn+' a '+mx; return'Escolha até '+mx; }
+function _gruposPend(p){
+  const out=[]; (p.adicionaisGrupos||[]).forEach(g=>{ const itens=(g.itens||[]).map(id=>adicCatalogo[id]).filter(Boolean); if(!itens.length)return; const mn=g.obrigatorio?Math.max(1,Number(g.min)||0):(Number(g.min)||0); if(mn<=0)return; const cnt=itens.filter(a=>(_pdSel[a.id]||0)>0).length; if(cnt<mn)out.push(g.nome||'opção'); });
+  return out;
+}
+function _grupoById(gid){ const p=recipes.find(r=>String(r.id)===String(_pdId)); return (p?.adicionaisGrupos||[]).find(g=>String(g.id)===String(gid)); }
+function selRadio(gid,id){ const g=_grupoById(gid); if(!g)return; (g.itens||[]).forEach(i=>_pdSel[i]=0); _pdSel[id]=1; _renderProd(); }
+function togChk(gid,id){ const g=_grupoById(gid); if(!g)return; const mx=Math.max(1,Number(g.max)||1); if((_pdSel[id]||0)>0){_pdSel[id]=0;} else { const cnt=(g.itens||[]).filter(i=>(_pdSel[i]||0)>0).length; if(cnt>=mx)return; _pdSel[id]=1; } _renderProd(); }
+function flatQty(id,d){ const a=adicCatalogo[id]; if(!a)return; const mx=a.qtdMax||10; _pdSel[id]=Math.min(mx,Math.max(0,(_pdSel[id]||0)+d)); _renderProd(); }
+function pdQtyAdj(d){ _pdQty=Math.max(1,_pdQty+d); _renderProd(); }
+function _renderProd(){
+  const p=recipes.find(r=>String(r.id)===String(_pdId)); if(!p)return;
+  const preco=p.price||p.preco||0;
+  const grupos=p.adicionaisGrupos||[];
+  const idsEmGrupo=new Set(); grupos.forEach(g=>(g.itens||[]).forEach(id=>idsEmGrupo.add(String(id))));
+  const gruposHtml=grupos.map(g=>{
+    const itens=(g.itens||[]).map(id=>adicCatalogo[id]).filter(Boolean); if(!itens.length)return'';
+    const tipo=(Number(g.min)===1&&Number(g.max)===1)?'radio':'check';
+    const mx=Math.max(1,Number(g.max)||1);
+    const obrig=!!g.obrigatorio||(Number(g.min)||0)>=1;
+    const cnt=itens.filter(a=>(_pdSel[a.id]||0)>0).length;
+    return `<div class="gsec"><div class="ghead"><div class="gtit">${_esc(g.nome)}</div><div class="grule">${_grupoRegra(g)}${obrig?' <span class="gobrig">Obrigatório</span>':''}</div></div>
+      ${itens.map(a=>{ const sel=(_pdSel[a.id]||0)>0; const pago=Number(a.preco||0)>0; const atMax=tipo==='check'&&!sel&&cnt>=mx;
+        return `<label class="gitem${sel?' sel':''}${atMax?' dis':''}" onclick="${atMax?'':(tipo==='radio'?`selRadio('${g.id}','${a.id}')`:`togChk('${g.id}','${a.id}')`)}"><span class="gmark ${tipo}">${sel?(tipo==='radio'?'●':'✓'):''}</span><span class="gnome">${_esc(a.nome)}</span><span class="gpreco${pago?'':' incl'}">${pago?'+ '+fmt(a.preco):'Incluso'}</span></label>`;
+      }).join('')}</div>`;
+  }).join('');
+  const flatIds=(p.adicionais||[]).filter(id=>!idsEmGrupo.has(String(id)));
+  const flat=flatIds.map(id=>adicCatalogo[id]).filter(Boolean);
+  const flatHtml=flat.length?`<div class="fl" style="margin:6px 0 9px">Adicionais</div>${flat.map(a=>{const q=_pdSel[a.id]||0;const mx=a.qtdMax||10;const pago=Number(a.preco||0)>0;return `<div class="arow"><div style="flex:1"><div class="arow-nome">${_esc(a.nome)}</div><div class="arow-preco${pago?'':' incl'}" style="font-size:12px">${pago?'+ '+fmt(a.preco):'Incluso'}</div></div><div class="aqty"><button class="qbtn" onclick="flatQty('${a.id}',-1)" ${q===0?'disabled':''}>−</button><span style="min-width:18px;text-align:center;font-weight:700">${q}</span><button class="qbtn" onclick="flatQty('${a.id}',1)" ${q>=mx?'disabled':''}>+</button></div></div>`;}).join('')}`:'';
+  const extra=Object.entries(_pdSel).reduce((s,[id,q])=>s+(q||0)*(adicCatalogo[id]?.preco||0),0);
+  const totalP=(preco+extra)*_pdQty;
+  document.getElementById('prodB').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text3);text-transform:uppercase">${_esc(p.categoria||'')}</span><span style="font-size:20px;font-weight:800;color:var(--orange)">${fmt(preco)}</span></div>
+    <div class="fl">Quantidade</div><div class="qrow"><button class="qbtn" onclick="pdQtyAdj(-1)">−</button><span class="qval">${_pdQty}</span><button class="qbtn" onclick="pdQtyAdj(1)">+</button></div>
+    ${gruposHtml}${flatHtml}
+    <div class="fl" style="margin:6px 0 6px">Observação</div><input class="fld" id="pdObs" placeholder="Ex: sem cebola, bem passado...">`;
+  const pend=_gruposPend(p);
+  document.getElementById('prodF').innerHTML = `<button class="btn btn-orange" onclick="addCart()" ${pend.length?'disabled':''}>${pend.length?'Escolha: '+pend.map(_esc).join(', '):'+ Adicionar · '+fmt(totalP)}</button>`;
+}
+function addCart(){
+  const p=recipes.find(r=>String(r.id)===String(_pdId)); if(!p)return;
+  if(_gruposPend(p).length){ toast('Escolha as opções obrigatórias'); return; }
+  const preco=p.price||p.preco||0; const nome=p.name||p.nome||'—';
+  const grupoDoItem={}; (p.adicionaisGrupos||[]).forEach(g=>(g.itens||[]).forEach(id=>grupoDoItem[String(id)]=g.nome));
+  const adic=Object.entries(_pdSel).filter(([,q])=>q>0).map(([id,q])=>{ const a=adicCatalogo[id]; if(!a)return null; const it={id,nome:a.nome,preco:a.preco||0,qty:q}; if(grupoDoItem[String(id)])it.grupo=grupoDoItem[String(id)]; return it; }).filter(Boolean);
+  const obs=(document.getElementById('pdObs')?.value||'').trim();
+  const adicSum=adic.reduce((s,a)=>s+(a.preco||0)*(a.qty||1),0);
+  _cart.push({ id:p.id, nome, preco, qty:_pdQty, adicionais:adic, obs, total:(preco+adicSum)*_pdQty });
+  fechar('prodSheet'); renderProdList();
+}
+
+// ===================== GRAVAR PEDIDO (mesmo fluxo do painel) =====================
+async function _proxId(){
+  const ref=db.doc(`clientes/${slug}/config/contador`);
+  return db.runTransaction(t=>t.get(ref).then(d=>{ const a=d.exists?(d.data().ultimoPedido||0):0; const n=a+1; t.set(ref,{ultimoPedido:n},{merge:true}); return n; }));
+}
+async function confirmarPedido(){
+  if(!_cart.length){ toast('Adicione ao menos um item'); return; }
+  const hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+  const data=new Date().toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
+  const subtotal=_cart.reduce((s,i)=>s+i.total,0);
+  const itens=_cart.map(i=>({id:i.id,nome:i.nome,preco:i.preco,qty:i.qty,adicionais:i.adicionais,obs:i.obs}));
+  try{
+    if(_modo==='mesa' && _mesaId){
+      // Grava SÓ o pedido (kanban + Salão). O Salão e a conta derivam a comanda do pedido
+      // ativo (ped-<id>) — evita dupla contagem do total. origem 'garcom' p/ o painel imprimir.
+      const novoId=await _proxId();
+      await db.collection(`clientes/${slug}/pedidos`).doc(String(novoId)).set({
+        id:String(novoId),ts:Date.now(),hora,data,tipo:'mesa',mesa:_mesaId,mesaNome:_mesaNome,origem:'garcom',
+        itens,subtotal,taxaEntrega:0,total:subtotal,status:'producao',pagamento:'mesa',entrega:'local',cliente:{nome:_mesaNome}
+      });
+      // marca a mesa como ocupada (não grava comanda no doc — o pedido ativo já a ocupa)
+      await db.collection(`clientes/${slug}/mesas`).doc(_mesaId).set({status:'ocupada'},{merge:true});
+      toast('✓ Lançado na '+_mesaNome);
+      _cart=[]; fechar('cardapioSheet');
+    } else {
+      // Para Levar / Balcão -> retirada, producao, paga no balcão (igual npConfirmar)
+      const novoId=await _proxId();
+      await db.collection(`clientes/${slug}/pedidos`).doc(String(novoId)).set({
+        id:String(novoId),ts:Date.now(),hora,data,cliente:{nome:'Balcão'},
+        itens,subtotal,taxaEntrega:0,total:subtotal,entrega:'retirada',origem:'garcom',
+        pagamento:'pendente',status:'producao'
+      });
+      toast('✓ Pedido #'+novoId+' enviado');
+      _cart=[]; fechar('cardapioSheet');
+    }
+  }catch(e){ console.error('[confirmarPedido]',e); toast('Erro: '+e.message); }
+}
+
+// ===================== CONTA / FECHAMENTO (mesmos writes do painel) =====================
+let _contaSel=new Set();
+function _contaItens(mesaId){
+  const comandas=_comandasDaMesa(mesaId);
+  const m=mesasData[mesaId]||{};
+  const pagos=new Set(((m.conta&&m.conta.itensPagos)||[]));
+  const out=[];
+  Object.entries(comandas).sort(([a],[b])=>a.localeCompare(b)).forEach(([cId,c])=>{
+    (c.itens||[]).forEach((it,idx)=>{
+      const adicSum=(it.adicionais||[]).reduce((s,a)=>s+(Number(a.preco)||0)*(Number(a.qty)||1),0);
+      const linha=((Number(it.preco)||0)+adicSum)*(Number(it.qty)||1);
+      const key=cId+'#'+idx;
+      out.push({key,nome:it.nome,qty:it.qty||1,adicionais:it.adicionais||[],obs:it.obs||'',linha,pago:pagos.has(key)});
+    });
+  });
+  return out;
+}
+function _contaTotais(mesaId){
+  const itens=_contaItens(mesaId);
+  const m=mesasData[mesaId]||{};
+  const pagamentos=(m.conta&&m.conta.pagamentos)||[];
+  const total=itens.reduce((s,i)=>s+i.linha,0);
+  const pago=pagamentos.reduce((s,p)=>s+(Number(p.valor)||0),0);
+  return {total,pago,saldoRaw:total-pago,itens,pagamentos};
+}
+function _contaState(mesaId){ const m=mesasData[mesaId]||{}; const c=m.conta||{}; return {pagamentos:[...(c.pagamentos||[])],itensPagos:[...(c.itensPagos||[])],divisao:c.divisao||null}; }
+
+function abrirConta(){ document.getElementById('contaT').textContent='Conta — '+_mesaNome; _renderConta(); document.getElementById('contaSheet').classList.add('show'); }
+function _renderConta(){
+  if(!_mesaId)return;
+  const {total,pago,saldoRaw,itens,pagamentos}=_contaTotais(_mesaId);
+  const FORMAS={pix:'PIX',dinheiro:'Dinheiro',debito:'Débito',credito:'Crédito'};
+  const itensHtml=itens.length===0?`<div class="empty" style="padding:1.5rem 0">Nenhum item na conta</div>`
+    :itens.map(it=>{ const adic=(it.adicionais||[]).filter(a=>(a.qty||1)>0).map(a=>`+ ${(a.qty||1)>1?(a.qty+'× '):''}${_esc(a.nome)}`).join(', ');
+      return it.pago
+        ? `<div class="citm cpaid"><span style="color:var(--green)">✓</span><div style="flex:1"><div class="citm-nome">${it.qty}× ${_esc(it.nome)}</div>${adic?`<div class="citm-add">${adic}</div>`:''}</div><span class="cbadge">PAGO</span></div>`
+        : `<div class="citm"><div style="flex:1"><div class="citm-nome">${it.qty}× ${_esc(it.nome)}</div>${adic?`<div class="citm-add">${adic}</div>`:''}</div><span class="citm-val">${fmt(it.linha)}</span></div>`;
+    }).join('');
+  const pagHtml=pagamentos.length===0?'':`<div class="fl" style="margin:14px 0 6px">Pagamentos recebidos</div>${pagamentos.map((p,i)=>`<div class="pag-row"><span style="color:var(--text3)">${p.hora||''}</span><span style="flex:1">${_esc(p.descricao||'')}</span><span style="color:var(--text3)">${FORMAS[p.forma]||p.forma||''}</span><span style="font-weight:800;color:var(--green)">${fmt(p.valor)}</span><button onclick="estornar(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">✕</button></div>`).join('')}`;
+  document.getElementById('contaB').innerHTML=`
+    <div class="ctot"><div class="ctot-card"><div class="l">Total</div><div class="v">${fmt(total)}</div></div><div class="ctot-card"><div class="l">Pago</div><div class="v" style="color:var(--green)">${fmt(pago)}</div></div><div class="ctot-card"><div class="l">Saldo</div><div class="v" style="color:${saldoRaw>0.005?'var(--orange)':'var(--green)'}">${fmt(Math.max(0,saldoRaw))}</div></div></div>
+    <div class="fl" style="margin-bottom:6px">Itens</div>${itensHtml}${pagHtml}`;
+  const temSaldo=saldoRaw>0.005;
+  document.getElementById('contaF').innerHTML=
+      (temSaldo?`<button class="btn btn-orange" onclick="abrirPag('total')">💳 Pagar conta toda · ${fmt(saldoRaw)}</button>
+      <div style="display:flex;gap:8px"><button class="btn btn-blue" style="flex:1" onclick="abrirPag('igual')">👥 Dividir igual</button><button class="btn btn-ghost" style="flex:1" onclick="abrirPag('avulso')">💵 Valor avulso</button></div>`:'')
+    + `<button class="btn btn-green" onclick="fecharContaFinal()">💰 Fechar conta</button>`;
+}
+async function estornar(idx){
+  const st=_contaState(_mesaId); const pg=st.pagamentos[idx]; if(!pg)return;
+  if(!confirm('Estornar o pagamento de '+fmt(pg.valor)+'?'))return;
+  st.pagamentos.splice(idx,1);
+  if(pg.tipo==='item'&&pg.itens) st.itensPagos=st.itensPagos.filter(k=>!pg.itens.includes(k));
+  if(pg.tipo==='igual'&&st.divisao) st.divisao.pagas=Math.max(0,(st.divisao.pagas||0)-(pg.fracoes||1));
+  try{ await db.collection(`clientes/${slug}/mesas`).doc(_mesaId).set({conta:st},{merge:true}); toast('Pagamento estornado'); }catch(e){ toast('Erro ao estornar'); }
+}
+
+// ----- pagamento -----
+let _pag=null;
+function abrirPag(tipo){
+  const {saldoRaw}=_contaTotais(_mesaId);
+  const saldoCents=Math.max(0,Math.round(saldoRaw*100));
+  if(saldoCents<=0){ toast('Conta já quitada'); return; }
+  if(tipo==='total') _pag={tipo:'avulso',valor:saldoRaw,descricao:'Pagamento total',forma:''};
+  else if(tipo==='avulso') _pag={tipo:'avulso',valor:0,descricao:'Pagamento avulso',forma:''};
+  else { // igual
+    const m=mesasData[_mesaId]||{}; const div=m.conta&&m.conta.divisao;
+    if(div&&div.pessoas>=1&&(div.pagas||0)<div.pessoas&&div.perPessoaCents) _pag={tipo:'igual',pessoas:div.pessoas,pagas:div.pagas||0,perPessoaCents:div.perPessoaCents,fracoes:1,forma:'',saldoCents};
+    else { const N=2; _pag={tipo:'igual',pessoas:N,pagas:0,perPessoaCents:Math.round(saldoCents/N),fracoes:1,forma:'',saldoCents}; }
+  }
+  _renderPag();
+  document.getElementById('pagSheet').classList.add('show');
+}
+function _pagCalcIgual(){ const c=_pag; const N=Math.max(1,c.pessoas||1); const restantes=Math.max(1,N-(c.pagas||0)); const K=Math.max(1,Math.min(c.fracoes||1,restantes)); let reg; if(K>=restantes)reg=c.saldoCents; else reg=Math.min((c.perPessoaCents||0)*K,c.saldoCents); reg=Math.max(0,Math.min(reg,c.saldoCents)); return {perPessoaCents:c.perPessoaCents||0,registroCents:reg,K}; }
+function _renderPag(){
+  const c=_pag; if(!c)return;
+  const FORMAS={pix:'PIX',dinheiro:'Dinheiro',debito:'Débito',credito:'Crédito'};
+  let corpo='';
+  if(c.tipo==='avulso'){
+    document.getElementById('pagT').textContent = c.descricao==='Pagamento total'?'Pagar conta toda':'Valor avulso';
+    corpo=`<div class="fl" style="margin-bottom:6px">Valor recebido (R$)</div><input id="pagVal" class="fld" type="number" step="0.01" min="0" value="${c.valor||''}" placeholder="0,00" oninput="_pag.valor=parseFloat(this.value)||0">`;
+  } else {
+    document.getElementById('pagT').textContent='Dividir igual';
+    const ci=_pagCalcIgual(); c.vpp=ci.perPessoaCents/100; c.valor=ci.registroCents/100;
+    corpo=`<div style="display:flex;gap:8px;margin-bottom:10px"><div style="flex:1"><div class="fl" style="margin-bottom:4px">Pessoas</div><input class="fld" type="number" min="1" value="${c.pessoas}" oninput="_pagSetPessoas(this.value)"></div><div style="flex:1"><div class="fl" style="margin-bottom:4px">Frações a pagar</div><input class="fld" type="number" min="1" value="${c.fracoes}" oninput="_pagSetFracoes(this.value)"></div></div>
+      <div class="pag-row"><span style="flex:1">Saldo restante</span><span style="font-weight:700">${fmt(c.saldoCents/100)}</span></div>
+      ${(c.pagas||0)>0?`<div class="pag-row"><span style="flex:1">Já pagas</span><span>${c.pagas}/${c.pessoas}</span></div>`:''}
+      <div class="pag-row"><span style="flex:1">Valor por pessoa</span><span id="pagVpp" style="font-weight:700">${fmt(c.vpp)}</span></div>
+      <div class="pag-row"><span style="flex:1;font-weight:700">Total a registrar</span><span id="pagTot" style="font-weight:800;color:var(--orange);font-size:16px">${fmt(c.valor)}</span></div>`;
+  }
+  document.getElementById('pagB').innerHTML=`${corpo}<div class="fl" style="margin:16px 0 6px">Forma de pagamento</div><div class="formas" id="pagFormas">${Object.keys(FORMAS).map(f=>`<button class="fbtn${c.forma===f?' active':''}" onclick="_pagForma('${f}')">${FORMAS[f]}</button>`).join('')}</div>`;
+  document.getElementById('pagF').innerHTML=`<button class="btn btn-orange" onclick="_pagConfirmar()">✓ Registrar pagamento</button>`;
+}
+function _pagForma(f){ _pag.forma=f; document.querySelectorAll('#pagFormas .fbtn').forEach(b=>b.classList.toggle('active',b.textContent===({pix:'PIX',dinheiro:'Dinheiro',debito:'Débito',credito:'Crédito'}[f]))); }
+function _pagSetPessoas(v){ if(!_pag)return; _pag.pessoas=Math.max(1,parseInt(v)||1); _pag.pagas=0; _pag.perPessoaCents=Math.round(_pag.saldoCents/_pag.pessoas); _pagRecalc(); }
+function _pagSetFracoes(v){ if(!_pag)return; _pag.fracoes=Math.max(1,parseInt(v)||1); _pagRecalc(); }
+function _pagRecalc(){ const c=_pag; if(!c)return; const ci=_pagCalcIgual(); c.vpp=ci.perPessoaCents/100; c.valor=ci.registroCents/100; const a=document.getElementById('pagVpp'); if(a)a.textContent=fmt(c.vpp); const b=document.getElementById('pagTot'); if(b)b.textContent=fmt(c.valor); }
+async function _pagConfirmar(){
+  const c=_pag; if(!c)return;
+  if(!c.forma){ toast('Escolha a forma de pagamento'); return; }
+  let valor=Math.round((Number(c.valor)||0)*100)/100;
+  if(valor<=0){ toast('Informe um valor válido'); return; }
+  const hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+  const st=_contaState(_mesaId);
+  let descricao=c.descricao||''; let igualK=0;
+  if(c.tipo==='igual'){
+    const saldoAtualCents=Math.max(0,Math.round(_contaTotais(_mesaId).saldoRaw*100));
+    c.saldoCents=saldoAtualCents; const calc=_pagCalcIgual(); igualK=calc.K;
+    valor=Math.min(calc.registroCents,saldoAtualCents)/100;
+    if(valor<=0){ toast('Conta já quitada'); fechar('pagSheet'); return; }
+    const novasPagas=Math.min(c.pessoas,(c.pagas||0)+calc.K);
+    descricao=`Divisão: ${novasPagas}/${c.pessoas} pessoa(s)`;
+    const zerou=(saldoAtualCents-Math.round(valor*100))<=0;
+    st.divisao=zerou?null:{pessoas:c.pessoas,pagas:novasPagas,perPessoaCents:c.perPessoaCents};
+  }
+  const pagamento={id:'pg'+Date.now(),valor,forma:c.forma,descricao,tipo:c.tipo,hora};
+  if(c.tipo==='igual')pagamento.fracoes=igualK;
+  st.pagamentos.push(pagamento);
+  try{
+    await db.collection(`clientes/${slug}/mesas`).doc(_mesaId).set({conta:st,status:'ocupada'},{merge:true});
+    fechar('pagSheet'); toast('Pagamento registrado: '+fmt(valor));
+  }catch(e){ console.error('[pag]',e); toast('Erro: '+e.message); }
+}
+async function fecharContaFinal(){
+  const {total,pago,saldoRaw,pagamentos}=_contaTotais(_mesaId);
+  if(total<=0&&pagamentos.length===0){ toast('Conta vazia'); return; }
+  if(saldoRaw>0.005){ if(!confirm('Ainda falta '+fmt(saldoRaw)+' para quitar.\nFechar a mesa mesmo assim?'))return; }
+  const mesaId=_mesaId, mesaNome=_mesaNome;
+  try{
+    const now=new Date();
+    const data=now.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
+    const hora=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+    for(const pg of pagamentos){
+      await db.collection(`clientes/${slug}/fechamentos`).add({mesa:mesaId,mesaNome,total:Number(pg.valor)||0,pagamento:pg.forma,descricao:pg.descricao||'',data,hora,tipo:'mesa-conta',timestamp:firebase.firestore.FieldValue.serverTimestamp()});
+    }
+    const ativos=_pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
+    await Promise.all(ativos.map(p=>db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({status:'finalizado'}).catch(e=>console.warn('[fechar]',p.id,e))));
+    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({status:'livre',comandas:{},pedidos:[],total:0,conta:{pagamentos:[],itensPagos:[],divisao:null}},{merge:false});
+    fechar('contaSheet'); fechar('mesaSheet');
+    toast('Conta da '+mesaNome+' fechada! Recebido '+fmt(pago));
+  }catch(e){ console.error('[fecharConta]',e); toast('Erro ao fechar: '+e.message); }
+}
+</script>
+</body>
+</html>
