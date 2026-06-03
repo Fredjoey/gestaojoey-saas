@@ -10,6 +10,7 @@ const gestaoApp = admin.initializeApp(
   'gestao'
 );
 const dbGestao = gestaoApp.firestore();
+const GESTAO_BUCKET = 'gestaojoey.firebasestorage.app';   // Storage do gestaojoey (XMLs das NFC-e)
 
 // ── FOCUS NFe — EMISSÃO DE NFCe ──────────────────────────────────────────────
 
@@ -205,6 +206,19 @@ exports.emitirNFCe = onRequest(
           ? `${baseUrl}${focusData.caminho_danfe}?token=${focusToken}`
           : null;
         console.log('[emitirNFCe] autorizado — caminho_danfe:', focusData.caminho_danfe, '| danfeUrl:', danfeUrl);
+        // Salva o XML no Cloud Storage (resiliente — NÃO quebra a emissão; cai no fallback no download)
+        try {
+          const cxml = focusData.caminho_xml_nota_fiscal || focusData.caminho_xml;
+          if (cxml) {
+            const xr = await axios.get(`${baseUrl}${cxml}`, { auth: { username: focusToken, password: '' }, timeout: 25000, responseType: 'text', validateStatus: () => true });
+            if (xr.status < 400 && xr.data) {
+              const xmlStr = typeof xr.data === 'string' ? xr.data : String(xr.data);
+              const xmlStoragePath = await _fnSalvarXmlStorage('joey', ref, xmlStr);
+              await dbGestao.collection('clientes/joey/notasFiscais').doc(String(pedidoId)).set({ xmlStoragePath }, { merge: true });
+              console.log('[emitirNFCe] XML salvo no Storage:', xmlStoragePath);
+            }
+          }
+        } catch (e) { console.warn('[emitirNFCe] XML->Storage falhou (cai no fallback no download):', e.message); }
         return res.json({
           ok:        true,
           status:    statusNota,
@@ -614,6 +628,39 @@ async function _fnBaixarXml(baseUrl, token, ref) {
   return typeof x.data === 'string' ? x.data : String(x.data);
 }
 
+// Storage do gestaojoey: salva/le o XML em clientes/{slug}/xmls/{ref}.xml
+async function _fnSalvarXmlStorage(slug, ref, xml) {
+  const path = `clientes/${slug}/xmls/${ref}.xml`;
+  await gestaoApp.storage().bucket(GESTAO_BUCKET).file(path).save(Buffer.from(xml, 'utf8'), {
+    contentType: 'application/xml; charset=utf-8', resumable: false,
+  });
+  return path;
+}
+async function _fnLerXmlStorage(path) {
+  const [buf] = await gestaoApp.storage().bucket(GESTAO_BUCKET).file(path).download();
+  return buf.toString('utf8');
+}
+
+// Obtém o XML: 1º do Storage (xmlStoragePath, instantâneo); senão consulta a Focus por
+// ref e salva no Storage de quebra (vira rápida na próxima). 'nota' = dados do doc.
+async function _fnObterXml(slug, nota, baseUrl, token) {
+  if (nota && nota.xmlStoragePath) {
+    try { return await _fnLerXmlStorage(nota.xmlStoragePath); }
+    catch (e) { console.warn('[xml] Storage falhou, fallback Focus:', e.message); }
+  }
+  const ref = nota && (nota.focusRef || nota.ref);
+  if (!ref) throw new Error('sem ref nem xmlStoragePath');
+  const xml = await _fnBaixarXml(baseUrl, token, ref);
+  // bônus: salva no Storage p/ a próxima vez (best-effort — não falha o download)
+  try {
+    const path = await _fnSalvarXmlStorage(slug, ref, xml);
+    if (nota && nota.pedidoId != null) {
+      await dbGestao.doc(`clientes/${slug}/notasFiscais/${nota.pedidoId}`).set({ xmlStoragePath: path }, { merge: true });
+    }
+  } catch (e) { /* só otimização — ignora */ }
+  return xml;
+}
+
 // XML individual — POST { slug, pedidoId } ou { slug, ref }
 exports.nfceXml = onRequest({ invoker: 'public', region: 'us-central1' }, async (req, res) => {
   _fnNfceCors(res);
@@ -626,17 +673,19 @@ exports.nfceXml = onRequest({ invoker: 'public', region: 'us-central1' }, async 
     if (!dono.ok) return res.status(dono.code).json({ ok: false, erro: dono.erro });
     const { token, baseUrl } = await _fnFocusCtx(slug);
     if (!token) return res.status(400).json({ ok: false, erro: 'Token da Focus NFe não configurado.' });
-    let refUse = ref, numero = null;
-    if (!refUse) {
+    let nota = null, numero = null;
+    if (pedidoId) {
       const nd = await dbGestao.doc(`clientes/${slug}/notasFiscais/${pedidoId}`).get();
       if (!nd.exists) return res.status(404).json({ ok: false, erro: 'Nota não encontrada.' });
-      refUse = nd.data().focusRef || nd.data().ref;
-      numero = nd.data().numeroNota || nd.data().nf;
-      if (!refUse) return res.status(404).json({ ok: false, erro: 'Nota sem referência Focus.' });
+      nota = nd.data();
+      numero = nota.numeroNota || nota.nf;
+      if (!(nota.focusRef || nota.ref || nota.xmlStoragePath)) return res.status(404).json({ ok: false, erro: 'Nota sem referência Focus.' });
+    } else {
+      nota = { focusRef: ref };  // ref direto, sem doc → só Focus
     }
-    const xml = await _fnBaixarXml(baseUrl, token, refUse);
+    const xml = await _fnObterXml(slug, nota, baseUrl, token);
     res.set('Content-Type', 'application/xml; charset=utf-8');
-    res.set('Content-Disposition', `attachment; filename="NFCe-${numero || pedidoId || refUse}.xml"`);
+    res.set('Content-Disposition', `attachment; filename="NFCe-${numero || pedidoId || ref || 'nota'}.xml"`);
     return res.status(200).send(xml);
   } catch (err) {
     console.error('[nfceXml]', err.message);
@@ -660,7 +709,7 @@ exports.nfceXmlZip = onRequest({ invoker: 'public', region: 'us-central1', timeo
     const snap = await dbGestao.collection(`clientes/${slug}/notasFiscais`).get();
     const notas = snap.docs.map(d => d.data()).filter(n => {
       if (n.status !== 'emitida' && n.status !== 'cancelada') return false;
-      if (!(n.focusRef || n.ref)) return false;
+      if (!(n.focusRef || n.ref || n.xmlStoragePath)) return false;
       const d = _fnParseBR(n.data);
       return d && d >= deD && d <= ateD;
     });
@@ -674,7 +723,7 @@ exports.nfceXmlZip = onRequest({ invoker: 'public', region: 'us-central1', timeo
       await Promise.all(lote.map(async (n) => {
         const ref = n.focusRef || n.ref;
         try {
-          const xml = await _fnBaixarXml(baseUrl, token, ref);
+          const xml = await _fnObterXml(slug, n, baseUrl, token);   // Storage 1º; fallback Focus + salva
           const tag = n.status === 'cancelada' ? '-CANCELADA' : '';
           zip.file(`NFCe-${n.numeroNota || n.nf || ref}-pedido-${n.pedidoId || ''}${tag}.xml`, xml);
           okCount++;
