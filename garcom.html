@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 <style>
 :root{
   --bg:#0f0f0f; --bg2:#141414; --bg3:#1c1c1c; --bg4:#242424;
@@ -265,62 +266,65 @@ function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;'
 function fmt(v){ return 'R$ ' + (Number(v)||0).toFixed(2).replace('.',','); }
 function fechar(id){ document.getElementById(id).classList.remove('show'); }
 
-// ===================== PIN =====================
+// ===================== LOGIN POR PIN (validado no servidor + custom token) =====================
+// O PIN é validado pela Cloud Function garcomLogin (lê o doc privado garcomSecrets/{slug});
+// se bater, devolve um custom token com claim {slug, role:'garcom'} e entramos com
+// signInWithCustomToken. A identidade do garçom passa a ser por loja (regras isGarcom).
 const PIN_KEY = 'garcom_ok_' + slug;
-let _pinBuf = '', _pinMode = 'enter'; // enter | create | confirm
-let _pinFirst = '';
+let _pinBuf = '', _pinBusy = false;
 function _renderPinDots(){
-  const n = _pinMode === 'enter' ? 4 : 4;
-  document.getElementById('pinDots').innerHTML = Array.from({length:n}).map((_,i)=>`<div class="pin-dot ${i<_pinBuf.length?'on':''}"></div>`).join('');
+  document.getElementById('pinDots').innerHTML = Array.from({length:4}).map((_,i)=>`<div class="pin-dot ${i<_pinBuf.length?'on':''}"></div>`).join('');
 }
 function pinPress(d){
+  if (_pinBusy) return;
   document.getElementById('pinErr').textContent='';
   if (_pinBuf.length >= 4) return;
   _pinBuf += d; _renderPinDots();
   if (_pinBuf.length === 4) setTimeout(_pinSubmit, 120);
 }
-function pinBack(){ _pinBuf = _pinBuf.slice(0,-1); _renderPinDots(); }
-function pinClear(){ _pinBuf=''; _renderPinDots(); }
-function _pinSubmit(){
-  const pinSalvo = String(config.garcomPin || '');
-  if (!pinSalvo) {
-    // primeira vez — garçom/lojista define o PIN
-    if (_pinMode === 'create') {
-      _pinFirst = _pinBuf; _pinBuf=''; _pinMode='confirm';
-      document.getElementById('pinSub').textContent = 'Confirme o PIN';
-      _renderPinDots(); return;
-    }
-    if (_pinMode === 'confirm') {
-      if (_pinBuf !== _pinFirst) { _pinErr('Os PINs não coincidem'); _pinMode='create'; _pinFirst=''; _pinBuf=''; document.getElementById('pinSub').textContent='Crie um PIN de acesso'; _renderPinDots(); return; }
-      db.doc(`clientes/${slug}/config/loja`).set({ garcomPin: _pinBuf }, { merge:true })
-        .then(()=>{ config.garcomPin=_pinBuf; _liberar(); })
-        .catch(e=>_pinErr('Erro ao salvar: '+e.message));
-      return;
-    }
-  }
-  if (_pinBuf === pinSalvo) { _liberar(); }
-  else { _pinErr('PIN incorreto'); _pinBuf=''; _renderPinDots(); }
+function pinBack(){ if (_pinBusy) return; _pinBuf = _pinBuf.slice(0,-1); _renderPinDots(); }
+function pinClear(){ if (_pinBusy) return; _pinBuf=''; _renderPinDots(); }
+function _pinErr(m){ document.getElementById('pinErr').textContent = m; _pinBuf=''; _renderPinDots(); }
+function _mostrarPinGate(){
+  document.getElementById('pinGate').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('pinSub').textContent = 'Digite o PIN de acesso';
+  _renderPinDots();
 }
-function _pinErr(m){ document.getElementById('pinErr').textContent=m; }
+async function _pinSubmit(){
+  const pin = _pinBuf;
+  if (pin.length !== 4 || _pinBusy) return;
+  _pinBusy = true;
+  document.getElementById('pinErr').textContent = '';
+  document.getElementById('pinSub').textContent = 'Entrando...';
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('garcomLogin');
+    const res = await fn({ slug: slug, pin: pin });
+    const token = res && res.data && res.data.token;
+    if (!token) throw new Error('sem-token');
+    await firebase.auth().signInWithCustomToken(token);
+    sessionStorage.setItem(PIN_KEY, '1');
+    // onAuthStateChanged (em _boot) detecta a sessão garçom -> _liberar + _iniciarDados
+  } catch (e) {
+    _pinBusy = false;
+    document.getElementById('pinSub').textContent = 'Digite o PIN de acesso';
+    const code = String((e && (e.code || e.message)) || '');
+    if (code.indexOf('failed-precondition') >= 0) _pinErr('PIN não configurado. Peça ao dono p/ definir no painel.');
+    else if (code.indexOf('invalid-argument') >= 0) _pinErr('Informe o PIN.');
+    else _pinErr('PIN incorreto');
+  }
+}
 function _liberar(){
-  sessionStorage.setItem(PIN_KEY,'1');
+  _pinBusy = false;
   document.getElementById('pinGate').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   renderHome();
 }
-function sair(){ sessionStorage.removeItem(PIN_KEY); location.reload(); }
-function _initPinGate(){
-  const pinSalvo = String(config.garcomPin || '');
-  if (sessionStorage.getItem(PIN_KEY) === '1') { _liberar(); return; }
-  if (!pinSalvo) { _pinMode='create'; document.getElementById('pinSub').textContent='Crie um PIN de acesso (primeira vez)'; }
-  else { _pinMode='enter'; document.getElementById('pinSub').textContent='Digite o PIN de acesso'; }
-  _renderPinDots();
-}
+function sair(){ sessionStorage.removeItem(PIN_KEY); firebase.auth().signOut().finally(()=>location.reload()); }
 
-// ===================== AUTH (anônimo) + SUBSCRIPTIONS =====================
-// As regras do Firestore exigem request.auth != null em clientes/{slug}/...
-// O cardápio faz signInAnonymously; o garçom faz igual. Só assina após o login,
-// senão a leitura de mesas-config (e tudo) é negada -> "Nenhuma mesa cadastrada".
+// ===================== SUBSCRIPTIONS (após login por custom token) =====================
+// O garçom entra com signInWithCustomToken (claim slug+role) via garcomLogin. As regras
+// liberam mesas/mesas-config/pedidos/fechamentos por isGarcom(slug). Listeners só após o login.
 let _started = false;
 // onSnapshot resiliente: se a leitura falhar (ex.: permission-denied porque o token
 // do auth ainda não propagou) o listener MORRE e não volta sozinho. Aqui re-assinamos
@@ -343,7 +347,6 @@ function _iniciarDados(){
   _sub(() => db.doc(`clientes/${slug}/config/loja`), s=>{
     config = s.exists ? (s.data()||{}) : {};
     const lj=document.getElementById('hdrLoja'); if(lj) lj.textContent = config.nome || 'Garçom';
-    if (!_dataReady.config){ _dataReady.config=true; _initPinGate(); }
   }, 'config/loja');
   _sub(() => db.collection(`clientes/${slug}/mesas-config`).orderBy('ordem'), s=>{ mesasConfig = s.docs.map(d=>({id:d.id,...d.data()})); _mesasCarregou = true; if(_tab==='mesas') renderHome(); }, 'mesas-config');
   _sub(() => db.collection(`clientes/${slug}/mesas`), s=>{ mesasData={}; s.docs.forEach(d=>mesasData[d.id]=d.data()); renderHome(); _refreshAberta(); }, 'mesas');
@@ -352,20 +355,28 @@ function _iniciarDados(){
   _sub(() => db.collection(`clientes/${slug}/adicionais`), s=>{ adicCatalogo={}; s.docs.forEach(d=>adicCatalogo[d.id]={id:d.id,...d.data()}); }, 'adicionais');
   _sub(() => db.collection(`clientes/${slug}/catalogoStatus`), s=>{ catalogoStatus={}; s.docs.forEach(d=>catalogoStatus[d.id]=d.data()); }, 'catalogoStatus');
 }
-// Auth no DEFAULT app (o mesmo firebase.auth() que funciona no console). signInAnonymously
-// é SEMPRE chamado aqui; os listeners (_iniciarDados) só montam dentro do onAuthStateChanged
-// com user != null — nenhuma leitura do Firestore antes do auth. _boot é idempotente.
+// Login por loja (custom token via PIN). SEM auth anônimo. Os listeners (_iniciarDados)
+// só montam quando há sessão de GARÇOM (claim slug+role). Sem sessão -> mostra o PIN.
+// onAuthStateChanged persiste entre reaberturas (Firebase refresca o token) -> não re-pede PIN.
 let _booted = false;
 function _boot(){
   if (_booted) return; _booted = true;
-  console.log('[garcom] _boot — projeto:', firebase.app().options.projectId, '· iniciando signInAnonymously()');
+  console.log('[garcom] _boot — projeto:', firebase.app().options.projectId);
   firebase.auth().onAuthStateChanged(function(u){
-    if (u) { console.log('[garcom] auth pronto:', u.uid); _iniciarDados(); }
-    else   { console.log('[garcom] auth: ainda sem usuário'); }
+    if (!u) { _mostrarPinGate(); return; }
+    u.getIdTokenResult().then(function(r){
+      const c = (r && r.claims) || {};
+      if (c.slug === slug && c.role === 'garcom') {
+        console.log('[garcom] sessão garçom OK:', u.uid, '· slug:', c.slug);
+        _liberar();        // esconde PIN, mostra app
+        _iniciarDados();   // listeners (autorizados pela regra isGarcom)
+      } else {
+        // sessão estranha (ex.: anônima antiga, ou outro slug) -> desloga e pede PIN
+        console.warn('[garcom] sessão sem claim de garçom -> signOut');
+        firebase.auth().signOut().finally(_mostrarPinGate);
+      }
+    }).catch(function(){ _mostrarPinGate(); });
   });
-  firebase.auth().signInAnonymously()
-    .then(function(c){ console.log('[garcom] signInAnonymously OK:', c && c.user && c.user.uid); })
-    .catch(function(e){ console.error('AUTH FALHOU', e && e.code, e && e.message); const s=document.getElementById('pinSub'); if(s) s.textContent='Erro de login ('+((e&&e.code)||'?')+'). Recarregue.'; });
 }
 
 // ── AUTO-LIMPEZA DE SERVICE WORKER (garcom é ONLINE-ONLY) ────────────────────

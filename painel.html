@@ -15,6 +15,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/qzind/tray@2.2.4/js/qz-tray.min.js"></script>
 <style>
 @import url('https://fonts.cdnfonts.com/css/abstante');
@@ -881,8 +882,8 @@ textarea.fi{resize:vertical;min-height:60px}
           <div class="form-grid">
             <div class="fg">
               <label class="fl">🔑 PIN do App Garçom</label>
-              <input class="fi" id="cfgGarcomPin" placeholder="Ex: 1234" inputmode="numeric" maxlength="4">
-              <div style="font-size:11px;color:var(--text3);margin-top:4px">PIN de 4 dígitos pro app de mesas/balcão do garçom · <a href="/garcom" target="_blank" style="color:var(--orange)">abrir /garcom</a></div>
+              <input class="fi" id="cfgGarcomPin" placeholder="Definir/trocar (4 dígitos)" inputmode="numeric" maxlength="4" autocomplete="off">
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">PIN privado do app de mesas/balcão. Deixe em branco p/ não alterar · <a href="/garcom" target="_blank" style="color:var(--orange)">abrir /garcom</a></div>
             </div>
           </div>
 
@@ -3706,7 +3707,7 @@ function carregarConfig() {
   document.getElementById('cfgTaxa').value         = config.taxa         || '5.00';
   document.getElementById('cfgPedidoMinimo').value = config.pedidoMinimo > 0 ? config.pedidoMinimo : '';
   document.getElementById('cfgEnd').value          = config.end          || '';
-  const _gp = document.getElementById('cfgGarcomPin'); if (_gp) _gp.value = config.garcomPin || '';
+  const _gp = document.getElementById('cfgGarcomPin'); if (_gp) _gp.value = '';  // PIN é write-only (privado); em branco = não altera
   _setBannerPreview(config.bannerUrl || null);
   renderLogoPreview(config.logoUrl || null);
   carregarPagOnline();
@@ -3754,14 +3755,31 @@ function salvarConfig() {
     impressoraNome:   (document.getElementById('cfgImpressoraNome')?.value || '').trim(),
     destaque:       document.getElementById('cfgDestaque').value || null,
     bannerUrl:      config.bannerUrl || null,
-    // Preserva campos salvos por outras telas (saveConfig faz set total): PIN do garçom e notificações
-    garcomPin:      ((document.getElementById('cfgGarcomPin')?.value || '').trim() || config.garcomPin || ''),
+    // Preserva notificações (saveConfig faz set total). O PIN do garçom NÃO fica mais aqui
+    // (era público) — vai pro doc privado garcomSecrets via Cloud Function garcomSetPin.
     wppNotifs:      config.wppNotifs || {}
   };
   saveConfig();
+  // PIN do App Garçom (se preenchido) -> salvo server-side em doc privado
+  const _gpVal = (document.getElementById('cfgGarcomPin')?.value || '').trim();
+  if (_gpVal) _salvarGarcomPin(_gpVal);
   db.doc(`clientes/${slug}/config/configuracoes`).set({ valorMinimoPedido: config.pedidoMinimo || 0 }, { merge: true });
   atualizarSidebar();
   notify('Configurações salvas!');
+}
+
+// Salva o PIN do App Garçom no doc privado (garcomSecrets) via Cloud Function (Admin SDK).
+async function _salvarGarcomPin(pin){
+  if (!/^\d{4}$/.test(pin)) { notify('O PIN do garçom deve ter 4 dígitos.', 'error'); return; }
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('garcomSetPin');
+    await fn({ slug: slug, pin: pin });
+    notify('🔑 PIN do App Garçom salvo!');
+    const el = document.getElementById('cfgGarcomPin'); if (el) el.value = '';
+  } catch (e) {
+    console.error('[garcomSetPin]', e);
+    notify('Erro ao salvar o PIN do garçom: ' + ((e && e.message) || ''), 'error');
+  }
 }
 
 function renderDestaqueOpts() {
