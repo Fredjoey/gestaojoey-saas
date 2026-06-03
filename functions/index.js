@@ -2,6 +2,7 @@ const { onRequest }  = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const axios = require('axios');
+const JSZip = require('jszip');
 admin.initializeApp();
 const db = admin.firestore();
 const gestaoApp = admin.initializeApp(
@@ -559,3 +560,137 @@ exports.verificarCarrinhosAbandonados = onSchedule(
     }
   }
 );
+
+// ── FOCUS NFe — DOWNLOAD DE XML (individual e ZIP do período) ─────────────────
+// Por slug. Reusa o token Focus da config fiscal do tenant. Verifica o dono pelo
+// token gestaojoey (gestaoApp.auth). Consulta a Focus por ref p/ obter o caminho_xml.
+
+function _fnNfceCors(res) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+}
+
+async function _fnVerificarDono(req, slug) {
+  const m = String(req.headers.authorization || '').match(/^Bearer (.+)$/);
+  if (!m) return { ok: false, code: 401, erro: 'Faça login no painel.' };
+  let dec;
+  try { dec = await gestaoApp.auth().verifyIdToken(m[1]); }
+  catch (e) { return { ok: false, code: 401, erro: 'Sessão inválida. Recarregue e tente de novo.' }; }
+  const email = dec.email || '';
+  if (email === 'fred@joey.app.br' || email === 'isabela@joey.app.br') return { ok: true };
+  const cli = await dbGestao.doc(`clientes/${slug}`).get();
+  if (cli.exists && cli.data().authUid === dec.uid) return { ok: true };
+  return { ok: false, code: 403, erro: 'Sem permissão para este estabelecimento.' };
+}
+
+async function _fnFocusCtx(slug) {
+  const fs = await dbGestao.doc(`clientes/${slug}/config/fiscal`).get();
+  const f = fs.exists ? (fs.data() || {}) : {};
+  const token = (f.apiKey || f.tokenProducao || '').trim();
+  const amb = f.ambiente || f.fAmbiente || 'producao';
+  const baseUrl = amb === 'homologacao' ? 'https://homologacao.focusnfe.com.br' : 'https://api.focusnfe.com.br';
+  return { token, baseUrl };
+}
+
+function _fnParseBR(s) {
+  if (!s) return null;
+  const p = String(s).split('/');
+  return p.length === 3 ? new Date(+p[2], +p[1] - 1, +p[0]) : null;
+}
+
+// Consulta a Focus por ref, pega caminho_xml e baixa o XML (string). Lança em falha.
+async function _fnBaixarXml(baseUrl, token, ref) {
+  const meta = await axios.get(`${baseUrl}/v2/nfce/${encodeURIComponent(ref)}`, {
+    auth: { username: token, password: '' }, timeout: 25000, validateStatus: () => true,
+  });
+  if (meta.status >= 400) throw new Error(`consulta ref HTTP ${meta.status}`);
+  const path = meta.data && (meta.data.caminho_xml_nota_fiscal || meta.data.caminho_xml);
+  if (!path) throw new Error(`sem caminho_xml (status ${meta.data && meta.data.status})`);
+  const x = await axios.get(`${baseUrl}${path}`, {
+    auth: { username: token, password: '' }, timeout: 25000, responseType: 'text', validateStatus: () => true,
+  });
+  if (x.status >= 400) throw new Error(`download xml HTTP ${x.status}`);
+  return typeof x.data === 'string' ? x.data : String(x.data);
+}
+
+// XML individual — POST { slug, pedidoId } ou { slug, ref }
+exports.nfceXml = onRequest({ invoker: 'public', region: 'us-central1' }, async (req, res) => {
+  _fnNfceCors(res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, erro: 'Método não permitido' });
+  try {
+    const { slug, pedidoId, ref } = req.body || {};
+    if (!slug || (!pedidoId && !ref)) return res.status(400).json({ ok: false, erro: 'slug e (pedidoId ou ref) são obrigatórios' });
+    const dono = await _fnVerificarDono(req, slug);
+    if (!dono.ok) return res.status(dono.code).json({ ok: false, erro: dono.erro });
+    const { token, baseUrl } = await _fnFocusCtx(slug);
+    if (!token) return res.status(400).json({ ok: false, erro: 'Token da Focus NFe não configurado.' });
+    let refUse = ref, numero = null;
+    if (!refUse) {
+      const nd = await dbGestao.doc(`clientes/${slug}/notasFiscais/${pedidoId}`).get();
+      if (!nd.exists) return res.status(404).json({ ok: false, erro: 'Nota não encontrada.' });
+      refUse = nd.data().focusRef || nd.data().ref;
+      numero = nd.data().numeroNota || nd.data().nf;
+      if (!refUse) return res.status(404).json({ ok: false, erro: 'Nota sem referência Focus.' });
+    }
+    const xml = await _fnBaixarXml(baseUrl, token, refUse);
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="NFCe-${numero || pedidoId || refUse}.xml"`);
+    return res.status(200).send(xml);
+  } catch (err) {
+    console.error('[nfceXml]', err.message);
+    return res.status(500).json({ ok: false, erro: 'Erro ao baixar XML: ' + err.message });
+  }
+});
+
+// ZIP dos XMLs do período — POST { slug, de:'yyyy-mm-dd', ate:'yyyy-mm-dd' }
+exports.nfceXmlZip = onRequest({ invoker: 'public', region: 'us-central1', timeoutSeconds: 540, memory: '512MiB' }, async (req, res) => {
+  _fnNfceCors(res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, erro: 'Método não permitido' });
+  try {
+    const { slug, de, ate } = req.body || {};
+    if (!slug || !de || !ate) return res.status(400).json({ ok: false, erro: 'slug, de e ate são obrigatórios' });
+    const dono = await _fnVerificarDono(req, slug);
+    if (!dono.ok) return res.status(dono.code).json({ ok: false, erro: dono.erro });
+    const { token, baseUrl } = await _fnFocusCtx(slug);
+    if (!token) return res.status(400).json({ ok: false, erro: 'Token da Focus NFe não configurado.' });
+    const deD = new Date(de + 'T00:00:00'), ateD = new Date(ate + 'T23:59:59');
+    const snap = await dbGestao.collection(`clientes/${slug}/notasFiscais`).get();
+    const notas = snap.docs.map(d => d.data()).filter(n => {
+      if (n.status !== 'emitida' && n.status !== 'cancelada') return false;
+      if (!(n.focusRef || n.ref)) return false;
+      const d = _fnParseBR(n.data);
+      return d && d >= deD && d <= ateD;
+    });
+    if (!notas.length) return res.status(404).json({ ok: false, erro: 'Nenhuma NFC-e emitida/cancelada no período.' });
+    const zip = new JSZip();
+    const erros = [];
+    let okCount = 0;
+    // baixa em lotes de 5 (não trava o ZIP se algum XML faltar)
+    for (let i = 0; i < notas.length; i += 5) {
+      const lote = notas.slice(i, i + 5);
+      await Promise.all(lote.map(async (n) => {
+        const ref = n.focusRef || n.ref;
+        try {
+          const xml = await _fnBaixarXml(baseUrl, token, ref);
+          const tag = n.status === 'cancelada' ? '-CANCELADA' : '';
+          zip.file(`NFCe-${n.numeroNota || n.nf || ref}-pedido-${n.pedidoId || ''}${tag}.xml`, xml);
+          okCount++;
+        } catch (e) {
+          erros.push(`ref ${ref} (pedido ${n.pedidoId || '?'}, nota ${n.numeroNota || n.nf || '?'}): ${e.message}`);
+        }
+      }));
+    }
+    if (erros.length) zip.file('_xmls_nao_baixados.txt', `Não foi possível baixar ${erros.length} XML(s):\n\n` + erros.join('\n'));
+    if (okCount === 0) return res.status(502).json({ ok: false, erro: 'Nenhum XML pôde ser baixado da Focus NFe.', detalhes: erros.slice(0, 5) });
+    const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    res.set('Content-Type', 'application/zip');
+    res.set('Content-Disposition', `attachment; filename="NFCe-${slug}-${de}_a_${ate}.zip"`);
+    return res.status(200).send(buf);
+  } catch (err) {
+    console.error('[nfceXmlZip]', err.message);
+    return res.status(500).json({ ok: false, erro: 'Erro ao gerar ZIP: ' + err.message });
+  }
+});

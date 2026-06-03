@@ -837,22 +837,76 @@ textarea.fi{resize:vertical;min-height:60px}
 
         <!-- ABA: Relatório de Notas -->
         <div id="fTabContent-notas" style="display:none">
-          <!-- Filtros -->
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-            <input class="fi" id="nfBusca" placeholder="🔍 Cliente ou nº do pedido..." style="flex:1;min-width:160px" oninput="renderRelatorioNotas()">
+          <!-- Filtros: busca + período -->
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+            <input class="fi" id="nfBusca" placeholder="🔍 Nº pedido, nº nota ou cliente..." style="flex:1;min-width:200px" oninput="_nfReset();renderRelatorioNotas()">
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <span style="font-size:12px;color:var(--text2);white-space:nowrap">De</span>
-              <input class="fi" type="date" id="nfDe"  style="width:150px;padding:7px 10px" onchange="renderRelatorioNotas()">
+              <input class="fi" type="date" id="nfDe"  style="width:148px;padding:7px 10px" onchange="_nfReset();renderRelatorioNotas()">
               <span style="font-size:12px;color:var(--text2);white-space:nowrap">Até</span>
-              <input class="fi" type="date" id="nfAte" style="width:150px;padding:7px 10px" onchange="renderRelatorioNotas()">
+              <input class="fi" type="date" id="nfAte" style="width:148px;padding:7px 10px" onchange="_nfReset();renderRelatorioNotas()">
             </div>
-            <button class="btn btn-ghost btn-sm" style="white-space:nowrap;flex-shrink:0" onclick="exportarNotasCsv()">⬇ Exportar</button>
           </div>
-          <!-- Cards de métricas -->
-          <div id="nfMetrics" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px"></div>
+          <!-- Filtros: selects + ações -->
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+            <select class="fi" id="nfFStatusPed" style="width:auto;min-width:140px;padding:7px 10px" onchange="_nfReset();renderRelatorioNotas()">
+              <option value="">Pedido: todos</option>
+              <option value="novo">Em análise</option>
+              <option value="producao">Em produção</option>
+              <option value="pronto">Pronto</option>
+              <option value="entregue">Entregue</option>
+              <option value="finalizado">Finalizado</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+            <select class="fi" id="nfFPag" style="width:auto;min-width:130px;padding:7px 10px" onchange="_nfReset();renderRelatorioNotas()">
+              <option value="">Pagamento: todos</option>
+              <option value="pix">Pix</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="credito">Crédito</option>
+              <option value="debito">Débito</option>
+              <option value="mesa">Mesa</option>
+            </select>
+            <select class="fi" id="nfFStatusNota" style="width:auto;min-width:150px;padding:7px 10px" onchange="_nfReset();renderRelatorioNotas()">
+              <option value="">Nota: todas</option>
+              <option value="emitida">Emitida</option>
+              <option value="nao_emitida">Não emitida</option>
+              <option value="erro">Com erro</option>
+              <option value="cancelada">Cancelada</option>
+            </select>
+            <div style="flex:1;min-width:0"></div>
+            <button class="btn btn-ghost btn-sm" style="white-space:nowrap;flex-shrink:0" onclick="exportarNotasCsv()">⬇ CSV</button>
+            <button class="btn btn-primary btn-sm" style="white-space:nowrap;flex-shrink:0" onclick="abrirBaixarXmlsModal()">🗜️ Baixar XMLs</button>
+          </div>
+          <!-- Cards de resumo (6) -->
+          <div id="nfMetrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px"></div>
           <!-- Tabela -->
           <div class="card-box" style="padding:0;overflow:hidden">
             <div id="nfTabela"></div>
+          </div>
+          <!-- Paginação -->
+          <div id="nfPaginacao" style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px"></div>
+        </div>
+
+        <!-- MODAL: Baixar XMLs em lote -->
+        <div id="nfXmlModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.style.display='none'">
+          <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:14px;max-width:400px;width:100%;padding:22px">
+            <div style="font-size:16px;font-weight:800;margin-bottom:4px">🗜️ Baixar XMLs das NFC-e</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.5">Junta num único ZIP os XMLs de todas as NFC-e <b>emitidas e canceladas</b> do mês escolhido.</div>
+            <div style="display:flex;gap:10px;margin-bottom:14px">
+              <div style="flex:1"><label class="fl">Mês</label>
+                <select class="fi" id="nfXmlMes">
+                  <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+                  <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+                  <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+                  <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+                </select></div>
+              <div style="flex:1"><label class="fl">Ano</label><input class="fi" id="nfXmlAno" type="number" min="2020" max="2099"></div>
+            </div>
+            <div id="nfXmlStatus" style="font-size:12px;color:var(--text2);min-height:18px;margin-bottom:12px"></div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('nfXmlModal').style.display='none'">Fechar</button>
+              <button class="btn btn-primary" style="flex:1" id="nfXmlBtn" onclick="confirmarBaixarXmls()">⬇ Baixar ZIP</button>
+            </div>
           </div>
         </div>
 
@@ -1811,6 +1865,8 @@ db.doc('clientes/'+slug).onSnapshot(s => {
 // Functions vivem no projeto pedidos-joey (legado), mas o site pode rodar em qualquer projeto.
 const NFCE_EMITIR_URL    = 'https://emitirnfce-eb6kvzsxgq-uc.a.run.app';
 const NFCE_CANCELAR_URL  = 'https://cancelarnfce-eb6kvzsxgq-uc.a.run.app';
+const NFCE_XML_URL       = 'https://us-central1-pedidos-joey.cloudfunctions.net/nfceXml';
+const NFCE_XMLZIP_URL    = 'https://us-central1-pedidos-joey.cloudfunctions.net/nfceXmlZip';
 
 // =================== CONSTANTES ===================
 const STATUS_LABELS = {
@@ -4565,51 +4621,178 @@ function exportarNotasCsv() {
   notify('CSV exportado!');
 }
 
+// ===== Relatório de Notas — dirigido por PEDIDOS (join com notasFiscais) =====
+let _nfPage = 0;
+const _NF_PAGE = 25;
+function _nfReset(){ _nfPage = 0; }
+
+// pedidos do período + status da nota de cada um
+function _nfDados(){
+  const deVal  = document.getElementById('nfDe')?.value;
+  const ateVal = document.getElementById('nfAte')?.value;
+  const deD  = deVal  ? new Date(deVal  + 'T00:00:00') : null;
+  const ateD = ateVal ? new Date(ateVal + 'T23:59:59') : null;
+  const notaPor = {};
+  notasFiscais.forEach(n => { if (n.pedidoId != null) notaPor[String(n.pedidoId)] = n; });
+  return pedidos.filter(p => {
+    const d = parseDateBR(p.data);
+    if (!d) return false;
+    if (deD && d < deD) return false;
+    if (ateD && d > ateD) return false;
+    return true;
+  }).map(p => {
+    const nota = notaPor[String(p.id)] || null;
+    const statusNota = nota ? (nota.status || 'pendente') : 'nao_emitida';
+    return { p, nota, statusNota };
+  });
+}
+
+function _nfFiltrado(dados){
+  const busca = (document.getElementById('nfBusca')?.value || '').toLowerCase().trim();
+  const fPed  = document.getElementById('nfFStatusPed')?.value || '';
+  const fPag  = document.getElementById('nfFPag')?.value || '';
+  const fNota = document.getElementById('nfFStatusNota')?.value || '';
+  return dados.filter(x => {
+    if (fPed && (x.p.status||'') !== fPed) return false;
+    if (fPag && !((x.p.pagamento||'').toLowerCase().includes(fPag))) return false;
+    if (fNota === 'nao_emitida') { if (!(x.statusNota === 'nao_emitida' || x.statusNota === 'pendente')) return false; }
+    else if (fNota && x.statusNota !== fNota) return false;
+    if (busca) {
+      const nomeCli = (x.p.cliente && typeof x.p.cliente === 'object') ? (x.p.cliente.nome||'') : (x.p.cliente||'');
+      const nNota = x.nota ? (x.nota.numeroNota||x.nota.nf||'') : '';
+      if (!(`${x.p.id||''} ${nomeCli} ${nNota}`.toLowerCase().includes(busca)) ) return false;
+    }
+    return true;
+  });
+}
+
+function _nfBadge(status){
+  const map = {
+    emitida:     ['&#x2705; Emitida','#34d399','rgba(52,211,153,.12)'],
+    nao_emitida: ['&mdash; Não emitida','var(--text3)','rgba(255,255,255,.05)'],
+    pendente:    ['&#x23F3; Processando','#fbbf24','rgba(251,191,36,.12)'],
+    erro:        ['&#x26A0; Erro','#f87171','rgba(239,68,68,.12)'],
+    cancelada:   ['&#x1F6AB; Cancelada','#f87171','rgba(239,68,68,.12)'],
+  };
+  const a = map[status] || map.nao_emitida;
+  return `<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:7px;color:${a[1]};background:${a[2]};white-space:nowrap">${a[0]}</span>`;
+}
+
 function renderRelatorioNotas() {
-  const lista = _nfListaFiltrada();
+  const dados = _nfDados();
+  // ---- 6 cards de resumo (do período) ----
+  const emit = dados.filter(x=>x.statusNota==='emitida');
+  const canc = dados.filter(x=>x.statusNota==='cancelada');
+  const erro = dados.filter(x=>x.statusNota==='erro');
+  const nemi = dados.filter(x=>x.statusNota==='nao_emitida'||x.statusNota==='pendente');
+  const valor = emit.reduce((s,x)=>s+(Number((x.nota&&x.nota.total!=null)?x.nota.total:x.p.total)||0),0);
   const mc = document.getElementById('nfMetrics');
-  const emitidas   = lista.filter(n => n.status === 'emitida');
-  const canceladas = lista.filter(n => n.status === 'cancelada');
-  const valorTotal = emitidas.reduce((s,n) => s + (n.total||0), 0);
   if (mc) mc.innerHTML = [
-    { label:'Notas emitidas',  val: emitidas.length,                                             cor:'#34d399' },
-    { label:'Canceladas',      val: canceladas.length,                                           cor:'#f87171' },
-    { label:'Valor total',     val: 'R$ ' + valorTotal.toFixed(2).replace('.',','),              cor:'var(--orange)' },
-  ].map(c => `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:22px;font-weight:700;color:${c.cor}">${c.val}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.label}</div></div>`).join('');
+    { l:'Valor NFs emitidas', v:'R$ '+valor.toFixed(2).replace('.',','), c:'var(--orange)' },
+    { l:'Total de pedidos',   v:dados.length, c:'var(--text)' },
+    { l:'NFs emitidas',       v:emit.length,  c:'#34d399' },
+    { l:'NFs não emitidas',   v:nemi.length,  c:'var(--text2)' },
+    { l:'NFs com erro',       v:erro.length,  c:'#fbbf24' },
+    { l:'NFs canceladas',     v:canc.length,  c:'#f87171' },
+  ].map(c=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:13px 15px"><div style="font-size:21px;font-weight:700;color:${c.c}">${c.v}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.l}</div></div>`).join('');
+  // ---- lista filtrada + paginação ----
+  const lista = _nfFiltrado(dados);
   const tb = document.getElementById('nfTabela'); if (!tb) return;
+  const pg = document.getElementById('nfPaginacao');
   if (!lista.length) {
-    tb.innerHTML = `<p style="padding:20px 18px;color:var(--text2);font-size:13px">${notasFiscais.length ? 'Nenhuma nota com esse filtro.' : 'Nenhuma nota fiscal registrada.'}</p>`;
+    tb.innerHTML = `<p style="padding:20px 18px;color:var(--text2);font-size:13px">${dados.length ? 'Nenhum pedido com esse filtro.' : 'Nenhum pedido no período.'}</p>`;
+    if (pg) pg.innerHTML = '';
     return;
   }
-  const COLS = '90px minmax(0,1fr) 88px 110px 110px minmax(180px,auto)';
-  const hdCell = t => `<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:10px 10px;white-space:nowrap;overflow:hidden">${t}</div>`;
-  let html = `<div style="display:grid;grid-template-columns:${COLS};width:100%;border-bottom:1px solid var(--border)">${['N&ordm; Pedido','Cliente','Valor','Pagamento','Data / Hora','Status / A&ccedil;&otilde;es'].map(hdCell).join('')}</div>`;
-  lista.forEach((n, idx) => {
-    const rowBg = idx % 2 === 0 ? '' : 'background:rgba(255,255,255,.02)';
-    const cell = (content, extra='') => `<div style="padding:10px 10px;font-size:13px;color:var(--text);display:flex;align-items:center;min-width:0;overflow:hidden;${extra}">${content}</div>`;
-    const dataHora = n.data ? (n.data + (n.hora ? ' ' + n.hora : '')) : '&mdash;';
-    const clienteLabel = (n.cliente && typeof n.cliente === 'object') ? (n.cliente.nome || '&mdash;') : (n.cliente || '&mdash;');
-    const refEsc = (n.focusRef || n.ref || '').replace(/'/g, "\\'");
-    const nfEsc  = (n.nf || '').replace(/'/g, "\\'");
-    let acoes;
-    if (n.status === 'cancelada') {
-      acoes = `<span style="font-size:11px;font-weight:600;color:#f87171;white-space:nowrap">🚫 Cancelada</span>`
-        + (n.danfeUrl ? ` <a href="${n.danfeUrl}" target="_blank" rel="noopener" style="margin-left:6px;font-size:11px;color:var(--text3);text-decoration:underline;white-space:nowrap">DANFE</a>` : '');
-    } else {
-      acoes = `<span style="font-size:11px;color:#34d399;white-space:nowrap">&#x2705; Emitida</span>`
-        + (n.danfeUrl ? ` <a href="${n.danfeUrl}" target="_blank" rel="noopener" style="margin-left:6px;padding:2px 7px;font-size:11px;background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.25);border-radius:5px;text-decoration:none;white-space:nowrap">📄 DANFE</a>` : '')
-        + (refEsc    ? ` <button onclick="openCancelNfceModal('${n.pedidoId}','${refEsc}','${nfEsc}',${n.total||0})" style="margin-left:4px;padding:2px 7px;font-size:11px;background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);border-radius:5px;cursor:pointer;white-space:nowrap">🚫 Cancelar</button>` : '');
+  const nPages = Math.ceil(lista.length / _NF_PAGE);
+  if (_nfPage >= nPages) _nfPage = nPages - 1;
+  if (_nfPage < 0) _nfPage = 0;
+  const pageItems = lista.slice(_nfPage*_NF_PAGE, _nfPage*_NF_PAGE + _NF_PAGE);
+  const COLS = '74px 92px 96px 86px 92px 80px minmax(150px,auto)';
+  const hd = t => `<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;padding:10px 9px;white-space:nowrap;overflow:hidden">${t}</div>`;
+  const STLBL = { novo:'Análise', producao:'Produção', pronto:'Pronto', entregue:'Entregue', finalizado:'Finalizado', cancelado:'Cancelado' };
+  let html = `<div style="display:grid;grid-template-columns:${COLS};width:100%;border-bottom:1px solid var(--border)">${['Pedido','Status','Data','Pgto','Valor','NFC-e','Nota / Ações'].map(hd).join('')}</div>`;
+  pageItems.forEach(({p,nota,statusNota}, idx) => {
+    const bg = idx%2 ? 'background:rgba(255,255,255,.02)' : '';
+    const cell = (c,ex='') => `<div style="padding:9px;font-size:13px;color:var(--text);display:flex;align-items:center;min-width:0;overflow:hidden;${ex}">${c}</div>`;
+    const refEsc = ((nota && (nota.focusRef||nota.ref))||'').toString().replace(/'/g,"\\'");
+    const nfEsc  = ((nota && (nota.numeroNota||nota.nf))||'').toString().replace(/'/g,"\\'");
+    let acoes = _nfBadge(statusNota);
+    acoes += ` <button onclick="openOrderModal('${p.id}')" title="Detalhe do pedido" style="margin-left:3px;padding:2px 6px;font-size:11px;background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer">&#x1F441;</button>`;
+    if (statusNota === 'emitida') {
+      if (nota && nota.danfeUrl) acoes += ` <a href="${nota.danfeUrl}" target="_blank" rel="noopener" title="DANFE" style="padding:2px 7px;font-size:11px;background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.25);border-radius:5px;text-decoration:none">&#x1F4C4;</a>`;
+      acoes += ` <button onclick="nfBaixarXml('${p.id}')" title="Baixar XML" style="padding:2px 7px;font-size:11px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:5px;cursor:pointer">XML</button>`;
+      if (refEsc) acoes += ` <button onclick="openCancelNfceModal('${p.id}','${refEsc}','${nfEsc}',${(nota&&nota.total)||p.total||0})" title="Cancelar nota" style="padding:2px 7px;font-size:11px;background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);border-radius:5px;cursor:pointer">&#x1F6AB;</button>`;
+    } else if (statusNota === 'cancelada') {
+      acoes += ` <button onclick="nfBaixarXml('${p.id}')" title="Baixar XML" style="padding:2px 7px;font-size:11px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:5px;cursor:pointer">XML</button>`;
+    } else if (p.status !== 'cancelado') {
+      acoes += ` <button onclick="openNfceModal('${p.id}')" title="Emitir NFC-e" style="padding:2px 8px;font-size:11px;background:rgba(255,107,53,.12);color:var(--orange);border:1px solid rgba(255,107,53,.3);border-radius:5px;cursor:pointer;white-space:nowrap">Emitir</button>`;
     }
-    html += `<div style="display:grid;grid-template-columns:${COLS};width:100%;border-bottom:1px solid var(--border);${rowBg}">
-      ${cell(`<span style="font-weight:600;color:var(--orange);white-space:nowrap">#${n.pedidoId||'&mdash;'}</span>`)}
-      ${cell(`<span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${clienteLabel}</span>`)}
-      ${cell(`<span style="white-space:nowrap">R$ ${(n.total||0).toFixed(2).replace('.',',')}</span>`)}
-      ${cell(`<span style="white-space:nowrap;color:var(--text2)">${n.pagamento||'&mdash;'}</span>`)}
-      ${cell(`<span style="color:var(--text2);white-space:nowrap;font-size:12px">${dataHora}</span>`)}
-      <div style="padding:10px;font-size:13px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0">${acoes}</div>
+    html += `<div style="display:grid;grid-template-columns:${COLS};width:100%;border-bottom:1px solid var(--border);${bg}">
+      ${cell(`<span style="font-weight:600;color:var(--orange)">#${p.id||'&mdash;'}</span>`)}
+      ${cell(`<span style="font-size:11px;color:var(--text2);white-space:nowrap">${STLBL[p.status]||p.status||'&mdash;'}</span>`)}
+      ${cell(`<span style="font-size:12px;color:var(--text2);white-space:nowrap">${p.data||'&mdash;'}</span>`)}
+      ${cell(`<span style="font-size:12px;color:var(--text2);white-space:nowrap">${p.pagamento||'&mdash;'}</span>`)}
+      ${cell(`<span style="white-space:nowrap">R$ ${(Number(p.total)||0).toFixed(2).replace('.',',')}</span>`)}
+      ${cell(`<span style="white-space:nowrap;color:var(--text2)">${nota?(nota.numeroNota||nota.nf||'&mdash;'):'&mdash;'}</span>`)}
+      <div style="padding:9px;display:flex;align-items:center;gap:3px;flex-wrap:wrap;min-width:0">${acoes}</div>
     </div>`;
   });
   tb.innerHTML = html;
+  if (pg) {
+    if (nPages <= 1) pg.innerHTML = `<span style="font-size:12px;color:var(--text3)">${lista.length} registro(s)</span>`;
+    else pg.innerHTML = `<button class="btn btn-ghost btn-sm" ${_nfPage<=0?'disabled':''} onclick="_nfPageGo(-1)">&lsaquo; Anterior</button>
+      <span style="font-size:12px;color:var(--text2)">Página ${_nfPage+1}/${nPages} &middot; ${lista.length} registros</span>
+      <button class="btn btn-ghost btn-sm" ${_nfPage>=nPages-1?'disabled':''} onclick="_nfPageGo(1)">Próxima &rsaquo;</button>`;
+  }
+}
+function _nfPageGo(d){ _nfPage += d; renderRelatorioNotas(); }
+
+// ---- Download de XML (com Bearer token do dono) ----
+async function _nfDownload(url, body, fallbackName){
+  const user = firebase.auth().currentUser;
+  if (!user) { notify('Sessão expirada. Recarregue o painel.', 'error'); return false; }
+  try {
+    const idToken = await user.getIdToken();
+    const resp = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+idToken }, body: JSON.stringify(body) });
+    if (!resp.ok) {
+      let msg = 'Erro ' + resp.status;
+      try { const j = await resp.json(); msg = j.erro || msg; } catch(_){}
+      notify(msg, 'error'); return false;
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = m ? m[1] : fallbackName; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    return true;
+  } catch (e) { notify('Falha no download: ' + e.message, 'error'); return false; }
+}
+async function nfBaixarXml(pedidoId){
+  notify('Baixando XML...');
+  const ok = await _nfDownload(NFCE_XML_URL, { slug, pedidoId: String(pedidoId) }, `NFCe-${pedidoId}.xml`);
+  if (ok) notify('XML baixado!');
+}
+function abrirBaixarXmlsModal(){
+  const now = new Date();
+  document.getElementById('nfXmlMes').value = now.getMonth()+1;
+  document.getElementById('nfXmlAno').value = now.getFullYear();
+  document.getElementById('nfXmlStatus').textContent = '';
+  document.getElementById('nfXmlBtn').disabled = false;
+  document.getElementById('nfXmlModal').style.display = 'flex';
+}
+async function confirmarBaixarXmls(){
+  const mes = parseInt(document.getElementById('nfXmlMes').value) || (new Date().getMonth()+1);
+  const ano = parseInt(document.getElementById('nfXmlAno').value) || (new Date().getFullYear());
+  const mm = String(mes).padStart(2,'0');
+  const last = new Date(ano, mes, 0).getDate();
+  const de  = `${ano}-${mm}-01`;
+  const ate = `${ano}-${mm}-${String(last).padStart(2,'0')}`;
+  const btn = document.getElementById('nfXmlBtn'), st = document.getElementById('nfXmlStatus');
+  btn.disabled = true; st.textContent = '⏳ Gerando ZIP (pode levar alguns segundos)...';
+  const ok = await _nfDownload(NFCE_XMLZIP_URL, { slug, de, ate }, `NFCe-${slug}-${mm}-${ano}.zip`);
+  btn.disabled = false;
+  st.textContent = ok ? '✅ Download iniciado! Confira a pasta de downloads.' : '';
 }
 
 function openNfceModal(pedidoId) {
