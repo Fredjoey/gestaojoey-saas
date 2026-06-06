@@ -24,7 +24,7 @@ async function migrar(db, col) {
 }
 
 async function main() {
-  for (const col of ['pedidos','clientes','mesas','conversas','notasFiscais','backups','botConfig','mensagensProgramadas','fechamentos','catalogoStatus'])
+  for (const col of ['pedidos','clientes','mesas','conversas','notasFiscais','backups','botConfig','mensagensProgramadas','fechamentos','catalogoStatus','config'])
     await migrar(dbOrigem, col);
   for (const col of ['categorias','recipes','adicionais'])
     await migrar(dbOrigemJoey, col);

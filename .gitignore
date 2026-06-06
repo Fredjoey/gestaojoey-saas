@@ -18,9 +18,26 @@ clientes_joey.json
 clientes*.json
 contatos*.json
 
-# Scripts locais com credenciais
+# Scripts locais com credenciais (tokens Cloudflare/Railway inline) — NUNCA versionar
 importar_clientes.js
 upload-splash.js
+ativar_proxy_cname.js
+atualizar_firebase_railway.js
+comparar_dominios.js
+criar_dominio_teste_railway.js
+deletar_teste_bot.js
+desativar_proxy_teste_ssl.js
+descobrir_dominio_railway.js
+descobrir_mutation_domain.js
+monitor_deploy_railway.js
+pegar_railway_ids.js
+redeploy_joeyapi.js
+validar_railway_mutations.js
+validar_railway_schema.js
+verificar_cname.js
+verificar_dns_exclusao.js
+verificar_firebase_railway.js
+verificar_railway_servicos.js
 
 # Claude Code (config local)
 .claude/

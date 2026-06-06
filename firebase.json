@@ -14,6 +14,7 @@
       "site": "pedidos-joey",
       "public": ".",
       "ignore": [
+        "scripts/**",
         "firebase.json",
         ".firebaserc",
         ".gitignore",
@@ -96,6 +97,7 @@
       "site": "pedidos-joey-painel",
       "public": ".",
       "ignore": [
+        "scripts/**",
         "firebase.json",
         ".firebaserc",
         ".gitignore",
@@ -179,6 +181,7 @@
       "site": "gestaojoey-painel",
       "public": ".",
       "ignore": [
+        "scripts/**",
         "firebase.json",
         ".firebaserc",
         ".gitignore",
