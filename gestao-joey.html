@@ -7627,7 +7627,7 @@
 
             if (qual === 'periodo') {
                 _vendasDestacarAtalho('periodo');
-                iniEl.focus();
+                iniEl.focus({ preventScroll: true });
                 return;
             }
 
@@ -7917,7 +7917,7 @@
             }
 
             renderVendasHistorico();
-            setTimeout(() => resultado && resultado.scrollIntoView({ behavior:'smooth', block:'start' }), 100);
+            // (scroll-to-resultado removido: a Análise + tabela agora abrem no topo da aba)
         }
 
         async function selecionarArquivoVendas(input, tipo) {
