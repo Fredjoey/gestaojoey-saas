@@ -700,7 +700,7 @@
           <div class="cal-wrap">
             <div class="cal-resumo">
               <div class="cal-resumo-card">
-                <h4>📌 Próximos vencimentos (7 dias)</h4>
+                <h4>📌 Próximos eventos (7 dias)</h4>
                 <div id="calProximos"></div>
               </div>
               <div class="cal-resumo-card">
@@ -1539,6 +1539,194 @@
 
         <!-- VENDAS TAB -->
         <div id="vendas" class="tab-content">
+            <!-- ANALISE POR PERIODO -->
+            <div class="section-title">📊 Análise por Período</div>
+
+            <div id="vendasPeriodoAtivo" style="display:none; font-size:12px; color:#f97316; font-weight:600; margin-bottom:8px; padding:6px 14px; background:#2a1500; border-radius:6px; border:1px solid #f97316; align-items:center; justify-content:space-between;">
+                <span id="vendasPeriodoAtivoTexto"></span>
+                <button onclick="limparFiltroPeriodo()" style="background:transparent; border:none; color:#f97316; font-size:16px; cursor:pointer; padding:0 0 0 10px; line-height:1;" title="Limpar filtro">✕</button>
+            </div>
+
+            <!-- DASHBOARD DO PERIODO -->
+            <div id="vendasDashboardPeriodo" style="display:none; margin-bottom:0;">
+                <div class="metrics-grid" style="margin-bottom:1.5rem;">
+                    <div class="metric-card">
+                        <div class="metric-label">Faturamento</div>
+                        <div class="metric-value" id="vendasFaturamentoMes">—</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Custo Insumos</div>
+                        <div class="metric-value" style="color:#e74c3c;" id="vendasCustoMes">—</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Lucro Bruto</div>
+                        <div class="metric-value" style="color:#27ae60;" id="vendasLucroMes">—</div>
+                        <div style="font-size:10px; color:#555; margin-top:3px;">(sem impostos e taxas)</div>
+                    </div>
+                    <div class="metric-card" id="cardLucroLiquido" style="display:none;">
+                        <div class="metric-label">Lucro Líquido</div>
+                        <div class="metric-value" id="vendasLucroLiquido">—</div>
+                        <div style="font-size:10px; color:#555; margin-top:3px;">(após impostos e taxas)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Unidades Vendidas</div>
+                        <div class="metric-value" id="vendasUnidadesMes">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">CMV</div>
+                        <div class="metric-value" id="vendasCMVMes">—</div>
+                    </div>
+                    <div class="metric-card" id="cardNumPedidos" style="display:none;">
+                        <div class="metric-label">Nº Pedidos</div>
+                        <div class="metric-value" id="vendasNumPedidos">—</div>
+                    </div>
+                    <div class="metric-card" id="cardTicketMedio" style="display:none;">
+                        <div class="metric-label">Ticket Médio</div>
+                        <div class="metric-value" id="vendasTicketMedio">—</div>
+                    </div>
+                </div>
+            <!-- DRE SIMPLIFICADO -->
+            <div id="vendasDRE" style="display:none; margin-bottom:1.5rem;">
+                <div style="background:#1a1a2e; border:1px solid #2a2a4a; border-radius:10px; padding:1.5rem;">
+                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:16px;">📋 DRE Simplificado</div>
+
+                    <!-- Alíquotas editáveis -->
+                    <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <label style="font-size:11px; color:#777; white-space:nowrap;">Simples Nacional (%)</label>
+                            <input type="number" id="dreSimples" value="6" min="0" max="100" step="0.01"
+                                oninput="calcularDRE()"
+                                style="width:70px; padding:5px 8px; border:1px solid #444; border-radius:6px; font-size:13px; font-weight:700; background:#2c2c2c; color:#e8e8e8; text-align:center;">
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <label style="font-size:11px; color:#777; white-space:nowrap; position:relative;">Taxa Cartão (%)
+                                <span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'"
+                                    style="display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; background:#444; color:#aaa; border-radius:50%; font-size:10px; font-weight:700; cursor:pointer; margin-left:4px; user-select:none;">?</span>
+                                <div style="display:none; position:absolute; z-index:100; background:#1e1e1e; border:1px solid #555; border-radius:8px; padding:12px 14px; font-size:12px; color:#ccc; line-height:1.6; max-width:280px; margin-top:6px; box-shadow:0 4px 16px rgba(0,0,0,0.5);">
+                                    Esta taxa representa a <strong style="color:#f97316;">média ponderada</strong> das taxas cobradas pelas formas de pagamento.<br><br>
+                                    <strong style="color:#aaa;">Exemplo:</strong> se 35% das vendas são no cartão (taxa 3%) e 65% no Pix (taxa 0%), a taxa média é <strong style="color:#f97316;">1,05%</strong>.<br><br>
+                                    Ajuste conforme o mix de pagamento do seu período.
+                                </div>
+                            </label>
+                            <input type="number" id="dreTaxaCartao" value="1.05" min="0" max="100" step="0.01"
+                                oninput="calcularDRE()"
+                                style="width:70px; padding:5px 8px; border:1px solid #444; border-radius:6px; font-size:13px; font-weight:700; background:#2c2c2c; color:#e8e8e8; text-align:center;">
+                        </div>
+                    </div>
+
+                    <!-- Linhas do DRE -->
+                    <div style="font-family:monospace; font-size:14px; display:flex; flex-direction:column; gap:6px;">
+                        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #2a2a4a;">
+                            <span style="color:#e8e8e8;">Faturamento Bruto</span>
+                            <span style="color:#60a5fa; font-weight:700;" id="dreFatBruto">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
+                            <span style="color:#aaa;" id="dreSimplesTxt">(-) Simples Nacional 6%</span>
+                            <span style="color:#e74c3c;" id="dreSimlesVal">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
+                            <span style="color:#aaa;" id="dreCartaoTxt">(-) Taxa Cartão 1,05%</span>
+                            <span style="color:#e74c3c;" id="dreCartaoVal">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
+                            <span style="color:#aaa;">(-) Custo Insumos</span>
+                            <span style="color:#e74c3c;" id="dreInsumosVal">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px; border-bottom:1px solid #2a2a4a; padding-bottom:10px;">
+                            <span style="color:#aaa;" id="dreFixosTxt">(-) Custos Fixos</span>
+                            <span style="color:#e74c3c;" id="dreFixosVal">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:10px 0 4px;">
+                            <span style="color:#e8e8e8; font-weight:700; font-size:15px;">= Lucro Líquido Real</span>
+                            <span style="font-weight:700; font-size:15px;" id="dreLucroLiq">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
+                            <span style="color:#aaa;">Margem Líquida</span>
+                            <span style="font-weight:700;" id="dreMargemLiq">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            </div>
+
+            <!-- BUSCAR PEDIDOS DO FIRESTORE -->
+            <div style="background:#1a2535; padding:1.5rem; border-radius:8px; border:1px solid #2a4a6a; margin-bottom:1.5rem;">
+                <!-- Atalhos de período -->
+                <div id="vendasAtalhosPeriodo" style="display:flex; gap:8px; margin-bottom:1.1rem; flex-wrap:wrap;">
+                    <button type="button" class="anaPeriodBtn" data-vp="hoje" onclick="aplicarAtalhoPeriodo('hoje')">Hoje</button>
+                    <button type="button" class="anaPeriodBtn" data-vp="semana" onclick="aplicarAtalhoPeriodo('semana')">Esta semana</button>
+                    <button type="button" class="anaPeriodBtn" data-vp="mes" onclick="aplicarAtalhoPeriodo('mes')">Este mês</button>
+                    <button type="button" class="anaPeriodBtn" data-vp="periodo" onclick="aplicarAtalhoPeriodo('periodo')">Período</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.25rem; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:140px;">
+                        <label style="font-size:10px; color:#777; display:block; margin-bottom:4px;">De</label>
+                        <input type="date" id="vendaDataInicio" onchange="_vendasMarcarPeriodo()" style="width:100%; padding:10px; border:1px solid #2a4a6a; border-radius:6px; font-size:14px; background:#0f1a2a; color:#e8e8e8;">
+                    </div>
+                    <div style="color:#555; font-size:18px; margin-top:16px;">→</div>
+                    <div style="flex:1; min-width:140px;">
+                        <label style="font-size:10px; color:#777; display:block; margin-bottom:4px;">Até</label>
+                        <input type="date" id="vendaDataFim" onchange="_vendasMarcarPeriodo()" style="width:100%; padding:10px; border:1px solid #2a4a6a; border-radius:6px; font-size:14px; background:#0f1a2a; color:#e8e8e8;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="buscarPedidosFirestore()" style="flex:1; background:#f97316; padding:13px; font-size:14px; border-radius:8px; font-weight:700; color:#fff; border:none; cursor:pointer;">
+                        🔍 Buscar Período
+                    </button>
+                    <button onclick="limparFiltroPeriodo()" style="background:#333; border:1px solid #555; color:#aaa; padding:13px 18px; font-size:13px; border-radius:8px; font-weight:600; cursor:pointer;" onmouseover="this.style.borderColor='#e74c3c';this.style.color='#e74c3c'" onmouseout="this.style.borderColor='#555';this.style.color='#aaa'">
+                        ✕ Limpar
+                    </button>
+                </div>
+                <div id="vendaFirestoreStatus" style="display:none; margin-top:10px; padding:10px; border-radius:6px; font-size:13px; font-weight:600; text-align:center;"></div>
+            </div>
+
+            <!-- RESULTADO DA IMPORTAÇÃO -->
+            <div id="vendasResultado" style="display:none;">
+                <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>📊 Resultado do Período</span>
+                    <button id="btnToggleResultado" onclick="toggleResultadoVendas()" style="background:#333; border:1px solid #555; color:#aaa; padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer;">▼ Recolher</button>
+                </div>
+                <div id="vendasResultadoBody">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                    <input type="text" id="vendasFiltroNome" placeholder="🔍 Filtrar por nome do item..." oninput="filtrarTabelaVendas()" style="flex:1; padding:9px 12px; font-size:13px; border-radius:6px;">
+                    <select id="vendasFiltroCategoria" onchange="filtrarTabelaVendas()" style="padding:9px 12px; font-size:13px; border-radius:6px; min-width:180px;">
+                        <option value="">Todas as categorias</option>
+                    </select>
+                    <button onclick="document.getElementById('vendasFiltroNome').value=''; document.getElementById('vendasFiltroCategoria').value=''; filtrarTabelaVendas();" style="background:#444; padding:9px 14px; font-size:12px; border-radius:6px;">✕ Limpar</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-right">Qtd</th>
+                                <th class="text-right">Preço Unit.</th>
+                                <th class="text-right">Faturamento</th>
+                                <th class="text-right">Custo Unit.</th>
+                                <th class="text-right">Custo Total</th>
+                                <th class="text-right">Lucro</th>
+                                <th class="text-right">CMV%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vendasTabelaItens"></tbody>
+                        <tfoot id="vendasTabelaTotais"></tfoot>
+                    </table>
+                </div>
+                <div style="margin-top:1rem; font-size:12px; color:#777;">
+                    ⚠️ Itens sem receita cadastrada aparecem destacados — cadastre a receita para calcular custo e margem.
+                </div>
+                <div id="vendasAdicionaisSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
+                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">➕ Adicionais mais vendidos</div>
+                    <div id="vendasAdicionaisBody"></div>
+                </div>
+                <div id="vendasPagamentosSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
+                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">💳 Formas de Pagamento</div>
+                    <div id="vendasPagamentosBody"></div>
+                </div>
+                </div><!-- fim vendasResultadoBody -->
+            </div>
+
             <!-- RESUMO DO MES ATUAL -->
             <div id="resumoMensalPanel" style="margin-bottom:1.5rem; padding:1.25rem; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -1659,187 +1847,6 @@
                     <span id="fmPct" style="font-weight:700; color:#f97316;">0%</span>
                     <span>100%</span>
                 </div>
-            </div>
-
-            <!-- ANALISE POR PERIODO -->
-            <div class="section-title">📊 Análise por Período</div>
-
-            <div id="vendasPeriodoAtivo" style="display:none; font-size:12px; color:#f97316; font-weight:600; margin-bottom:8px; padding:6px 14px; background:#2a1500; border-radius:6px; border:1px solid #f97316; align-items:center; justify-content:space-between;">
-                <span id="vendasPeriodoAtivoTexto"></span>
-                <button onclick="limparFiltroPeriodo()" style="background:transparent; border:none; color:#f97316; font-size:16px; cursor:pointer; padding:0 0 0 10px; line-height:1;" title="Limpar filtro">✕</button>
-            </div>
-
-            <!-- DASHBOARD DO PERIODO -->
-            <div id="vendasDashboardPeriodo" style="display:none; margin-bottom:0;">
-                <div class="metrics-grid" style="margin-bottom:1.5rem;">
-                    <div class="metric-card">
-                        <div class="metric-label">Faturamento</div>
-                        <div class="metric-value" id="vendasFaturamentoMes">—</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Custo Insumos</div>
-                        <div class="metric-value" style="color:#e74c3c;" id="vendasCustoMes">—</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Lucro Bruto</div>
-                        <div class="metric-value" style="color:#27ae60;" id="vendasLucroMes">—</div>
-                        <div style="font-size:10px; color:#555; margin-top:3px;">(sem impostos e taxas)</div>
-                    </div>
-                    <div class="metric-card" id="cardLucroLiquido" style="display:none;">
-                        <div class="metric-label">Lucro Líquido</div>
-                        <div class="metric-value" id="vendasLucroLiquido">—</div>
-                        <div style="font-size:10px; color:#555; margin-top:3px;">(após impostos e taxas)</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Unidades Vendidas</div>
-                        <div class="metric-value" id="vendasUnidadesMes">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">CMV</div>
-                        <div class="metric-value" id="vendasCMVMes">—</div>
-                    </div>
-                    <div class="metric-card" id="cardNumPedidos" style="display:none;">
-                        <div class="metric-label">Nº Pedidos</div>
-                        <div class="metric-value" id="vendasNumPedidos">—</div>
-                    </div>
-                    <div class="metric-card" id="cardTicketMedio" style="display:none;">
-                        <div class="metric-label">Ticket Médio</div>
-                        <div class="metric-value" id="vendasTicketMedio">—</div>
-                    </div>
-                </div>
-            <!-- DRE SIMPLIFICADO -->
-            <div id="vendasDRE" style="display:none; margin-bottom:1.5rem;">
-                <div style="background:#1a1a2e; border:1px solid #2a2a4a; border-radius:10px; padding:1.5rem;">
-                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:16px;">📋 DRE Simplificado</div>
-
-                    <!-- Alíquotas editáveis -->
-                    <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <label style="font-size:11px; color:#777; white-space:nowrap;">Simples Nacional (%)</label>
-                            <input type="number" id="dreSimples" value="6" min="0" max="100" step="0.01"
-                                oninput="calcularDRE()"
-                                style="width:70px; padding:5px 8px; border:1px solid #444; border-radius:6px; font-size:13px; font-weight:700; background:#2c2c2c; color:#e8e8e8; text-align:center;">
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <label style="font-size:11px; color:#777; white-space:nowrap; position:relative;">Taxa Cartão (%)
-                                <span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'"
-                                    style="display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; background:#444; color:#aaa; border-radius:50%; font-size:10px; font-weight:700; cursor:pointer; margin-left:4px; user-select:none;">?</span>
-                                <div style="display:none; position:absolute; z-index:100; background:#1e1e1e; border:1px solid #555; border-radius:8px; padding:12px 14px; font-size:12px; color:#ccc; line-height:1.6; max-width:280px; margin-top:6px; box-shadow:0 4px 16px rgba(0,0,0,0.5);">
-                                    Esta taxa representa a <strong style="color:#f97316;">média ponderada</strong> das taxas cobradas pelas formas de pagamento.<br><br>
-                                    <strong style="color:#aaa;">Exemplo:</strong> se 35% das vendas são no cartão (taxa 3%) e 65% no Pix (taxa 0%), a taxa média é <strong style="color:#f97316;">1,05%</strong>.<br><br>
-                                    Ajuste conforme o mix de pagamento do seu período.
-                                </div>
-                            </label>
-                            <input type="number" id="dreTaxaCartao" value="1.05" min="0" max="100" step="0.01"
-                                oninput="calcularDRE()"
-                                style="width:70px; padding:5px 8px; border:1px solid #444; border-radius:6px; font-size:13px; font-weight:700; background:#2c2c2c; color:#e8e8e8; text-align:center;">
-                        </div>
-                    </div>
-
-                    <!-- Linhas do DRE -->
-                    <div style="font-family:monospace; font-size:14px; display:flex; flex-direction:column; gap:6px;">
-                        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #2a2a4a;">
-                            <span style="color:#e8e8e8;">Faturamento Bruto</span>
-                            <span style="color:#60a5fa; font-weight:700;" id="dreFatBruto">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;" id="dreSimplesTxt">(-) Simples Nacional 6%</span>
-                            <span style="color:#e74c3c;" id="dreSimlesVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;" id="dreCartaoTxt">(-) Taxa Cartão 1,05%</span>
-                            <span style="color:#e74c3c;" id="dreCartaoVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;">(-) Custo Insumos</span>
-                            <span style="color:#e74c3c;" id="dreInsumosVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px; border-bottom:1px solid #2a2a4a; padding-bottom:10px;">
-                            <span style="color:#aaa;" id="dreFixosTxt">(-) Custos Fixos</span>
-                            <span style="color:#e74c3c;" id="dreFixosVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:10px 0 4px;">
-                            <span style="color:#e8e8e8; font-weight:700; font-size:15px;">= Lucro Líquido Real</span>
-                            <span style="font-weight:700; font-size:15px;" id="dreLucroLiq">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;">Margem Líquida</span>
-                            <span style="font-weight:700;" id="dreMargemLiq">—</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            </div>
-
-            <!-- BUSCAR PEDIDOS DO FIRESTORE -->
-            <div style="background:#1a2535; padding:1.5rem; border-radius:8px; border:1px solid #2a4a6a; margin-bottom:1.5rem;">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.25rem; flex-wrap:wrap;">
-                    <div style="flex:1; min-width:140px;">
-                        <label style="font-size:10px; color:#777; display:block; margin-bottom:4px;">De</label>
-                        <input type="date" id="vendaDataInicio" style="width:100%; padding:10px; border:1px solid #2a4a6a; border-radius:6px; font-size:14px; background:#0f1a2a; color:#e8e8e8;">
-                    </div>
-                    <div style="color:#555; font-size:18px; margin-top:16px;">→</div>
-                    <div style="flex:1; min-width:140px;">
-                        <label style="font-size:10px; color:#777; display:block; margin-bottom:4px;">Até</label>
-                        <input type="date" id="vendaDataFim" style="width:100%; padding:10px; border:1px solid #2a4a6a; border-radius:6px; font-size:14px; background:#0f1a2a; color:#e8e8e8;">
-                    </div>
-                </div>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="buscarPedidosFirestore()" style="flex:1; background:#f97316; padding:13px; font-size:14px; border-radius:8px; font-weight:700; color:#fff; border:none; cursor:pointer;">
-                        🔍 Buscar Período
-                    </button>
-                    <button onclick="limparFiltroPeriodo()" style="background:#333; border:1px solid #555; color:#aaa; padding:13px 18px; font-size:13px; border-radius:8px; font-weight:600; cursor:pointer;" onmouseover="this.style.borderColor='#e74c3c';this.style.color='#e74c3c'" onmouseout="this.style.borderColor='#555';this.style.color='#aaa'">
-                        ✕ Limpar
-                    </button>
-                </div>
-                <div id="vendaFirestoreStatus" style="display:none; margin-top:10px; padding:10px; border-radius:6px; font-size:13px; font-weight:600; text-align:center;"></div>
-            </div>
-
-            <!-- RESULTADO DA IMPORTAÇÃO -->
-            <div id="vendasResultado" style="display:none;">
-                <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>📊 Resultado do Período</span>
-                    <button id="btnToggleResultado" onclick="toggleResultadoVendas()" style="background:#333; border:1px solid #555; color:#aaa; padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer;">▼ Recolher</button>
-                </div>
-                <div id="vendasResultadoBody">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-                    <input type="text" id="vendasFiltroNome" placeholder="🔍 Filtrar por nome do item..." oninput="filtrarTabelaVendas()" style="flex:1; padding:9px 12px; font-size:13px; border-radius:6px;">
-                    <select id="vendasFiltroCategoria" onchange="filtrarTabelaVendas()" style="padding:9px 12px; font-size:13px; border-radius:6px; min-width:180px;">
-                        <option value="">Todas as categorias</option>
-                    </select>
-                    <button onclick="document.getElementById('vendasFiltroNome').value=''; document.getElementById('vendasFiltroCategoria').value=''; filtrarTabelaVendas();" style="background:#444; padding:9px 14px; font-size:12px; border-radius:6px;">✕ Limpar</button>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th class="text-right">Qtd</th>
-                                <th class="text-right">Preço Unit.</th>
-                                <th class="text-right">Faturamento</th>
-                                <th class="text-right">Custo Unit.</th>
-                                <th class="text-right">Custo Total</th>
-                                <th class="text-right">Lucro</th>
-                                <th class="text-right">CMV%</th>
-                            </tr>
-                        </thead>
-                        <tbody id="vendasTabelaItens"></tbody>
-                        <tfoot id="vendasTabelaTotais"></tfoot>
-                    </table>
-                </div>
-                <div style="margin-top:1rem; font-size:12px; color:#777;">
-                    ⚠️ Itens sem receita cadastrada aparecem destacados — cadastre a receita para calcular custo e margem.
-                </div>
-                <div id="vendasAdicionaisSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
-                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">➕ Adicionais mais vendidos</div>
-                    <div id="vendasAdicionaisBody"></div>
-                </div>
-                <div id="vendasPagamentosSection" style="display:none; margin-top:1.25rem; padding-top:1rem; border-top:1px solid #3a3a3a;">
-                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">💳 Formas de Pagamento</div>
-                    <div id="vendasPagamentosBody"></div>
-                </div>
-                </div><!-- fim vendasResultadoBody -->
             </div>
 
             <!-- HISTÓRICO DE IMPORTAÇÕES -->
@@ -2286,7 +2293,11 @@
             if (tabName === 'insumos') renderInsumosList();
             if (tabName === 'financeiro') _finUpdate();
             if (tabName === 'notas') { renderNotasLancadas(); atualizarDatalistFornecedores(); }
-            if (tabName === 'vendas') { renderVendasItens(); renderVendasHistorico(); atualizarDashboardVendas(); calcularPE(); iniciarResumoMensal(); }
+            if (tabName === 'vendas') {
+                window.scrollTo(0, 0);  // abre a aba no topo, mostrando a Análise por Período
+                renderVendasItens(); renderVendasHistorico(); atualizarDashboardVendas(); calcularPE(); iniciarResumoMensal();
+                if (!_vendasAutoCarregou) { _vendasAutoCarregou = true; aplicarAtalhoPeriodo('mes'); }  // 1ª abertura: já carrega "Este mês"
+            }
             if (tabName === 'calendario') renderCalendario();
         }
 
@@ -2298,6 +2309,7 @@
             retirada: { label: 'Retirada de dinheiro', cor: '#27ae60' },
             tarefa:   { label: 'Tarefa',               cor: '#3498db' },
             evento:   { label: 'Evento',               cor: '#9b59b6' },
+            conta_pagar: { label: 'Conta a pagar',     cor: '#c0392b' },  // auto-criado da aba Contas a Pagar (não some quando pago: fica riscado)
         };
         const CAL_DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         let _agenda = [];
@@ -2425,7 +2437,7 @@
         // ----- modal de evento -----
         function _calPopularTipos() {
             const sel = document.getElementById('calEvTipo');
-            if (sel && !sel.options.length) sel.innerHTML = Object.entries(CAL_TIPOS).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
+            if (sel && !sel.options.length) sel.innerHTML = Object.entries(CAL_TIPOS).filter(([k]) => k !== 'conta_pagar').map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');  // conta_pagar é só auto (aba Contas), não manual
         }
         function calOnTipoChange() {
             if (_calEditId) return; // só sugere recorrência ao criar
@@ -6620,12 +6632,38 @@
             _reajustesPendentes = [];
         }
 
+        // ===== Sincronização Conta a Pagar ↔ Calendário (evento id determinístico = 'conta_<notaId>') =====
+        // Só sincroniza com o Calendário ligado (config.features.CALENDARIO). Uma conta = um evento (sem duplicar).
+        function _sincronizarContaCalendario(nota) {
+            if (!_calFeatures.CALENDARIO || !window._fb || !nota) return;
+            const eventId = 'conta_' + nota.id;
+            if (!nota.vencimento) { window._fb.fbDelete('agenda', eventId).catch(() => {}); return; } // sem vencimento → sem evento
+            const pago = nota.statusPagamento === 'pago';
+            const ev = {
+                tipo: 'conta_pagar',
+                titulo: '💳 ' + (nota.fornecedor || 'Conta') + (nota.numero ? ' nº ' + nota.numero : ''),
+                data: nota.vencimento,
+                valor: Number(nota.total) || 0,
+                recorrencia: 'nenhuma',
+                concluido: pago,                       // pago → riscado (cal-done) no calendário
+                contaId: nota.id,                      // vínculo conta ↔ evento
+                pagoEm: pago ? (nota.dataPagamento || '') : '',
+                origem: 'conta_pagar',
+                criadoEm: Date.now()
+            };
+            window._fb.fbSave('agenda', eventId, ev).catch(e => console.error('[sync conta→agenda]', e));
+        }
+        function _removerEventoConta(notaId) {
+            if (window._fb) window._fb.fbDelete('agenda', 'conta_' + notaId).catch(() => {});
+        }
+
         function _executarSalvarNota(nota) {
             notasLancadas.unshift(nota);
             if (window._fb) {
                 window._fb.fbSave('notasLancadas', nota.id, nota).catch(e => console.error('Erro nota:', e));
                 window._fb.fbLog('lançou', 'Nota Fiscal', nota.fornecedor, `Nº ${nota.numero || '-'} | R$ ${nota.total.toFixed(2).replace('.', ',')} | ${nota.itens.length} item(ns)`).catch(()=>{});
             }
+            _sincronizarContaCalendario(nota);   // cria/atualiza o evento no calendário (data de vencimento)
             document.getElementById('notaFornecedor').value = '';
             document.getElementById('notaData').value = '';
             document.getElementById('notaNumero').value = '';
@@ -7179,6 +7217,7 @@
             nota.statusPagamento = 'pago';
             nota.dataPagamento = new Date().toISOString().slice(0, 10);
             if (window._fb) window._fb.fbSave('notasLancadas', id, nota).catch(e => console.error('Erro marcar pago:', e));
+            _sincronizarContaCalendario(nota);   // evento fica riscado (pago) + registra a data de pagamento
             renderNotasLancadas();
             _atualizarContasPagarBanner();
             renderNotasAPagar();
@@ -7406,6 +7445,7 @@
                 window._fb.fbDelete('notasLancadas', id).catch(e => console.error('Erro excluir nota:', e));
                 if (nota) window._fb.fbLog('removeu', 'Nota Fiscal', nota.fornecedor, `Nº ${nota.numero || '-'} | R$ ${(nota.total||0).toFixed(2).replace('.', ',')}`).catch(()=>{});
             }
+            _removerEventoConta(id);   // remove o evento correspondente do calendário
             renderNotasLancadas();
         }
 
@@ -7487,6 +7527,7 @@
                     window._fb.fbSave('notasLancadas', id, notasLancadas[idx]).catch(e => console.error('Erro atualizar nota:', e));
                     window._fb.fbLog('editou', 'Nota Fiscal', fornecedor, `Nº ${numero || '-'} | R$ ${totalNota.toFixed(2).replace('.', ',')}`).catch(()=>{});
                 }
+                _sincronizarContaCalendario(notasLancadas[idx]);   // evento acompanha título/data/valor
             }
 
             // Restaurar botão salvar
@@ -7551,6 +7592,65 @@
                     })
                     .filter(Boolean);
             });
+        }
+
+        // ===== Atalhos de período (aba Vendas) — reaproveitam buscarPedidosFirestore =====
+        let _vendasAtalhoAtivo = null;    // 'hoje' | 'semana' | 'mes' | 'periodo'
+        let _vendasAutoCarregou = false;  // garante o auto-load "Este mês" só na 1ª abertura da aba
+
+        // Monta "YYYY-MM-DD" a partir dos componentes LOCAIS da data (fuso da máquina = America/Sao_Paulo).
+        // Evita o erro de dia que new Date().toISOString() causa ao converter pra UTC.
+        function _vendasYMD(d) {
+            const p = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+        }
+
+        // Destaca o atalho selecionado (estado ativo)
+        function _vendasDestacarAtalho(qual) {
+            _vendasAtalhoAtivo = qual;
+            document.querySelectorAll('#vendasAtalhosPeriodo .anaPeriodBtn').forEach(b => {
+                b.classList.toggle('active', b.dataset.vp === qual);
+            });
+        }
+
+        // Usuário editou uma das datas manualmente → passa a ser "Período" (sem auto-buscar)
+        function _vendasMarcarPeriodo() {
+            _vendasDestacarAtalho('periodo');
+        }
+
+        // Clique nos atalhos: preenche DE/ATÉ e dispara a MESMA busca do botão "🔍 Buscar Período".
+        // "Período" só libera os inputs pra escolha manual (não busca).
+        function aplicarAtalhoPeriodo(qual) {
+            const iniEl = document.getElementById('vendaDataInicio');
+            const fimEl = document.getElementById('vendaDataFim');
+            if (!iniEl || !fimEl) return;
+
+            if (qual === 'periodo') {
+                _vendasDestacarAtalho('periodo');
+                iniEl.focus();
+                return;
+            }
+
+            const hoje = new Date();
+            let de;
+            if (qual === 'hoje') {
+                de = _vendasYMD(hoje);
+            } else if (qual === 'semana') {
+                const dow = hoje.getDay();                 // 0=Dom … 6=Sáb
+                const diff = (dow === 0 ? -6 : 1 - dow);   // recua até a segunda-feira da semana corrente
+                const segunda = new Date(hoje);
+                segunda.setDate(hoje.getDate() + diff);
+                de = _vendasYMD(segunda);
+            } else if (qual === 'mes') {
+                de = _vendasYMD(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+            } else {
+                return;
+            }
+
+            iniEl.value = de;
+            fimEl.value = _vendasYMD(hoje);
+            _vendasDestacarAtalho(qual);
+            buscarPedidosFirestore();   // mesma função do botão "🔍 Buscar Período"
         }
 
         async function buscarPedidosFirestore() {
