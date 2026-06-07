@@ -1134,6 +1134,7 @@
             <!-- ① KPIs EXECUTIVOS -->
             <div class="section-title">① Visão Executiva</div>
             <div id="anaKpis" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:2rem;"></div>
+            <div id="anaRetiradasBox" style="margin-bottom:2rem;"></div>
 
             <!-- ② INSIGHTS AUTOMÁTICOS -->
             <div class="section-title">② Insights Automáticos</div>
@@ -1225,6 +1226,7 @@
             <!-- ① DRE -->
             <div class="section-title">① DRE — Demonstração do Resultado <span id="finDreLabel" style="font-size:10px; color:var(--text3); font-weight:500; text-transform:none; letter-spacing:0; margin-left:8px;"></span></div>
             <div id="finDreContainer" style="margin-bottom:2rem;"></div>
+            <div id="finRetiradasBox" style="margin-bottom:2rem;"></div>
 
             <!-- ② COMPARATIVO -->
             <div class="section-title">② Comparativo vs Período Anterior</div>
@@ -1646,6 +1648,7 @@
                         </div>
                     </div>
                 </div>
+                <div id="vendasRetiradasBox" style="margin-top:1rem;"></div>
             </div>
 
             </div>
@@ -4832,6 +4835,10 @@
                     ${deltaHtml}
                 </div>`;
             }).join('');
+
+            // Retiradas de caixa (calendário) — descontadas do líquido e visíveis na Análise
+            const _retBoxA = document.getElementById('anaRetiradasBox');
+            if (_retBoxA) _retBoxA.innerHTML = _retiradasBoxHtml(dreC && dreC.retiradasLista, (dreC && dreC.retiradas) || 0, (dreC && dreC.lucroLiquido) || 0);
         }
 
         function _anaRenderInsights(c, p, cfg, hasPrev, dreC, dreP) {
@@ -7906,6 +7913,7 @@
             _dreFaturamento = faturamentoReal;
             _dreCusto       = custo;
             _dreDias        = _calcDreDias(dataInicio, dataFim);
+            _dreDataInicio  = dataInicio; _dreDataFim = dataFim;
             calcularDRE();
 
             // RAIZ DO BUG DE FATURAMENTO: NÃO salvar buscas por período na coleção 'vendas'.
@@ -8077,6 +8085,7 @@
             _dreFaturamento = faturamento;
             _dreCusto       = custo;
             _dreDias        = _calcDreDias(dataInicio, dataFim);
+            _dreDataInicio  = dataInicio; _dreDataFim = dataFim;
             calcularDRE();
 
             const relatorio = {
@@ -8280,6 +8289,7 @@
             _dreFaturamento = v.faturamento || 0;
             _dreCusto       = v.custo || 0;
             _dreDias        = _calcDreDias(v.dataInicio, v.dataFim);
+            _dreDataInicio  = v.dataInicio || ''; _dreDataFim = v.dataFim || '';
             calcularDRE();
 
             setTimeout(() => {
@@ -8287,7 +8297,7 @@
             }, 100);
         }
 
-        let _dreFaturamento = 0, _dreCusto = 0, _dreDias = 30;
+        let _dreFaturamento = 0, _dreCusto = 0, _dreDias = 30, _dreDataInicio = '', _dreDataFim = '';
 
         // Dias do período (inclusive): 20/05→20/05 = 1; 01/05→10/05 = 10. Fallback 30 (mês cheio).
         function _calcDreDias(ini, fim) {
@@ -8297,6 +8307,67 @@
             if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 30;
             const dias = Math.round((d2 - d1) / 86400000) + 1;
             return dias > 0 ? dias : 30;
+        }
+
+        // ===== RETIRADAS DE CAIXA (lidas do calendário, tipo 'retirada') =====
+        // Soma as retiradas cuja data cai no período [iniStr,fimStr] (YYYY-MM-DD). Trata
+        // recorrência mensal (gera a ocorrência de cada mês no diaMes). NÃO duplica dados.
+        function _retiradasNoPeriodo(iniStr, fimStr) {
+            const lista = [];
+            if (!iniStr || !fimStr || !Array.isArray(_agenda)) return { total: 0, lista };
+            for (const ev of _agenda) {
+                if (!ev || ev.tipo !== 'retirada') continue;
+                const valor = Number(ev.valor) || 0;
+                if (valor <= 0) continue;
+                const titulo = ev.titulo || 'Retirada';
+                if (ev.recorrencia === 'mensal') {
+                    const diaMes = Number(ev.diaMes) || (ev.data ? Number(ev.data.split('-')[2]) : 1);
+                    // Teto: fim do mês corrente (evita explosão no "Tudo"=2000–2100); início: não antes de o evento existir
+                    const _now = new Date();
+                    const _teto = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+                    const fimRec = fimStr < _teto ? fimStr : _teto;
+                    const desdeStr = (ev.data && ev.data > iniStr) ? ev.data : iniStr;
+                    let y = Number(desdeStr.slice(0, 4)), m = Number(desdeStr.slice(5, 7));
+                    const ey = Number(fimRec.slice(0, 4)), em = Number(fimRec.slice(5, 7));
+                    let guard = 0;
+                    while ((y < ey || (y === ey && m <= em)) && guard++ < 600) {
+                        const diasNoMes = new Date(y, m, 0).getDate();
+                        const d = Math.min(diaMes, diasNoMes);
+                        const occ = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        if (occ >= iniStr && occ <= fimRec) lista.push({ data: occ, titulo, valor });
+                        m++; if (m > 12) { m = 1; y++; }
+                    }
+                } else if (ev.data && ev.data >= iniStr && ev.data <= fimStr) {
+                    lista.push({ data: ev.data, titulo, valor });
+                }
+            }
+            lista.sort((a, b) => a.data.localeCompare(b.data));
+            const total = lista.reduce((s, r) => s + r.valor, 0);
+            return { total, lista };
+        }
+
+        // Bloco visual (dark/orange #E87722): lista das retiradas + total + "Resultado Líquido".
+        function _retiradasBoxHtml(lista, total, lucroAntes) {
+            total = Number(total) || 0;
+            lucroAntes = Number(lucroAntes) || 0;
+            const resultado = lucroAntes - total;
+            const fmtD = s => { const p = String(s).split('-'); return `${p[2]}/${p[1]}`; };
+            const itens = (lista && lista.length)
+                ? lista.map(r => `<div style="display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #2a2a2a; font-size:12px;"><span style="color:#bbb;">${fmtD(r.data)} · ${_calEsc(r.titulo)}</span><span style="color:#e74c3c; font-weight:600; white-space:nowrap;">- ${formatarMoeda(r.valor)}</span></div>`).join('')
+                : '<div style="color:#777; font-size:12px; padding:6px 0;">Nenhuma retirada lançada no calendário neste período.</div>';
+            return `
+                <div style="background:#1a1a2e; border:1px solid #2a2a4a; border-radius:10px; padding:1.25rem;">
+                    <div style="font-size:11px; font-weight:700; color:#E87722; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">💸 Retiradas de Caixa (calendário)</div>
+                    ${itens}
+                    <div style="display:flex; justify-content:space-between; padding:8px 0 4px; margin-top:6px; border-top:1px solid #2a2a4a;">
+                        <span style="color:#aaa;">(−) Total de retiradas</span>
+                        <span style="color:#e74c3c; font-weight:700;">- ${formatarMoeda(total)}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding:6px 0;">
+                        <span style="color:#e8e8e8; font-weight:700; font-size:14px;">= Resultado Líquido</span>
+                        <span style="font-weight:700; font-size:14px; color:${resultado >= 0 ? '#4ade80' : '#e74c3c'};">${formatarMoeda(resultado)}</span>
+                    </div>
+                </div>`;
         }
 
         function calcularDRE() {
@@ -8350,6 +8421,13 @@
 
             const dre = document.getElementById('vendasDRE');
             if (dre) dre.style.display = 'block';
+
+            // Retiradas de caixa (calendário) — NÃO altera o faturamento; exibe "Resultado Líquido"
+            const _retBox = document.getElementById('vendasRetiradasBox');
+            if (_retBox) {
+                const _ret = _retiradasNoPeriodo(_dreDataInicio, _dreDataFim);
+                _retBox.innerHTML = _retiradasBoxHtml(_ret.lista, _ret.total, lucro);
+            }
         }
 
         // ===== RESUMO MENSAL =====
@@ -8810,6 +8888,11 @@
             dre.margemLiquida = dre.margemLiqPct;
             // info de rateio dos fixos (p/ rótulo); null em 'todos' (integral, sem rateio por dias)
             dre.fixosRateio   = (periodKey === 'todos') ? null : _finFixosDias({ start, end });
+            // Retiradas de caixa (calendário) no período → saída que reduz o resultado líquido
+            const _ret = _retiradasNoPeriodo(_anaDateToStr(start), _anaDateToStr(end));
+            dre.retiradas = _ret.total;
+            dre.retiradasLista = _ret.lista;
+            dre.resultadoLiquido = dre.lucroLiq - _ret.total;
             return dre;
         }
 
@@ -8832,6 +8915,8 @@
 
             await _anaEnsureChart();
             _finRenderDre(dre, drePrev);
+            const _retBoxF = document.getElementById('finRetiradasBox');
+            if (_retBoxF) _retBoxF.innerHTML = _retiradasBoxHtml(dre.retiradasLista, dre.retiradas || 0, dre.lucroLiq);
             _finRenderComparativo(dre, drePrev);
             _finRenderPie(dre);
             _finRenderPagamentos(dre);
