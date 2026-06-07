@@ -1907,7 +1907,10 @@ function salvarPedidoFb(pedido) {
   return db.collection(`clientes/${slug}/pedidos`).doc(pedido.id).set(pedido);
 }
 function atualizarStatusFb(id, status) {
-  return db.collection(`clientes/${slug}/pedidos`).doc(id).update({ status });
+  const upd = { status };
+  // Carimba o momento em que o pedido foi marcado "pronto" → ordena a coluna Prontos por essa ordem.
+  if (status === 'pronto') upd.prontoEm = firebase.firestore.FieldValue.serverTimestamp();
+  return db.collection(`clientes/${slug}/pedidos`).doc(id).update(upd);
 }
 function _agoraBRT() {
   const brtStr = new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' });
@@ -2093,6 +2096,16 @@ function pedidosFiltrados() {
   });
 }
 
+// Momento (ms) em que o pedido foi marcado "pronto", pra ordenar a coluna Prontos.
+// prontoEm pode vir como Timestamp do Firestore (snapshot), número (update otimista)
+// ou ausente (pedidos antigos) — nesse caso cai no horário de chegada (ts).
+function _prontoTs(p) {
+  const v = p.prontoEm;
+  if (v && typeof v.toMillis === 'function') return v.toMillis();
+  if (typeof v === 'number') return v;
+  return p.ts || 0;
+}
+
 function renderKanban() {
   calcMetrics();
   const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -2100,6 +2113,12 @@ function renderKanban() {
   document.getElementById('kanbanBoard').innerHTML = KANBAN_COLS.map(col => {
     let cp = lista.filter(p => p.status===col.key);
     if (col.key==='entregue') cp = cp.filter(p => p.data===hoje);
+    // Ordenação por coluna (sobrescreve o ts DESC global):
+    //  - Em análise / Em produção: chegada ASC (mais antigo no topo, FIFO)
+    //  - Prontos p/ entrega: ordem do "Marcar pronto" (prontoEm ASC; fallback chegada)
+    //  - Entregues hoje: inalterado (ts DESC da lista global)
+    if (col.key==='novo' || col.key==='producao') cp.sort((a,b) => (a.ts||0) - (b.ts||0));
+    else if (col.key==='pronto')                  cp.sort((a,b) => _prontoTs(a) - _prontoTs(b));
     if (col.key==='entregue') {
       const q = buscaEntregues.toLowerCase().trim();
       let cpFiltrado = q ? cp.filter(p =>
@@ -2530,6 +2549,7 @@ function avancarStatus(id) {
   const statusAnterior = p.status;
   const novoStatus = STATUS_NEXT[p.status].next;
   p.status = novoStatus;
+  if (novoStatus === 'pronto') p.prontoEm = Date.now();   // ordem otimista até o snapshot trazer o serverTimestamp
   renderKanban();
   atualizarStatusFb(id, novoStatus);
   notify(`Pedido ${id} → ${STATUS_LABELS[novoStatus].label}`);
@@ -6251,7 +6271,7 @@ function iniciarListenersFirestore() {
 
   db.collection(`clientes/${slug}/pedidos`).onSnapshot(snap => {
     _pedidosAnt = [...pedidos];
-    pedidos = snap.docs.map(d => d.data());
+    pedidos = snap.docs.map(d => d.data({ serverTimestamps: 'estimate' }));
     pedidos.sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
     const novosIds = new Set(snap.docs.map(d => d.id));
