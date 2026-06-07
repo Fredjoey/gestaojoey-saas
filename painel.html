@@ -1891,6 +1891,7 @@ const KANBAN_COLS = [
 
 let pedidos=[], cardapio=[], config={}, recipes=[], catalogoStatusMap={}, adicionaisBiblioteca=[];
 let catOrdem = [];   // ['Cat1', 'Cat2', ...] — salvo em config/catOrdem
+let catsOcultas = []; // categorias ocultas no cardápio do cliente — salvo em config/catOrdem.ocultas
 let prodOrdem = {};  // { 'Cat1': ['id1', 'id2', ...] } — salvo em config/prodOrdem
 let filtroAtivo='todos', buscaTermo='', buscaEntregues='';
 let _bairroEditIdx = -1;
@@ -2160,11 +2161,69 @@ function contarPedidosCliente(tel) {
 // Qualquer outro estado (gerando/pendente/redirect/erro/expirado) fica TRAVADO —
 // só o webhook (pixStatus='pago') destrava. Vale p/ Mercado Pago (e futuros gateways).
 function _pixLockState(p) {
-  if (p.pagamento !== 'pix' || p.status !== 'novo' || p.pixStatus === 'pago') return { locked: false, glow: false, erro: false, badge: '' };
+  // pagamentoManual = operador trocou a forma (Pix na entrega / dinheiro / cartão) → destrava o Pix online não pago
+  if (p.pagamento !== 'pix' || p.status !== 'novo' || p.pixStatus === 'pago' || p.pagamentoManual === true) return { locked: false, glow: false, erro: false, badge: '' };
   const s = p.pixStatus;
   if (s === 'expirado') return { locked: true, glow: false, erro: true, badge: '⏰ Pix expirado — cancele o pedido' };
   if (typeof s === 'string' && s.indexOf('erro') === 0) return { locked: true, glow: false, erro: true, badge: '⚠️ Falha ao gerar o Pix — cancele o pedido' };
   return { locked: true, glow: true, erro: false, badge: '⏳ Aguardando pagamento Pix' };
+}
+
+// ── TROCAR FORMA DE PAGAMENTO (só em "Em análise") ──────────────────────────
+// Reaproveita as formas que o sistema já usa. Ao trocar, marca pagamentoManual=true
+// → destrava o Pix online não pago (_pixLockState) e libera "Confirmar → Produção".
+const _FORMAS_PAG_TROCA = [
+  { key:'dinheiro', label:'💵 Dinheiro' },
+  { key:'credito',  label:'💳 Cartão de crédito' },
+  { key:'debito',   label:'💳 Cartão de débito' },
+  { key:'pix',      label:'📱 Pix na entrega' },
+];
+const _PAG_LABEL = { dinheiro:'Dinheiro', credito:'Crédito', debito:'Débito', pix:'Pix', local:'Balcão' };
+
+function trocarFormaPagamento(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p) return;
+  if (p.status !== 'novo') { notify('Só dá para trocar a forma com o pedido em "Em análise".', 'error'); return; }
+  const atual = p.pagamento || '';
+  const pixOnline = atual === 'pix' && !p.pagamentoManual && p.pixStatus !== 'pago';
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px';
+  ov.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border2);border-radius:14px;max-width:360px;width:100%;padding:20px;box-shadow:0 14px 44px rgba(0,0,0,.55)">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">Trocar forma de pagamento</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Pedido #${p.id} · atual: <b style="color:var(--text)">${(atual||'—').toUpperCase()}</b>${pixOnline?' · Pix online aguardando':''}</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${_FORMAS_PAG_TROCA.map(f => `<button data-forma="${f.key}" style="width:100%;text-align:left;padding:12px 14px;background:var(--bg3);border:1px solid ${f.key===atual?'var(--orange)':'var(--border2)'};color:var(--text);border-radius:10px;font-size:14px;cursor:pointer">${f.label}${f.key===atual?' ✓':''}</button>`).join('')}
+      </div>
+      <button data-cancel="1" style="width:100%;margin-top:14px;padding:10px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:10px;font-size:13px;cursor:pointer">Cancelar</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const fechar = () => ov.remove();
+  ov.addEventListener('click', e => { if (e.target === ov) fechar(); });
+  ov.querySelector('[data-cancel]').addEventListener('click', fechar);
+  ov.querySelectorAll('[data-forma]').forEach(btn => btn.addEventListener('click', () => {
+    fechar();
+    _aplicarTrocaPagamento(id, btn.getAttribute('data-forma'));
+  }));
+}
+
+async function _aplicarTrocaPagamento(id, nova) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p || p.status !== 'novo' || !nova) return;
+  const anterior = p.pagamento || null;
+  // só forma de pagamento — NÃO mexe em total/itens
+  const update = { pagamento: nova, pagamentoManual: true, formaPagamentoAnterior: anterior };
+  Object.assign(p, update);                                            // feedback imediato (o snapshot reconcilia depois)
+  renderKanban();
+  const modal = document.getElementById('orderModal');
+  if (modal && modal.classList.contains('show')) openOrderModal(id);   // re-render do modal aberto (destrava o "Confirmar")
+  try {
+    await db.collection(`clientes/${slug}/pedidos`).doc(id).update(update);
+    notify(`#${id}: forma de pagamento → ${_PAG_LABEL[nova] || nova.toUpperCase()}${nova==='pix'?' (na entrega)':''}.`);
+  } catch (e) {
+    console.error('[trocarFormaPagamento]', e);
+    notify('Erro ao trocar a forma de pagamento. Tente de novo.', 'error');
+  }
 }
 
 function orderCardHtml(p) {
@@ -2186,6 +2245,7 @@ function orderCardHtml(p) {
     if (_pix.locked) {
       botoes = `
       <button class="oc-btn" style="background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;flex:1;border:1px solid rgba(100,100,100,.2)" disabled>🔒 Aguardando pagamento Pix</button>
+      <button class="oc-btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma</button>
       <button class="oc-btn oc-cancel" onclick="cancelarPedido('${p.id}')">Cancelar</button>`;
     } else {
       botoes = `
@@ -2223,6 +2283,7 @@ function orderCardHtml(p) {
       <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
+      ${p.entrega==='delivery'&&p.cliente?`<div style="font-size:11px;color:var(--text2);margin:-2px 0 8px;line-height:1.35">📍 ${((p.cliente.rua||'')+(p.cliente.numero?', '+p.cliente.numero:''))||'—'}${p.cliente.bairro?' · '+p.cliente.bairro:''}${p.cliente.ref?`<br><span style="color:var(--orange)">Ref: ${p.cliente.ref}</span>`:''}</div>`:''}
       ${p.mesa ? `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--orange);color:#fff;border-radius:6px;padding:4px 10px;margin-bottom:8px;font-size:12px;font-weight:700;letter-spacing:.2px">🍽️ ${p.mesaNome || ('Mesa ' + p.mesa)}</div>` : ''}
       ${pixTarjaHtml(p)}
       ${_badgePix}
@@ -2558,9 +2619,10 @@ function gerarHtmlComanda(p) {
 
   const itensHtml = (p.itens||[]).map(i => {
     const val = 'R$ ' + (i.preco * i.qty).toFixed(2).replace('.', ',');
-    const adics = (i.adicionais||[]).map(a => {
-      const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * a.qty).toFixed(2).replace('.', ',')}</span>` : '';
-      return `<div class="adic"><span>+ (${a.qty}) ${a.nome}</span>${aVal}</div>`;
+    const adics = (i.adicionais||[]).filter(a => a && a.nome).map(a => {
+      const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
+      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${(a.qty||1)}× ${a.nome}`;
+      return `<div class="adic"><span>${rotulo}</span>${aVal}</div>`;
     }).join('');
     const obs = i.obs ? obsBox(i.obs) : '';
     return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
@@ -2571,14 +2633,15 @@ function gerarHtmlComanda(p) {
   if (p.entrega === 'delivery') {
     const c = p.cliente || {};
     const linhas = [];
-    const ruaNum = (c.rua || '') + (c.numero ? ', ' + c.numero : '');
+    const ruaNum = (c.rua || '') + (c.numero ? ', ' + c.numero : ''); // compat: pedido antigo tem rua+nº juntos em c.rua
     if (ruaNum)   linhas.push('End: ' + ruaNum);
     if (c.comp)   linhas.push('Comp: ' + c.comp);
-    if (c.ref)    linhas.push('Ref: ' + c.ref);
     if (c.bairro) linhas.push('Bairro: ' + c.bairro);
     if (c.cidade) linhas.push('Cidade: ' + c.cidade);
     if (c.cep)    linhas.push('CEP: ' + c.cep);
     enderecoHtml = linhas.map(l => `<div class="cli">${l}</div>`).join('');
+    // Ponto de referência — linha simples, mesmo formato das demais (End/Comp/Bairro)
+    if (c.ref) enderecoHtml += `<div class="cli">Ref: ${c.ref}</div>`;
   }
 
   // Pagamento
@@ -2594,10 +2657,19 @@ function gerarHtmlComanda(p) {
       <div class="cli">Pagamento ja realizado</div>
       <div class="centro-bold">* Nao cobrar do cliente *</div>`;
   } else if (p.pagamento === 'dinheiro') {
+    const levarTroco = trocoVal - totalNum;
+    const trocoHtml = trocoVal > 0
+      ? `<div class="cli">TROCO PARA: R$ ${trocoVal.toFixed(2).replace('.', ',')}</div>${levarTroco > 0 ? `<div class="centro-bold">LEVAR TROCO: R$ ${levarTroco.toFixed(2).replace('.', ',')}</div>` : ''}`
+      : `<div class="cli">SEM TROCO</div>`;
     pagBlocoHtml = `
       <div class="cli">${formaPag}</div>
       <div class="cli">Receber: R$ ${totalNum.toFixed(2).replace('.', ',')}</div>
-      ${trocoVal > 0 ? `<div class="cli">Troco para: R$ ${trocoVal.toFixed(2).replace('.', ',')}</div>` : ''}`;
+      ${trocoHtml}`;
+  } else if (p.pagamento === 'pix' && p.pagamentoManual) {
+    pagBlocoHtml = `
+      <div class="cli">PIX (na entrega)</div>
+      <div class="cli">Cobrar via Pix: R$ ${totalNum.toFixed(2).replace('.', ',')}</div>
+      <div class="centro-bold">* Cobrar do cliente *</div>`;
   } else if (['cartao','credito','debito'].includes(p.pagamento)) {
     pagBlocoHtml = `
       <div class="cli">${formaPag}</div>
@@ -2795,7 +2867,7 @@ function gerarHtmlComandaMesa(comanda, mesaNome) {
 
   const itensHtml = (comanda.itens || []).map(i => {
     const adics = (i.adicionais || []).filter(a => a && a.nome)
-      .map(a => `<div class="sub">${a.grupo ? a.grupo + ': ' + a.nome : '+ ' + a.nome}</div>`).join('');
+      .map(a => `<div class="sub">${a.grupo ? a.grupo + ': ' + a.nome : '+ ' + (a.qty||1) + '× ' + a.nome}</div>`).join('');
     const obs = i.obs ? `<div class="sub">Obs: ${i.obs}</div>` : '';
     return `<div>${i.qty}x ${i.nome}</div>${adics}${obs}`;
   }).join('');
@@ -2836,8 +2908,8 @@ function gerarHtmlPedidoProducao(p) {
     const unitPrice = i.precoTotal != null ? i.precoTotal : i.preco;
     const val = 'R$ ' + (unitPrice * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
-      const aVal = a.preco > 0 ? `<span>R$ ${(a.preco).toFixed(2).replace('.', ',')}</span>` : '';
-      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${a.nome}`;
+      const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
+      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${(a.qty||1)}× ${a.nome}`;
       return `<div class="adic"><span>${rotulo}</span>${aVal}</div>`;
     }).join('');
     const obs = i.obs ? `<div class="adic"><span>Obs: ${i.obs}</span></div>` : '';
@@ -2856,15 +2928,27 @@ function gerarHtmlPedidoProducao(p) {
 
   let endHtml = '';
   if (p.entrega === 'delivery') {
-    const rua    = p.cliente?.rua    || '';
-    const bairro = p.cliente?.bairro || '';
-    if (rua)    endHtml += `<div class="cli">End: ${rua}</div>`;
-    if (bairro) endHtml += `<div class="cli">Bairro: ${bairro}</div>`;
+    const c      = p.cliente || {};
+    const ruaNum = (c.rua || '') + (c.numero ? ', ' + c.numero : ''); // compat: antigo tem rua+nº juntos em c.rua
+    if (ruaNum)   endHtml += `<div class="cli">End: ${ruaNum}</div>`;
+    if (c.comp)   endHtml += `<div class="cli">Comp: ${c.comp}</div>`;
+    if (c.bairro) endHtml += `<div class="cli">Bairro: ${c.bairro}</div>`;
+    if (c.ref)    endHtml += `<div class="cli">Ref: ${c.ref}</div>`;
   }
 
   const obsHtml = p.obs ? `<div class="cli">Obs: ${p.obs}</div>` : '';
   const _prev = _horaPrevista(p);
   const previsaoHtml = _prev ? `<div class="info">${_prev}</div>` : '';
+
+  // Troco (dinheiro): "troco para" = valor que o cliente entrega; levar = troco - total
+  const _totalNum = p.total || 0;
+  const _trocoPara = (p.pagamento === 'dinheiro' && p.troco > 0) ? p.troco : 0;
+  const _levarTroco = _trocoPara - _totalNum;
+  const trocoHtmlProd = p.pagamento === 'dinheiro'
+    ? (_trocoPara > 0
+        ? `<div class="cli">TROCO PARA: R$ ${_trocoPara.toFixed(2).replace('.', ',')}</div>${_levarTroco > 0 ? `<div class="centro-bold">LEVAR TROCO: R$ ${_levarTroco.toFixed(2).replace('.', ',')}</div>` : ''}`
+        : `<div class="cli">SEM TROCO</div>`)
+    : '';
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
@@ -2919,6 +3003,7 @@ ${obsHtml}
 
 <div class="pag-label">Pagamento:</div>
 <div class="cli">${pagamento}</div>
+${trocoHtmlProd}
 <div class="line">${dash}</div>
 
 <div class="row-val"><span>Subtotal:</span><span>R$ ${subtotal}</span></div>
@@ -2988,7 +3073,7 @@ function testeImpressao() {
       { qty: 1, nome: 'Pizza Margherita', preco: 45, obs: 'sem cebola' },
       { qty: 2, nome: 'Coca-Cola 600ml', preco: 8, obs: '' }
     ],
-    subtotal: 61, taxaEntrega: 5, total: 66, pagamento: 'dinheiro', troco: 4
+    subtotal: 61, taxaEntrega: 5, total: 66, pagamento: 'dinheiro', troco: 80
   };
   console.log('[PRINT] teste iniciado');
   _executarImpressao(pedidoFake);
@@ -3143,8 +3228,9 @@ function openOrderModal(id) {
       ${adicionaisHtml}
     </div>`;
   }).join('');
+  const _ruaNum = p.cliente ? ((p.cliente.rua||'') + (p.cliente.numero ? ', ' + p.cliente.numero : '')) : ''; // compat: antigo tem rua+nº juntos
   const endHtml=p.entrega==='delivery'&&p.cliente
-    ?`${p.cliente.rua||''}, ${p.cliente.bairro||''}${p.cliente.comp?` — ${p.cliente.comp}`:''}`
+    ?`${_ruaNum}${p.cliente.comp?` — ${p.cliente.comp}`:''}${p.cliente.bairro?` · ${p.cliente.bairro}`:''}`
     :p.entrega==='local'?'🍽️ Consumo no local':'🏠 Retirada no local';
   document.getElementById('modalBody').innerHTML=`
     <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val"><span class="chip ${st.cls}">${st.label}</span></span></div>
@@ -3152,19 +3238,20 @@ function openOrderModal(id) {
     <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${p.cliente?.nome||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${p.cliente?.tel||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Entrega</span><span class="detail-val">${endHtml}</span></div>
-    ${p.cliente?.ref?`<div class="detail-row"><span class="detail-key">Referência</span><span class="detail-val">${p.cliente.ref}</span></div>`:''}
+    ${p.cliente?.ref?`<div class="detail-row"><span class="detail-key">📍 Referência</span><span class="detail-val" style="color:var(--orange);font-weight:600">${p.cliente.ref}</span></div>`:''}
     <div style="margin:12px 0 4px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Itens do pedido</div>
     ${itensHtml}
     <div class="detail-row"><span class="detail-key">Subtotal</span><span class="detail-val">R$ ${(p.subtotal||p.total||0).toFixed(2).replace('.',',')}</span></div>
     <div class="detail-row"><span class="detail-key">Taxa entrega</span><span class="detail-val">${(p.taxaEntrega||0)===0?'Grátis':'R$ '+(p.taxaEntrega).toFixed(2).replace('.',',')}</span></div>
     ${p.desconto && p.desconto.valorAplicado > 0 ? `<div class="detail-row"><span class="detail-key">Desconto</span><span class="detail-val" style="color:#34d399">− R$ ${p.desconto.valorAplicado.toFixed(2).replace('.',',')}${p.desconto.tipo==='percent'?' ('+p.desconto.valor+'%)':''}</span></div>` : ''}
     <div class="detail-row" style="font-size:15px"><span class="detail-key" style="color:var(--text);font-weight:700">Total</span><span class="detail-val" style="color:var(--orange);font-size:16px">R$ ${(p.total||0).toFixed(2).replace('.',',')}</span></div>
-    <div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">${p.pagamento?.toUpperCase()||'—'}${p.troco>0?` · troco p/ R$ ${p.troco.toFixed(2).replace('.',',')}`:''}</span></div>
+    <div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">${p.pagamento?.toUpperCase()||'—'}${(p.pagamento==='pix'&&p.pagamentoManual)?' (na entrega)':''}${p.troco>0?` · troco p/ R$ ${p.troco.toFixed(2).replace('.',',')}`:''}${p.formaPagamentoAnterior?` <span style="color:var(--text3);font-size:11px">(era ${p.formaPagamentoAnterior.toUpperCase()})</span>`:''}</span></div>
     <div style="display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap">
       ${p.status==='novo'
         ? (_pixLockState(p).locked
             ? `<button class="btn" style="flex:1;background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;border:1px solid rgba(100,100,100,.2)" disabled>🔒 ${_pixLockState(p).badge}</button>`
             : `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Confirmar → Produção</button>`)
+          + `<button class="btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma de pagamento</button>`
         : p.status==='producao'
         ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">🚀 Marcar pronto</button>
            <button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${p.id}')">✏️ Editar pedido</button>`
@@ -3244,7 +3331,7 @@ function moverCategoria(cat, dir) {
   catOrdem = sorted;
   renderCatFilters();
   renderCardapioEditor();
-  db.doc(`clientes/${slug}/config/catOrdem`).set({ ordem: sorted })
+  db.doc(`clientes/${slug}/config/catOrdem`).set({ ordem: sorted }, { merge: true })
     .catch(e => notify('Erro ao salvar ordem: ' + e.message, 'error'));
 }
 
@@ -3312,7 +3399,9 @@ function renderCardapioEditor() {
         <button onclick="moverCategoria('${cat}',-1)" ${allIdx===0?'disabled':''} title="Mover categoria para cima" style="${_btnMover}opacity:${allIdx===0?.25:1}">⬆️</button>
         <button onclick="moverCategoria('${cat}',1)" ${allIdx===allSortedCats.length-1?'disabled':''} title="Mover categoria para baixo" style="${_btnMover}opacity:${allIdx===allSortedCats.length-1?.25:1}">⬇️</button>
       </span>` : '';
-    html += `<div class="section-lbl" style="display:flex;align-items:center">${cat} <span style="font-weight:400;color:var(--text3);margin-left:6px">(${itens.filter(r=>catalogoStatusMap[r.id]?.ativo).length}/${itens.length} ativos)</span>${catBtns}</div>`;
+    const oculta = catsOcultas.includes(cat);
+    const catEscBand = cat.replace(/'/g, "\\'");
+    html += `<div class="section-lbl" style="display:flex;align-items:center;${oculta?'opacity:.55;':''}">${cat} <span style="font-weight:400;color:var(--text3);margin-left:6px">(${itens.filter(r=>catalogoStatusMap[r.id]?.ativo).length}/${itens.length} ativos)</span>${oculta?` <span style="font-size:9px;font-weight:700;color:#E87722;background:rgba(232,119,34,.12);border:1px solid rgba(232,119,34,.35);border-radius:5px;padding:2px 6px;margin-left:6px;text-transform:uppercase;letter-spacing:.5px">oculta</span>`:''}<label class="toggle-switch" title="${oculta?'Mostrar':'Ocultar'} a categoria inteira no cardápio" style="margin-left:auto;flex-shrink:0"><input type="checkbox" ${oculta?'':'checked'} onchange="toggleCategoria('${catEscBand}', !this.checked)"><span class="toggle-slider"></span></label>${catBtns}</div>`;
     itens.forEach((r, pIdx) => {
       const ativo   = catalogoStatusMap[r.id]?.ativo === true;
       const fotoUrl = catalogoStatusMap[r.id]?.foto || null;
@@ -3323,7 +3412,7 @@ function renderCardapioEditor() {
         : `<span style="font-size:1.4rem">${r.emoji||'🍽️'}</span>`;
       const catEsc = cat.replace(/'/g, "\\'");
       html += `
-        <div class="prod-row" style="opacity:${ativo?1:.45};transition:opacity .2s">
+        <div class="prod-row" style="opacity:${oculta?.3:(ativo?1:.45)};transition:opacity .2s">
           <div class="prod-thumb" onclick="_abrirUploadFoto('${r.id}')" title="${fotoUrl?'Trocar foto':'Adicionar foto'}">${thumbHtml}</div>
           <div>
             <div style="font-weight:600;color:var(--text)">${r.name||'—'}</div>
@@ -3348,6 +3437,9 @@ function renderCardapioEditor() {
             <button onclick="moverProduto('${r.id}','${catEsc}',-1)" ${pIdx===0?'disabled':''} title="Mover produto para cima" style="${_btnMover}opacity:${pIdx===0?.25:1}">⬆️</button>
             <button onclick="moverProduto('${r.id}','${catEsc}',1)" ${pIdx===itens.length-1?'disabled':''} title="Mover produto para baixo" style="${_btnMover}opacity:${pIdx===itens.length-1?.25:1}">⬇️</button>
           </div>
+          <div style="grid-column:1/-1;margin-top:2px">
+            <input type="text" maxlength="200" value="${_esc(catalogoStatusMap[r.id]?.descricaoCliente || '')}" placeholder="✍️ Descrição p/ o cliente (aparece no cardápio)" onchange="salvarDescricaoProduto('${r.id}', this.value)" style="width:100%;padding:7px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
+          </div>
         </div>`;
     });
   });
@@ -3356,6 +3448,26 @@ function renderCardapioEditor() {
 
 function toggleReceita(id, ativo) {
   db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ ativo }, { merge: true });
+}
+
+// Descrição de marketing do produto (aparece no cardápio do cliente). Grava em
+// catalogoStatus/{id}.descricaoCliente (merge — não toca ativo/foto nem a ficha técnica do recipe).
+function salvarDescricaoProduto(id, valor) {
+  db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ descricaoCliente: (valor || '').trim() }, { merge: true })
+    .then(() => notify('✓ Descrição salva.'))
+    .catch(e => notify('Erro ao salvar descrição: ' + (e.message || ''), 'error'));
+}
+
+// Liga/desliga a categoria INTEIRA no cardápio do cliente. Flag próprio (config/catOrdem.ocultas)
+// — NÃO mexe nos toggles individuais (catalogoStatus). Ligar de volta restaura o estado de cada produto.
+function toggleCategoria(cat, oculta) {
+  const novas = catsOcultas.filter(c => c !== cat);
+  if (oculta) novas.push(cat);
+  catsOcultas = novas;
+  renderCardapioEditor();
+  db.doc(`clientes/${slug}/config/catOrdem`).set({ ocultas: novas }, { merge: true })
+    .then(() => notify(oculta ? `Categoria "${cat}" ocultada no cardápio.` : `Categoria "${cat}" visível no cardápio.`))
+    .catch(e => notify('Erro ao salvar: ' + e.message, 'error'));
 }
 
 (function() {
@@ -3813,7 +3925,10 @@ function salvarConfig() {
     bannerUrl:      config.bannerUrl || null,
     // Preserva notificações (saveConfig faz set total). O PIN do garçom NÃO fica mais aqui
     // (era público) — vai pro doc privado garcomSecrets via Cloud Function garcomSetPin.
-    wppNotifs:      config.wppNotifs || {}
+    wppNotifs:      config.wppNotifs || {},
+    // Preserva a playlist de música (salva pelo botão dedicado). undefined = nunca configurada
+    // (slug não liberado/intocado) → mantém ausente p/ o cardápio usar a fixa.
+    ...(config.playlistMusica !== undefined ? { playlistMusica: config.playlistMusica } : {})
   };
   saveConfig();
   // PIN do App Garçom (se preenchido) -> salvo server-side em doc privado
@@ -3837,6 +3952,9 @@ async function _salvarGarcomPin(pin){
     notify('Erro ao salvar o PIN do garçom: ' + ((e && e.message) || ''), 'error');
   }
 }
+
+// Música do cardápio: a playlist (config/loja.playlistMusica) agora é colada por nós no ADMIN
+// (gestaojoey-admin → Aditivos do cliente), não mais aqui. salvarConfig só PRESERVA o valor.
 
 function renderDestaqueOpts() {
   const sel = document.getElementById('cfgDestaque');
@@ -6122,7 +6240,8 @@ function iniciarListenersFirestore() {
 
   // Ordem de categorias e produtos
   db.doc(`clientes/${slug}/config/catOrdem`).onSnapshot(snap => {
-    catOrdem = snap.exists ? (snap.data().ordem || []) : [];
+    catOrdem    = snap.exists ? (snap.data().ordem || []) : [];
+    catsOcultas = snap.exists ? (snap.data().ocultas || []) : [];
     if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
   });
   db.doc(`clientes/${slug}/config/prodOrdem`).onSnapshot(snap => {
@@ -6754,6 +6873,7 @@ async function renderRelatorioClientes() {
         status,
         diasInatividade: Number(data.diasInatividade) || 0,
         origem: data.origem || '',
+        endereco: data.endereco || null,
       };
     });
 
@@ -6928,7 +7048,7 @@ function renderCliTabela() {
       </tr></thead>
       <tbody>${lista.map(c => `
         <tr>
-          <td style="font-weight:600">${c.nome}</td>
+          <td style="font-weight:600">${c.nome}${cliEndereco(c)}</td>
           <td style="color:var(--text2)">${cliTel(c.tel)}</td>
           <td style="font-weight:700">${c.totalPedidos}</td>
           <td style="color:var(--text2)">${c.pedidosJoey || '—'}</td>
@@ -6944,6 +7064,17 @@ function cliTel(tel) {
   if (d.length === 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
   if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
   return tel || '—';
+}
+
+// Endereço salvo do cliente (delivery) — mostrado abaixo do nome na aba Clientes
+function cliEndereco(c) {
+  const e = c.endereco;
+  if (!e) return '';
+  const ruaNum = (e.rua || '') + (e.numero ? ', ' + e.numero : '');
+  const partes = [ruaNum, e.comp, e.bairro].filter(Boolean).join(' · ');
+  let html = partes ? `<div style="font-size:11px;color:var(--text3);font-weight:400;margin-top:2px">📍 ${partes}</div>` : '';
+  if (e.ref) html += `<div style="font-size:11px;color:var(--text3);font-weight:400;margin-top:1px">Ref: ${e.ref}</div>`;
+  return html;
 }
 
 function cliWppBtn(tel) {
@@ -9249,12 +9380,14 @@ function renderRelatorioDia() {
   }
   var pgTotais = {};
   allItems.forEach(function(item) {
-    if (item.status === 'cancelado') return;
+    if (item.status === 'cancelado' || item.tipo === 'fechamento') return; // fechamento de mesa = detalhe (a venda já entra pelo pedido) — não soma
     var key = _pagKey(item.pagamento);
     if (!pgTotais[key]) pgTotais[key] = { val: 0, qtd: 0, pag: item.pagamento };
     pgTotais[key].val += item.total; pgTotais[key].qtd++;
   });
-  var totalGeral = allItems.reduce(function(s, x) { return x.status === 'cancelado' ? s : s + x.total; }, 0);
+  // Total NÃO soma fechamentos de mesa: a venda da mesa já entra pelo(s) pedido(s). Conta cada venda 1× (alinha com Métricas/Gestão).
+  var totalGeral = allItems.reduce(function(s, x) { return (x.status === 'cancelado' || x.tipo === 'fechamento') ? s : s + x.total; }, 0);
+  var nTransacoes = allItems.filter(function(x) { return x.status !== 'cancelado' && x.tipo !== 'fechamento'; }).length;
   var freteTotal = 0, freteQtd = 0;
   pedidosPeriodo.forEach(function(p) {
     if (p.status === 'cancelado') return;
@@ -9278,6 +9411,7 @@ function renderRelatorioDia() {
     var itRes = item.itens.slice(0,2).map(function(i) { return (i.qty||1) + '\xD7 ' + (i.nome||''); }).join(', ')
       + (item.itens.length > 2 ? ' e ' + (item.itens.length - 2) + ' mais' : '');
     var cancelado = item.status === 'cancelado';
+    var ehFech    = item.tipo === 'fechamento';   // linha de detalhe — visível, mas FORA da soma do total
     var nota = notasFiscais.find(function(n) { return n._docId === String(item.srcId) || n.pedidoId === String(item.srcId); });
     var emitida = nota && nota.status === 'emitida';
     var checkbox = (emitida || cancelado)
@@ -9287,18 +9421,18 @@ function renderRelatorioDia() {
       ? ''
       : '<button onclick="openNfceModalRD(\'' + item.srcId + '\',\'' + item.tipo + '\')" style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--orange);white-space:nowrap" title="Emitir NFCe">&#x1F9FE; Emitir</button>';
     var btnReimp  = '<button onclick="reimprimirRD(\'' + item.srcId + '\',\'' + item.tipo + '\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--text2);white-space:nowrap" title="Reimprimir comanda" onmouseover="this.style.borderColor=\'var(--border2)\';this.style.color=\'var(--text)\'" onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--text2)\'">&#x1F5A8; Imprimir</button>';
-    var btnCancelar = (item.tipo === 'pedido' && !cancelado && item.status !== 'entregue')
+    var btnCancelar = (item.tipo === 'pedido' && !cancelado)   // Relatório: permite cancelar até pedido ENTREGUE (decisão do dono; painel de pedidos segue sem cancelar entregue)
       ? '<button onclick="cancelarPedido(\'' + item.srcId + '\')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:#ef4444;white-space:nowrap" title="Cancelar pedido">&#x2715; Cancelar</button>'
       : '';
     var btnNfce   = '<td><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap">' + btnEmitir + btnReimp + btnCancelar + '</div></td>';
     var pagCell = cancelado ? _pagChip('cancelado') : _pagChip(item.pagamento, item.srcId);
-    return '<tr' + (cancelado ? ' style="opacity:0.55"' : '') + '>'
+    return '<tr style="' + (cancelado ? 'opacity:0.55' : (ehFech ? 'opacity:0.65;background:rgba(255,255,255,.02)' : '')) + '">'
       + checkbox
-      + '<td style="font-weight:600;color:' + (cancelado ? 'var(--text3)' : 'var(--orange)') + '">' + item.ref + '</td>'
+      + '<td style="font-weight:600;color:' + (cancelado ? 'var(--text3)' : (ehFech ? 'var(--text2)' : 'var(--orange)')) + '">' + (ehFech ? '&#x1F37D; ' : '') + item.ref + (ehFech ? ' <span style="font-size:9px;color:var(--text3);font-weight:400">fechamento &middot; n&atilde;o soma</span>' : '') + '</td>'
       + '<td>' + item.cliente + '</td>'
       + '<td style="color:var(--text2);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + itRes + '</td>'
       + '<td>' + pagCell + '</td>'
-      + '<td style="font-weight:700;white-space:nowrap">R$ ' + item.total.toFixed(2).replace('.',',') + '</td>'
+      + '<td style="white-space:nowrap;' + (ehFech ? 'color:var(--text3);font-weight:500' : 'font-weight:700') + '">R$ ' + item.total.toFixed(2).replace('.',',') + (ehFech ? ' <span style="font-size:9px;color:var(--text3)">(detalhe)</span>' : '') + '</td>'
       + '<td>' + (cancelado ? '' : _nfBadge(item.srcId)) + '</td>'
       + btnNfce
       + '</tr>';
@@ -9311,7 +9445,7 @@ function renderRelatorioDia() {
     + '<div class="rd-prog"><div class="rd-prog-fill" id="rdProgressFill" style="width:0%"></div></div></div>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px">' + pgCards + '</div>'
     + '<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">'
-    + '<span style="font-size:13px;color:var(--text2)">Total geral do per&iacute;odo (' + allItems.length + ' transac&atilde;oes)</span>'
+    + '<span style="font-size:13px;color:var(--text2)">Total geral do per&iacute;odo (' + nTransacoes + ' transac&atilde;oes)</span>'
     + '<span style="font-size:20px;font-weight:700;color:var(--orange)">R$ ' + totalGeral.toFixed(2).replace('.',',') + '</span></div>'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
     + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)">'
