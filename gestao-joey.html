@@ -1135,6 +1135,11 @@
             <div class="section-title">① Visão Executiva</div>
             <div id="anaKpis" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:2rem;"></div>
             <div id="anaRetiradasBox" style="margin-bottom:2rem;"></div>
+            <div id="anaHistFatBox" style="margin-bottom:2rem;"></div>
+            <div id="anaHistChartWrap" style="display:none; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:1.25rem; margin-bottom:2rem;">
+                <div style="font-size:13px; font-weight:700; color:#E87722; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">📊 Faturamento mês a mês (desde mai/2021)</div>
+                <div style="position:relative; height:260px;"><canvas id="anaHistChart"></canvas></div>
+            </div>
 
             <!-- ② INSIGHTS AUTOMÁTICOS -->
             <div class="section-title">② Insights Automáticos</div>
@@ -1227,6 +1232,7 @@
             <div class="section-title">① DRE — Demonstração do Resultado <span id="finDreLabel" style="font-size:10px; color:var(--text3); font-weight:500; text-transform:none; letter-spacing:0; margin-left:8px;"></span></div>
             <div id="finDreContainer" style="margin-bottom:2rem;"></div>
             <div id="finRetiradasBox" style="margin-bottom:2rem;"></div>
+            <div id="finHistFatBox" style="margin-bottom:2rem;"></div>
 
             <!-- ② COMPARATIVO -->
             <div class="section-title">② Comparativo vs Período Anterior</div>
@@ -1683,6 +1689,8 @@
                 </div>
                 <div id="vendaFirestoreStatus" style="display:none; margin-top:10px; padding:10px; border-radius:6px; font-size:13px; font-weight:600; text-align:center;"></div>
             </div>
+
+            <div id="vendasHistFatBox" style="margin-bottom:1.5rem;"></div>
 
             <!-- RESULTADO DA IMPORTAÇÃO -->
             <div id="vendasResultado" style="display:none;">
@@ -2270,6 +2278,14 @@
                 _agenda = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 _calRenderSePrecisar();
             });
+            // Histórico de faturamento (meses pré-sistema, Anota AI) — SÓ faturamento bruto, sem custo
+            onSnapshot(collection(db, `clientes/${slug}/historicoFaturamento`), (snap) => {
+                _histFat = {};
+                snap.docs.forEach(d => { const v = d.data(); if (v && v.valor != null) _histFat[d.id] = Number(v.valor) || 0; });
+                _histFatMeses = Object.keys(_histFat).sort();
+                if (document.getElementById('analysis')?.classList.contains('active') && typeof updateAnalysis === 'function') updateAnalysis();
+                if (document.getElementById('financeiro')?.classList.contains('active') && typeof _finUpdate === 'function') _finUpdate();
+            });
 
             // Categorias
             carregarCategorias();
@@ -2316,6 +2332,7 @@
         };
         const CAL_DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         let _agenda = [];
+        let _histFat = {}, _histFatMeses = [];   // faturamento histórico (Anota AI) por mês 'AAAA-MM' → valor
         let _calFeatures = {};
         let _calAno = new Date().getFullYear();
         let _calMes = new Date().getMonth(); // 0-11
@@ -4757,10 +4774,60 @@
                 }
             }
             console.log(`[DEBUG _anaGetAgg] resultado final: fat=${agg.faturamento.toFixed(2)} numPedidos=${agg.numPedidos}`);
+            // Faturamento histórico (Anota) do período — campo SEPARADO (não soma em agg.faturamento, p/ não inflar CMV%/lucro)
+            const _hf = _histFatNoPeriodo(_anaDateToStr(start), _anaDateToStr(end));
+            agg.histFat = _hf.total;
+            agg.histFatMeses = _hf.meses;
             return agg;
         }
 
         const _aggVazio = () => ({ faturamento: 0, custo: 0, unidades: 0, numPedidos: 0, itens: {} });
+
+        // Curva mensal de faturamento: histórico (Anota, pré-corte) + sistema (pedidos reais, pós-corte).
+        let _histChartReal = null;  // cache {AAAA-MM: faturamento real dos pedidos}
+        function _pedYM(p) {
+            if (typeof p.ts === 'number' && p.ts > 0) { const d = new Date(p.ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+            const s = p.data;
+            if (typeof s === 'string') {
+                if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const a = s.split('/'); return `${a[2]}-${a[1]}`; }
+                if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 7);
+            }
+            return null;
+        }
+        async function _renderHistChart() {
+            const wrap = document.getElementById('anaHistChartWrap');
+            const ctx = document.getElementById('anaHistChart');
+            if (!ctx || typeof Chart === 'undefined') return;
+            if (_histChartReal === null) {           // buckets reais (1x): pedidos do corte até hoje, por mês
+                _histChartReal = {};
+                try {
+                    if (window._fb?.fbQueryPedidos) {
+                        const peds = await window._fb.fbQueryPedidos(_anaDateToStr(_ANA_CORTE_PEDIDOS), _anaDateToStr(new Date()));
+                        for (const p of peds) { const ym = _pedYM(p); if (ym) _histChartReal[ym] = (_histChartReal[ym] || 0) + (Number(p.total) || 0); }
+                    }
+                } catch (e) { console.warn('[histChart] pedidos:', e); }
+            }
+            const yms = [...new Set([..._histFatMeses, ...Object.keys(_histChartReal)])].sort();
+            if (!yms.length) { if (wrap) wrap.style.display = 'none'; return; }
+            if (wrap) wrap.style.display = 'block';
+            const nm = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            const labels = yms.map(ym => { const a = ym.split('-').map(Number); return nm[a[1]] + '/' + String(a[0]).slice(2); });
+            const histVals = yms.map(ym => (_histFat[ym] != null ? _histFat[ym] : null));
+            const realVals = yms.map(ym => (_histChartReal[ym] != null ? _histChartReal[ym] : null));
+            if (_anaCharts.trend) _anaCharts.trend.destroy();
+            _anaCharts.trend = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: [
+                    { label: 'Histórico (Anota AI)', data: histVals, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,.10)', borderDash: [5, 4], borderWidth: 2, pointRadius: 2, tension: .25, spanGaps: false, fill: true },
+                    { label: 'Sistema (pedidos reais)', data: realVals, borderColor: '#E87722', backgroundColor: 'rgba(232,119,34,.15)', borderWidth: 2, pointRadius: 3, tension: .25, spanGaps: false, fill: true }
+                ] },
+                options: { responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#aaa', font: { size: 11 }, usePointStyle: true } },
+                        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${formatarMoeda(c.parsed.y)}` } } },
+                    scales: { x: { ticks: { color: '#777', maxRotation: 90, minRotation: 60, font: { size: 9 } }, grid: { color: '#222' } },
+                        y: { ticks: { color: '#777', callback: v => 'R$ ' + Math.round(v / 1000) + 'k' }, grid: { color: '#222' } } } }
+            });
+        }
 
         async function updateAnalysis() {
             const cur  = _anaRangeWrap(_anaPeriod);
@@ -4794,6 +4861,7 @@
 
             // Gráficos (precisa de Chart.js)
             await _anaEnsureChart();
+            await _renderHistChart();
 
             // ③ Performance (tabela usa mês atual via Firestore — independente do filtro de período)
             _anaRenderPerformance(cfg);
@@ -4811,7 +4879,7 @@
             const ticketP = p.numPedidos > 0 ? p.faturamento / p.numPedidos : 0;
 
             const kpis = [
-                { label:'Faturamento',   val:_anaFmt(c.faturamento), delta: hasPrev ? _anaDelta(c.faturamento, p.faturamento) : null, accent:'#ff6b35' },
+                { label:'Faturamento',   val:_anaFmt(c.faturamento + (c.histFat || 0)), delta: hasPrev ? _anaDelta(c.faturamento, p.faturamento) : null, accent:'#ff6b35' },
                 { label:'Custo de Insumos (CMV R$)', val:_anaFmt(cmvReaisC), delta: hasPrev ? _anaDelta(cmvReaisC, cmvReaisP) : null, accent:'#e74c3c', invertDelta: true },
                 { label:'Custo Fixo (R$)', val:_anaFmt(fixosC),      delta: hasPrev ? _anaDelta(fixosC, fixosP) : null,            accent:'#60a5fa', invertDelta: true },
                 { label:'Lucro Líquido', val:_anaFmt(lucroC),         delta: hasPrev ? _anaDelta(lucroC, lucroP) : null,            accent: lucroC >= 0 ? '#4ade80' : '#ff6b6b' },
@@ -4839,6 +4907,10 @@
             // Retiradas de caixa (calendário) — descontadas do líquido e visíveis na Análise
             const _retBoxA = document.getElementById('anaRetiradasBox');
             if (_retBoxA) _retBoxA.innerHTML = _retiradasBoxHtml(dreC && dreC.retiradasLista, (dreC && dreC.retiradas) || 0, (dreC && dreC.lucroLiquido) || 0);
+
+            // Faturamento histórico (Anota) — "Faturamento Bruto Total" (sistema + histórico)
+            const _hfBoxA = document.getElementById('anaHistFatBox');
+            if (_hfBoxA) _hfBoxA.innerHTML = _histFatBoxHtml(dreC && dreC.histFatMeses, (dreC && dreC.histFat) || 0, (dreC && dreC.fat) || 0);
         }
 
         function _anaRenderInsights(c, p, cfg, hasPrev, dreC, dreP) {
@@ -7676,9 +7748,20 @@
                 const pedidosFiltrados = await window._fb.fbQueryPedidos(dataInicio, dataFim);
 
                 if (pedidosFiltrados.length === 0) {
-                    statusEl.style.background = '#2a1500';
-                    statusEl.style.color      = '#f39c12';
-                    statusEl.textContent      = '⚠️ Nenhum pedido finalizado encontrado no período.';
+                    // Sem pedidos do sistema — mas pode haver faturamento histórico (Anota) no período
+                    _dreDataInicio = dataInicio; _dreDataFim = dataFim;
+                    const _hf = _histFatNoPeriodo(dataInicio, dataFim);
+                    const _hfBox = document.getElementById('vendasHistFatBox');
+                    if (_hfBox) _hfBox.innerHTML = _histFatBoxHtml(_hf.meses, _hf.total, 0);
+                    if (_hf.meses.length > 0) {
+                        statusEl.style.background = '#15233a';
+                        statusEl.style.color      = '#60a5fa';
+                        statusEl.textContent      = `📈 Sem pedidos do sistema no período — faturamento histórico (Anota AI): ${_hf.meses.length} ${_hf.meses.length > 1 ? 'meses' : 'mês'} = ${formatarMoeda(_hf.total)}.`;
+                    } else {
+                        statusEl.style.background = '#2a1500';
+                        statusEl.style.color      = '#f39c12';
+                        statusEl.textContent      = '⚠️ Nenhum pedido finalizado encontrado no período.';
+                    }
                     return;
                 }
 
@@ -8370,6 +8453,47 @@
                 </div>`;
         }
 
+        // ===== HISTÓRICO DE FATURAMENTO (Anota AI, meses pré-sistema) =====
+        // Soma o faturamento histórico cujos meses INTEIROS caem em [iniStr, fimStr] (YYYY-MM-DD).
+        // Mensal: inclui o mês só se o período cobre o mês inteiro (não rateia fração).
+        function _histFatNoPeriodo(iniStr, fimStr) {
+            const meses = [];
+            if (!iniStr || !fimStr || !_histFatMeses.length) return { total: 0, meses };
+            for (const ym of _histFatMeses) {
+                const [y, m] = ym.split('-').map(Number);
+                const primeiro = `${ym}-01`;
+                const ultimo = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+                if (iniStr <= primeiro && fimStr >= ultimo) meses.push(ym);
+            }
+            const total = meses.reduce((s, ym) => s + (_histFat[ym] || 0), 0);
+            return { total: Math.round(total * 100) / 100, meses };
+        }
+
+        // Bloco visual (dark/#E87722): meses históricos + "Faturamento Bruto Total" (sistema + histórico).
+        // NÃO infla lucro: o DRE acima cobre só os meses do sistema (histórico não tem custo apurado).
+        function _histFatBoxHtml(meses, totalHist, faturamentoReal) {
+            if (!meses || !meses.length) return '';
+            totalHist = Math.round((Number(totalHist) || 0) * 100) / 100;
+            const totalBruto = Math.round(((Number(faturamentoReal) || 0) + totalHist) * 100) / 100;
+            const nm = ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+            const itens = meses.map(ym => { const a = ym.split('-').map(Number); return `<div style="display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px solid #2a2a2a; font-size:12px;"><span style="color:#bbb;">${nm[a[1]]}/${String(a[0]).slice(2)}</span><span style="color:#60a5fa; font-weight:600; white-space:nowrap;">${formatarMoeda(_histFat[ym])}</span></div>`; }).join('');
+            return `
+                <div style="background:#1a1a2e; border:1px solid #2a2a4a; border-radius:10px; padding:1.25rem;">
+                    <div style="font-size:11px; font-weight:700; color:#E87722; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">📈 Faturamento histórico (Anota AI)</div>
+                    <div style="font-size:11px; color:#777; margin-bottom:10px;">Meses anteriores ao sistema — só receita bruta (sem custo apurado).</div>
+                    ${itens}
+                    <div style="display:flex; justify-content:space-between; padding:8px 0 4px; margin-top:6px; border-top:1px solid #2a2a4a;">
+                        <span style="color:#aaa;">(+) Histórico (${meses.length} ${meses.length > 1 ? 'meses' : 'mês'})</span>
+                        <span style="color:#60a5fa; font-weight:700;">${formatarMoeda(totalHist)}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding:6px 0;">
+                        <span style="color:#e8e8e8; font-weight:700; font-size:14px;">= Faturamento Bruto Total</span>
+                        <span style="font-weight:700; font-size:14px; color:#E87722;">${formatarMoeda(totalBruto)}</span>
+                    </div>
+                    <div style="font-size:10px; color:#777; margin-top:8px; line-height:1.4;">⚠️ Histórico é só receita bruta — o DRE/lucro acima cobre apenas os meses do sistema (sem custo apurado, não infla o lucro).</div>
+                </div>`;
+        }
+
         function calcularDRE() {
             if (!_dreFaturamento) return;
             const fat      = _dreFaturamento;
@@ -8428,6 +8552,9 @@
                 const _ret = _retiradasNoPeriodo(_dreDataInicio, _dreDataFim);
                 _retBox.innerHTML = _retiradasBoxHtml(_ret.lista, _ret.total, lucro);
             }
+            // Faturamento histórico (Anota) no período — "Faturamento Bruto Total"
+            const _hfBox = document.getElementById('vendasHistFatBox');
+            if (_hfBox) { const _hf = _histFatNoPeriodo(_dreDataInicio, _dreDataFim); _hfBox.innerHTML = _histFatBoxHtml(_hf.meses, _hf.total, _dreFaturamento); }
         }
 
         // ===== RESUMO MENSAL =====
@@ -8567,6 +8694,8 @@
             if (resultado) resultado.style.display = 'none';
             const statusEl = document.getElementById('vendaFirestoreStatus');
             if (statusEl) statusEl.style.display = 'none';
+            const histBox = document.getElementById('vendasHistFatBox');
+            if (histBox) histBox.innerHTML = '';
             const ini = document.getElementById('vendaDataInicio');
             const fim = document.getElementById('vendaDataFim');
             if (ini) ini.value = '';
@@ -8893,6 +9022,10 @@
             dre.retiradas = _ret.total;
             dre.retiradasLista = _ret.lista;
             dre.resultadoLiquido = dre.lucroLiq - _ret.total;
+            // Faturamento histórico (Anota) do período — só receita bruta (NÃO entra no lucro/DRE)
+            dre.histFat = agg.histFat || 0;
+            dre.histFatMeses = agg.histFatMeses || [];
+            dre.faturamentoTotal = (dre.fat || 0) + dre.histFat;
             return dre;
         }
 
@@ -8917,6 +9050,8 @@
             _finRenderDre(dre, drePrev);
             const _retBoxF = document.getElementById('finRetiradasBox');
             if (_retBoxF) _retBoxF.innerHTML = _retiradasBoxHtml(dre.retiradasLista, dre.retiradas || 0, dre.lucroLiq);
+            const _hfBoxF = document.getElementById('finHistFatBox');
+            if (_hfBoxF) _hfBoxF.innerHTML = _histFatBoxHtml(dre.histFatMeses, dre.histFat || 0, dre.fat);
             _finRenderComparativo(dre, drePrev);
             _finRenderPie(dre);
             _finRenderPagamentos(dre);
