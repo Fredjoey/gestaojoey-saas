@@ -352,11 +352,20 @@ textarea.fi{resize:vertical;min-height:60px}
 #botAlertBanner{
   display:none;position:fixed;top:0;left:0;right:0;z-index:9998;
   background:#7f1d1d;border-bottom:2px solid #ef4444;
-  padding:10px 20px;text-align:center;
+  padding:10px 48px;text-align:center;
   font-size:13px;font-weight:600;color:#fca5a5;letter-spacing:.2px;
   animation:tarjaSlide .3s ease;
 }
 @keyframes tarjaSlide{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+#botAlertClose{
+  position:absolute;top:50%;right:10px;transform:translateY(-50%);
+  display:flex;align-items:center;justify-content:center;
+  width:30px;height:30px;border:none;border-radius:7px;
+  background:rgba(255,255,255,.14);color:#fee2e2;
+  font-size:14px;line-height:1;font-weight:700;cursor:pointer;
+  transition:background .15s,color .15s;
+}
+#botAlertClose:hover{background:rgba(255,255,255,.28);color:#fff;}
 
 /* MODAL QR MESA */
 .qr-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:600;align-items:center;justify-content:center;padding:1rem;}
@@ -485,7 +494,7 @@ textarea.fi{resize:vertical;min-height:60px}
 <body>
 
 <!-- TARJA BOT DESCONECTADO -->
-<div id="botAlertBanner">⚠️ Bot WhatsApp desconectado — as mensagens automáticas não estão sendo enviadas. Reconecte o bot.</div>
+<div id="botAlertBanner">⚠️ Bot WhatsApp desconectado — as mensagens automáticas não estão sendo enviadas. Reconecte o bot.<button id="botAlertClose" type="button" onclick="dispensarAlertaBot()" aria-label="Dispensar aviso" title="Dispensar">✕</button></div>
 
 <!-- TELA DE LOGIN -->
 <div id="loginScreen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
@@ -2018,11 +2027,18 @@ async function enviarWhatsAppBot(numero, mensagem) {
   }
 }
 
+function dispensarAlertaBot() {
+  _botAlertDispensado = true;  // dispensa só esta instância; reaparece em reload ou se o bot cair de novo
+  const banner = document.getElementById('botAlertBanner');
+  if (banner) banner.style.display = 'none';
+}
+
 function _aplicarStatusBot(connected) {
   _botConectado = connected;
   const banner = document.getElementById('botAlertBanner');
   const btn    = document.getElementById('btnBot');
-  if (banner) banner.style.display = connected ? 'none' : 'block';
+  if (connected) _botAlertDispensado = false;  // bot voltou: reseta a dispensa pra reaparecer se cair de novo
+  if (banner) banner.style.display = (connected || _botAlertDispensado) ? 'none' : 'block';
   if (btn) {
     if (connected) {
       btn.style.background  = 'rgba(52,211,153,.15)';
@@ -2319,6 +2335,7 @@ function orderCardHtml(p) {
 // ── AUTO-ACEITAR PEDIDOS ─────────────────────────────────────────────────────
 let _autoAceitar  = false;
 let _botConectado = true;            // último estado conhecido do bot WhatsApp
+let _botAlertDispensado = false;     // X do banner: dispensa em memória (some no reload; reseta quando o bot reconecta)
 const _autoProcessados = new Set();  // ids já auto-aceitos (idempotência)
 const _autoPixVistos   = new Set();  // ids PIX já logados como "aguardando"
 
