@@ -749,7 +749,7 @@
                 <div style="flex:1;"><label class="cal-lbl">Data</label><input id="calEvData" type="date"></div>
                 <div style="flex:1;"><label class="cal-lbl">Valor (R$)</label><input id="calEvValor" type="number" step="0.01" min="0" placeholder="opcional"></div>
               </div>
-              <div><label class="cal-lbl">Recorrência</label><select id="calEvRec"><option value="nenhuma">Nenhuma</option><option value="mensal">Mensal (todo mês no mesmo dia)</option></select></div>
+              <div><label class="cal-lbl">Recorrência</label><select id="calEvRec"><option value="nenhuma">Nenhuma</option><option value="diario">Diária (todo dia)</option><option value="semanal">Semanal (mesmo dia da semana)</option><option value="mensal">Mensal (todo mês no mesmo dia)</option></select></div>
               <div><label class="cal-lbl">Observação</label><textarea id="calEvObs" rows="2" placeholder="opcional"></textarea></div>
               <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;"><input id="calEvConcluido" type="checkbox" style="width:auto;"> Concluído</label>
             </div>
@@ -2351,6 +2351,13 @@
                 const dm = Number(ev.diaMes) || 1;
                 return d === Math.min(dm, _calDiasNoMes(y, m0)); // clampa diaMes > dias do mês
             }
+            if (ev.recorrencia === 'diario' || ev.recorrencia === 'semanal') {
+                if (!ev.data) return false;
+                const dataStr = _calDateStr(y, m0, d);
+                if (dataStr < ev.data) return false; // recorrência começa na data do evento (não plota antes)
+                if (ev.recorrencia === 'diario') return true;
+                return new Date(y, m0, d).getDay() === new Date(ev.data + 'T12:00:00').getDay(); // semanal: mesmo dia da semana
+            }
             return ev.data === _calDateStr(y, m0, d);
         }
         function _calEventosNoDia(y, m0, d) {
@@ -2446,7 +2453,7 @@
             document.getElementById('calDiaLista').innerHTML = evs.length ? evs.map(ev => {
                 const t = CAL_TIPOS[ev.tipo] || { cor: '#7f8c8d', label: ev.tipo };
                 const val = (ev.valor != null && ev.valor !== '') ? `<span class="cal-dia-ev-val">${_calFmtBRL(ev.valor)}</span>` : '';
-                const rec = ev.recorrencia === 'mensal' ? ' · 🔁 mensal' : '';
+                const rec = (ev.recorrencia && ev.recorrencia !== 'nenhuma') ? ` · 🔁 ${({ mensal: 'mensal', semanal: 'semanal', diario: 'diária' })[ev.recorrencia] || ev.recorrencia}` : '';
                 return `<div class="cal-dia-ev ${ev.concluido ? 'cal-done' : ''}" style="border-left-color:${t.cor}" onclick="abrirEventoModal('${ev.id}')"><div><div class="cal-dia-ev-tit">${_calEsc(ev.titulo)}</div><div class="cal-dia-ev-tipo">${t.label}${rec}${ev.concluido ? ' · ✓ concluído' : ''}</div></div>${val}</div>`;
             }).join('') : `<div style="font-size:13px;color:var(--text2);text-align:center;padding:1rem;">Nenhum evento neste dia.</div>`;
             document.getElementById('calDiaModal').classList.add('show');
@@ -2487,7 +2494,8 @@
             const tipo = document.getElementById('calEvTipo').value;
             const data = document.getElementById('calEvData').value;
             const valorRaw = document.getElementById('calEvValor').value;
-            const rec = document.getElementById('calEvRec').value === 'mensal' ? 'mensal' : 'nenhuma';
+            const _recSel = document.getElementById('calEvRec').value;
+            const rec = ['mensal', 'semanal', 'diario'].includes(_recSel) ? _recSel : 'nenhuma';
             const obs = document.getElementById('calEvObs').value.trim();
             const concluido = document.getElementById('calEvConcluido').checked;
             if (!titulo) { alert('Informe o título do evento.'); return; }
@@ -8393,8 +8401,8 @@
         }
 
         // ===== RETIRADAS DE CAIXA (lidas do calendário, tipo 'retirada') =====
-        // Soma as retiradas cuja data cai no período [iniStr,fimStr] (YYYY-MM-DD). Trata
-        // recorrência mensal (gera a ocorrência de cada mês no diaMes). NÃO duplica dados.
+        // Soma as retiradas cuja data cai no período [iniStr,fimStr] (YYYY-MM-DD). Trata recorrência
+        // mensal/semanal/diária (clampadas entre a data do evento e o fim do mês corrente). NÃO duplica.
         function _retiradasNoPeriodo(iniStr, fimStr) {
             const lista = [];
             if (!iniStr || !fimStr || !Array.isArray(_agenda)) return { total: 0, lista };
@@ -8419,6 +8427,26 @@
                         const occ = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                         if (occ >= iniStr && occ <= fimRec) lista.push({ data: occ, titulo, valor });
                         m++; if (m > 12) { m = 1; y++; }
+                    }
+                } else if (ev.recorrencia === 'diario' || ev.recorrencia === 'semanal') {
+                    // Teto anti-explosão: não gera além do mês corrente; início: não antes da data do evento
+                    const _now = new Date();
+                    const _teto = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+                    const fimRec = fimStr < _teto ? fimStr : _teto;
+                    const desdeStr = (ev.data && ev.data > iniStr) ? ev.data : iniStr;
+                    const passo = ev.recorrencia === 'diario' ? 1 : 7;
+                    const cur = new Date(desdeStr + 'T12:00:00');
+                    if (ev.recorrencia === 'semanal' && ev.data) {
+                        const evDow = new Date(ev.data + 'T12:00:00').getDay();
+                        let g0 = 0;
+                        while (cur.getDay() !== evDow && g0++ < 7) cur.setDate(cur.getDate() + 1);
+                    }
+                    let guard = 0;
+                    while (guard++ < 4000) {
+                        const occ = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                        if (occ > fimRec) break;
+                        if (occ >= iniStr) lista.push({ data: occ, titulo, valor });
+                        cur.setDate(cur.getDate() + passo);
                     }
                 } else if (ev.data && ev.data >= iniStr && ev.data <= fimStr) {
                     lista.push({ data: ev.data, titulo, valor });
