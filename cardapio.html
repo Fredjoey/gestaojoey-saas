@@ -249,7 +249,7 @@ body{
 }
 .product-row-desc{
   font-size:11px;color:var(--text2);line-height:1.35;margin-bottom:5px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;
 }
 .product-row-price{font-size:13px;font-weight:700;color:var(--orange)}
 
@@ -330,7 +330,8 @@ body{
 @keyframes scaleIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
 #productContent{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:1.25rem 1.5rem .5rem}
 #productFooter{
-  padding:.75rem 1.5rem 1rem;
+  /* respiro embaixo do botão "Confirmar pedido" p/ não encostar na bottom-nav (60px) + safe-area do iPhone */
+  padding:.75rem 1.5rem calc(76px + env(safe-area-inset-bottom, 0px));
   border-top:1px solid var(--border);
   background:var(--bg2);
   flex-shrink:0;
@@ -862,6 +863,7 @@ firebase.auth().onAuthStateChanged(user => {
   }
 });
 firebase.auth().signInAnonymously().catch(e => console.error('Auth anônimo falhou:', e));
+_resolverTokenEndereco(); // Parte 2: pré-preenchimento de endereço via token do WhatsApp (independe do auth)
 
 // Splash: saída sincronizada com o load da imagem (não mais setTimeout cego)
 (function(){
@@ -943,6 +945,8 @@ function carregarDadosPainel() {
     CONFIG.tempo_local     = cfg.tempo_local     || '15-20 min';
     CONFIG.pedidoMinimo    = cfg.pedidoMinimo    || 0;
     CONFIG.destaque        = cfg.destaque        || null;
+    CONFIG.playlistMusica  = cfg.playlistMusica;   // undefined=fixa | ''=sem música | 'ID'=custom
+    _ytConfigReady = true; _maybeInitMusic();      // libera o player (Parte 2 — música por cliente)
     const heroLogo = document.getElementById('heroLogo');
     if (heroLogo) heroLogo.textContent = CONFIG.nome;
     const hero = document.querySelector('.hero');
@@ -959,13 +963,15 @@ function carregarDadosPainel() {
   function buildCatalogo() {
     CARDAPIO.length = 0;
     _recipesRaw.forEach(r => {
+      const _cat = r.categoria || 'Outros';
+      if (_catsOcultas.has(_cat)) return;               // categoria oculta pelo gestor → some inteira do cardápio
       if (_catalogoStatusMap[r.id]?.ativo !== true) return;
       CARDAPIO.push({
         id:         r.id,
         nome:       r.name || r.nome || '—',
-        categoria:  r.categoria || 'Outros',
+        categoria:  _cat,
         preco:      r.price || r.preco || 0,
-        desc:       r.desc || r.descricao || '',
+        desc:       _catalogoStatusMap[r.id]?.descricaoCliente || r.desc || r.descricao || '', // descrição do cliente (gestor) > desc do recipe (compat)
         emoji:      r.emoji || EMOJI_CAT[r.categoria] || '🍽️',
         foto:       _catalogoStatusMap[r.id]?.foto || r.foto || r.image || null,
         adicionais: r.adicionais || [],
@@ -1018,6 +1024,7 @@ function carregarDadosPainel() {
   // Ordem dinâmica definida pelo gestor
   db.doc(`clientes/${slug}/config/catOrdem`).onSnapshot(snap => {
     _catOrdem = snap.exists ? (snap.data().ordem || []) : [];
+    _catsOcultas = new Set(snap.exists ? (snap.data().ocultas || []) : []);
     buildCatalogo();
   });
   db.doc(`clientes/${slug}/config/prodOrdem`).onSnapshot(snap => {
@@ -1051,6 +1058,7 @@ const CONFIG     = { nome:'Joey Pizza', wpp:'', taxa:5, pedidoMinimo:0, horario:
 let EMOJI_CAT  = {};  // preenchido dinamicamente pela coleção 'categorias' do sistema-joey
 let CAT_ORDER  = [];  // preenchido dinamicamente pela coleção 'categorias' do sistema-joey
 let _catOrdem  = [];  // ordem dinâmica do Firestore (config/catOrdem)
+let _catsOcultas = new Set();  // categorias ocultas pelo gestor (config/catOrdem.ocultas)
 let _prodOrdem = {};  // ordem de produtos por categoria (config/prodOrdem)
 
 // =================== iOS COMPAT HELPERS ===================
@@ -1185,6 +1193,7 @@ let _spyRaf = null;
 let produtorModal = null;
 let qtyModal = 1;
 let obsModal = '';
+let _editCartIdx = null; // índice do item do carrinho em edição (null = adicionar item novo)
 let checkoutStep = 1; // 1=carrinho, 2=dados, 3=pagamento, 4=sucesso
 let formaPag = '';
 let tipoEntrega = '';
@@ -1327,7 +1336,7 @@ function prodCard(p) {
       <div class="product-row-img">${imgHtml}</div>
       <div class="product-row-info">
         <div class="product-row-name">${p.nome}</div>
-        <div class="product-row-desc">${p.desc}</div>
+        ${p.desc ? `<div class="product-row-desc">${p.desc}</div>` : ''}
         <div class="product-row-price">R$ ${p.preco.toFixed(2).replace('.',',')}</div>
       </div>
     </div>
@@ -1335,14 +1344,30 @@ function prodCard(p) {
 }
 
 // =================== PRODUTO MODAL ===================
-function openProduct(id) {
+function openProduct(id, editIdx) {
   produtorModal = CARDAPIO.find(p => String(p.id) === String(id));
-  if (!produtorModal) return;
-  qtyModal = 1;
-  obsModal = '';
-  adicionaisModal = {};
-  document.getElementById('productOverlay').classList.add('show');
-  lockBodyScroll();
+  if (!produtorModal) {
+    if (editIdx != null) alert('Não foi possível abrir este item para edição (produto indisponível agora). Use o − / + para ajustar a quantidade.');
+    return;
+  }
+  if (editIdx != null && cart[editIdx]) {
+    // modo EDIÇÃO: reabre o produto pré-preenchido com a qtd e os adicionais que o item do carrinho já tinha
+    const it = cart[editIdx];
+    _editCartIdx = editIdx;
+    qtyModal = it.qty || 1;
+    obsModal = it.obs || '';
+    adicionaisModal = {};
+    (it.adicionais || []).forEach(a => { if (a && a.id != null) adicionaisModal[a.id] = a.qty || 0; });
+  } else {
+    _editCartIdx = null;
+    qtyModal = 1;
+    obsModal = '';
+    adicionaisModal = {};
+  }
+  const _ovProd = document.getElementById('productOverlay');
+  _ovProd.style.zIndex = (_editCartIdx != null) ? '300' : ''; // em edição: ACIMA do overlay do carrinho (z-index 200), senão fica escondido atrás
+  _ovProd.classList.add('show');
+  if (document.body.style.position !== 'fixed') lockBodyScroll(); // não re-trava (modal pode abrir sobre o carrinho já aberto)
   renderProductModal();
 }
 
@@ -1423,14 +1448,15 @@ function renderProductModal() {
   // Validação: grupos obrigatórios que ainda não atingiram o mínimo
   const pendentes = _gruposPendentes(p);
   const podeAdd = pendentes.length === 0;
-  const btnLabel = podeAdd
-    ? `Adicionar ao carrinho · R$ ${totalModal.toFixed(2).replace('.',',')}`
-    : `Escolha: ${pendentes.join(', ')}`;
+  const emEdicao = _editCartIdx != null;
+  const btnLabel = !podeAdd
+    ? `Escolha: ${pendentes.join(', ')}`
+    : `${emEdicao ? 'Salvar alterações' : 'Adicionar ao carrinho'} · R$ ${totalModal.toFixed(2).replace('.',',')}`;
 
   document.getElementById('productContent').innerHTML = `
     ${imgHtml}
     <div class="prod-modal-name">${p.nome}</div>
-    <div class="prod-modal-desc">${p.desc}</div>
+    ${p.desc ? `<div class="prod-modal-desc">${p.desc}</div>` : ''}
     <div class="prod-modal-price">R$ ${totalModal.toFixed(2).replace('.',',')}</div>
     <div class="qty-big">
       <button class="qty-btn" onclick="changeQtyModal(-1)">−</button>
@@ -1445,7 +1471,7 @@ function renderProductModal() {
     </div>
   `;
   document.getElementById('productFooter').innerHTML = `
-    <button class="btn-main" onclick="addToCartFromModal()" ${podeAdd ? '' : 'disabled style="opacity:.5;cursor:not-allowed"'}>
+    <button class="btn-main" onclick="${emEdicao ? 'salvarEdicaoCarrinho()' : 'addToCartFromModal()'}" ${podeAdd ? '' : 'disabled style="opacity:.5;cursor:not-allowed"'}>
       ${btnLabel}
     </button>
     <button class="btn-secondary" onclick="closeProduct()">Cancelar</button>
@@ -1551,9 +1577,39 @@ function addToCartFromModal() {
     <div style="text-align:center;color:var(--success);font-weight:600;font-size:13px;margin-bottom:12px">
       ✓ Adicionado! (${totalItens} item${totalItens !== 1 ? 's' : ''} no carrinho)
     </div>
-    <button class="btn-main" onclick="closeProduct();openCart()">✓ Confirmar pedido</button>
     <button class="btn-secondary" onclick="closeProduct()">🛒 Continuar comprando</button>
+    <button class="btn-main" onclick="closeProduct();openCart()">✓ Confirmar pedido</button>
   `;
+}
+
+// Salva a edição POR CIMA do mesmo item do carrinho (mesma linha) — não duplica.
+// Reaproveita exatamente a mesma montagem de adicionais do addToCartFromModal.
+function salvarEdicaoCarrinho() {
+  const p = produtorModal;
+  const idx = _editCartIdx;
+  if (idx == null || !cart[idx]) { closeProduct(); return; }
+  const pendentes = _gruposPendentes(p);
+  if (pendentes.length) { alert('Escolha as opções obrigatórias: ' + pendentes.join(', ')); return; }
+  const grupoDoItem = {};
+  (Array.isArray(p.adicionaisGrupos) ? p.adicionaisGrupos : []).forEach(g =>
+    (g.itens || []).forEach(id => { grupoDoItem[String(id)] = g.nome; }));
+  const adicionaisSelecionados = Object.entries(adicionaisModal)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => {
+      const a = _adicionaisCatalogo[id];
+      if (!a) return null;
+      const it = { id, nome: a.nome, preco: a.preco || 0, qty };
+      if (grupoDoItem[String(id)]) it.grupo = grupoDoItem[String(id)];
+      return it;
+    })
+    .filter(Boolean);
+  // ATUALIZA a mesma linha (preserva linhas distintas; recalcula preço pelo cartTotal/preço-da-linha)
+  cart[idx] = { id: p.id, nome: p.nome, preco: p.preco, qty: qtyModal, obs: obsModal, emoji: p.emoji, adicionais: adicionaisSelecionados };
+  updateCartBtn();
+  renderProducts();
+  closeProduct();            // fecha só o modal de produto; o carrinho continua aberto por baixo
+  checkoutStep = 1;
+  renderCartContent();       // volta pro carrinho com o item atualizado
 }
 
 function quickAdd(id) {
@@ -1567,8 +1623,12 @@ function quickAdd(id) {
 }
 
 function closeProduct() {
-  document.getElementById('productOverlay').classList.remove('show');
-  unlockBodyScroll();
+  const _ovProd = document.getElementById('productOverlay');
+  _ovProd.classList.remove('show');
+  _ovProd.style.zIndex = '';   // volta ao z-index padrão (200)
+  _editCartIdx = null;   // sai do modo edição (item preservado se fechou sem salvar)
+  // só destrava o scroll se o carrinho NÃO estiver aberto por baixo (na edição, o carrinho continua aberto)
+  if (!document.getElementById('cartOverlay')?.classList.contains('show')) unlockBodyScroll();
 }
 
 // =================== CARRINHO ===================
@@ -1624,18 +1684,20 @@ function renderStepCart(el) {
     `;
     return;
   }
-  const itens = cart.map(i => {
+  const itens = cart.map((i, idx) => {
     const adicionaisUnit = (i.adicionais || []).reduce((a, x) => a + x.preco * x.qty, 0);
     const adicionaisHtml = (i.adicionais || []).filter(a => a.qty > 0).map(a =>
       `<div style="font-size:11px;color:var(--text2)">+ ${a.qty}x ${a.nome}</div>`
     ).join('');
     return `
     <div class="cart-item">
-      <span style="font-size:1.3rem">${i.emoji}</span>
-      <div style="flex:1">
-        <div class="cart-item-name">${i.nome}</div>
-        ${adicionaisHtml}
-        ${i.obs ? `<div style="font-size:11px;color:var(--text3)">📝 ${i.obs}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer" onclick="openProduct('${i.id}', ${idx})" title="Tocar para editar quantidade e adicionais">
+        <span style="font-size:1.3rem">${i.emoji}</span>
+        <div style="flex:1;min-width:0">
+          <div class="cart-item-name">${i.nome} <span style="font-size:10px;color:var(--orange);font-weight:600">✏️ editar</span></div>
+          ${adicionaisHtml}
+          ${i.obs ? `<div style="font-size:11px;color:var(--text3)">📝 ${i.obs}</div>` : ''}
+        </div>
       </div>
       <div class="qty-ctrl">
         <button class="qty-btn" onclick="changeCartQty('${i.id}',-1)">−</button>
@@ -1679,11 +1741,62 @@ function _enderecoSalvo() {
   catch(e) { return null; }
 }
 
+// PARTE 2 — pré-preenchimento via token do WhatsApp. Resolve ?t= (ou token salvo no
+// localStorage) → nome+endereço por uma Cloud Function (server-side; o anônimo não lê
+// tokens/clientes direto). Grava no MESMO localStorage que o checkout já lê → totalmente
+// editável e o "Entregar em outro endereço?" (limparEndereco) continua funcionando.
+const _CF_RESOLVE_TOKEN = 'https://southamerica-east1-gestaojoey.cloudfunctions.net/resolverEnderecoToken';
+async function _resolverTokenEndereco() {
+  try {
+    const lsKey = 'joey_linktoken_' + slug;
+    let token = '';
+    try { token = new URLSearchParams(location.search).get('t') || ''; } catch(e){}
+    if (token) { try { localStorage.setItem(lsKey, token); } catch(e){} }     // veio do link → memoriza
+    else { try { token = localStorage.getItem(lsKey) || ''; } catch(e){} }     // visita seguinte sem ?t=
+    if (!token) return;                                                        // sem token → digita tudo (atual)
+
+    const resp = await fetch(_CF_RESOLVE_TOKEN, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, token })
+    });
+    const data = await resp.json().catch(() => null);
+    if (!data || !data.ok) return;
+
+    // Nome — não sobrescreve o que o cliente já tem
+    if (data.nome) {
+      if (!clienteData) clienteData = {};
+      if (!clienteData.nome) clienteData.nome = data.nome;
+      try {
+        const cli = JSON.parse(localStorage.getItem('joey_cliente') || 'null') || {};
+        if (!cli.nome) { cli.nome = data.nome; localStorage.setItem('joey_cliente', JSON.stringify(cli)); }
+      } catch(e){}
+    }
+    // Endereço — COMPLEMENTA o localStorage atual (campo a campo; mantém o que já houver no device)
+    if (data.endereco) {
+      const e = data.endereco;
+      const atual = _enderecoSalvo() || {};
+      const novo = {
+        rua:    atual.rua    || e.rua    || '',
+        numero: atual.numero || e.numero || '',
+        comp:   atual.comp   || e.comp   || '',
+        ref:    atual.ref    || e.ref    || '',
+        bairro: atual.bairro || e.bairro || '',
+      };
+      try { localStorage.setItem('joey_endereco_' + slug, JSON.stringify(novo)); } catch(e){}
+    }
+    // Se o cliente já está na etapa de dados, re-renderiza pra refletir (campos editáveis)
+    if (checkoutStep === 2 && typeof renderCartContent === 'function') {
+      try { renderCartContent(); } catch(e){}
+    }
+  } catch (e) { console.warn('[token endereço]', e); }
+}
+
 function _salvarEnderecoTenant() {
   if (!clienteData || !clienteData.rua) return;
   try {
     localStorage.setItem('joey_endereco_' + slug, JSON.stringify({
       rua:    clienteData.rua    || '',
+      numero: clienteData.numero || '',
       bairro: clienteData.bairro || '',
       comp:   clienteData.comp   || '',
       ref:    clienteData.ref    || ''
@@ -1692,12 +1805,24 @@ function _salvarEnderecoTenant() {
 }
 
 function limparEndereco() {
-  ['fRua','fComp','fRef'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['fRua','fNumero','fComp','fRef'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const sn = document.getElementById('fSemNumero');
+  if (sn) sn.checked = false;
+  const num = document.getElementById('fNumero');
+  if (num) { num.disabled = false; num.style.opacity = ''; }
   const fb = document.getElementById('fBairro');
   if (fb) fb.value = '';
   bairroSelecionado = null;
   const taxaInfo = document.getElementById('taxaInfo');
   if (taxaInfo) taxaInfo.style.display = 'none';
+}
+
+// "Sem número": desabilita o campo Número (gravará "S/N"); desmarcado, volta a exigir número
+function onSemNumero(cb) {
+  const num = document.getElementById('fNumero');
+  if (!num) return;
+  if (cb.checked) { num.value = ''; num.disabled = true; num.style.opacity = '.5'; }
+  else { num.disabled = false; num.style.opacity = ''; num.focus(); }
 }
 
 // STEP 2: DADOS DO CLIENTE
@@ -1711,6 +1836,8 @@ function renderStepDados(el) {
     if (bMatch) bairroSelecionado = { nome: bMatch.nome, taxa: bMatch.taxa };
   }
   const temBairros = CONFIG.bairros && CONFIG.bairros.length > 0;
+  const _numSalvo = cEnd.numero || c.numero || '';
+  const _semNum   = _numSalvo === 'S/N';
   const bairroOpts = temBairros
     ? CONFIG.bairros.map(b =>
         `<option value="${b.nome}" data-taxa="${b.taxa}" ${bairroSelecionado?.nome===b.nome?'selected':''}>
@@ -1767,34 +1894,41 @@ function renderStepDados(el) {
     </div>
     <div id="enderecoFields" style="display:${tipoEntrega==='delivery'?'block':'none'}">
       <div class="form-group">
-        <label class="form-label">Rua e número *</label>
-        <input class="form-input" id="fRua" placeholder="Rua das Flores, 123" value="${cEnd.rua||c.rua||''}">
+        <label class="form-label">Rua *</label>
+        <input class="form-input" id="fRua" placeholder="Rua das Flores" value="${cEnd.rua||c.rua||''}">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Bairro *</label>
-          ${temBairros
-            ? `<select class="form-input" id="fBairro" onchange="onBairroChange(this)">
-                <option value="">Selecione seu bairro...</option>
-                ${bairroOpts}
-              </select>`
-            : `<input class="form-input" id="fBairro" placeholder="Centro" value="${cEnd.bairro||c.bairro||''}">`
-          }
+          <label class="form-label">Número *</label>
+          <input class="form-input" id="fNumero" placeholder="123" value="${_semNum?'':_numSalvo}" ${_semNum?'disabled':''}>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-top:6px;cursor:pointer">
+            <input type="checkbox" id="fSemNumero" onchange="onSemNumero(this)" ${_semNum?'checked':''} style="width:auto;margin:0"> Sem número
+          </label>
         </div>
         <div class="form-group">
           <label class="form-label">Complemento</label>
           <input class="form-input" id="fComp" placeholder="Apto 2, fundos..." value="${cEnd.comp||c.comp||''}">
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Ponto de referência *</label>
+        <input class="form-input" id="fRef" placeholder="Próximo ao mercado X..." value="${cEnd.ref||c.ref||''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bairro *</label>
+        ${temBairros
+          ? `<select class="form-input" id="fBairro" onchange="onBairroChange(this)">
+              <option value="">Selecione seu bairro...</option>
+              ${bairroOpts}
+            </select>`
+          : `<input class="form-input" id="fBairro" placeholder="Centro" value="${cEnd.bairro||c.bairro||''}">`
+        }
+      </div>
       ${temBairros && bairroSelecionado ? `
         <div class="info-note" id="taxaInfo">
           🛵 Taxa de entrega para <strong>${bairroSelecionado.nome}</strong>:
           <strong>R$ ${Number(bairroSelecionado.taxa).toFixed(2).replace('.',',')}</strong>
         </div>` : temBairros ? `<div class="info-note" id="taxaInfo" style="display:none"></div>` : ''}
-      <div class="form-group">
-        <label class="form-label">Referência (opcional)</label>
-        <input class="form-input" id="fRef" placeholder="Próximo ao mercado X..." value="${cEnd.ref||c.ref||''}">
-      </div>
       <div style="text-align:right;margin-top:-4px">
         <a onclick="limparEndereco()" style="font-size:12px;color:var(--orange);cursor:pointer;text-decoration:underline">Entregar em outro endereço?</a>
       </div>
@@ -1852,20 +1986,25 @@ function confirmarDados() {
       return;
     }
     const rua    = document.getElementById('fRua').value.trim();
+    const semNum = document.getElementById('fSemNumero')?.checked;
+    const numero = semNum ? 'S/N' : (document.getElementById('fNumero')?.value.trim() || '');
     const fBairro = document.getElementById('fBairro');
     const bairro  = fBairro ? fBairro.value.trim() : '';
-    if (!rua)    { alert('Por favor, preencha a rua e número.'); return; }
+    const ref     = document.getElementById('fRef').value.trim();
+    if (!rua)    { alert('Por favor, preencha a rua.'); return; }
+    if (!numero) { alert('Por favor, preencha o número (ou marque "Sem número").'); return; }
     if (!bairro) { alert('Por favor, selecione o bairro.'); return; }
+    if (!ref)    { alert('Por favor, preencha o ponto de referência (ajuda o entregador a achar).'); return; }
     // Se bairroSelecionado ainda não foi definido (digitação livre sem lista)
     if (!bairroSelecionado && CONFIG.bairros.length === 0) {
       bairroSelecionado = { nome: bairro, taxa: CONFIG.taxa };
     }
     clienteData = {
-      nome, tel, rua,
+      nome, tel, rua, numero,
       bairro: bairroSelecionado ? bairroSelecionado.nome : bairro,
       taxaBairro: bairroSelecionado ? bairroSelecionado.taxa : CONFIG.taxa,
       comp: document.getElementById('fComp').value.trim(),
-      ref:  document.getElementById('fRef').value.trim()
+      ref:  ref
     };
   } else {
     bairroSelecionado = null;
@@ -1974,6 +2113,44 @@ function setPag(forma, el) {
   if (trocoBox) trocoBox.className = 'troco-box' + (forma==='dinheiro'?' visible':'');
 }
 
+// idempotência: mesmo id de tentativa enquanto for a mesma intenção de pedido
+let _pedidoReqId = null;
+function _novoReqId() {
+  return 'req_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+}
+// roda a transação do contador com retry + backoff curto SÓ em erros transitórios de rede
+function _txComRetry(updateFn, maxTentativas) {
+  maxTentativas = maxTentativas || 4;
+  const transitorios = ['unavailable', 'deadline-exceeded', 'aborted', 'internal', 'cancelled', 'resource-exhausted'];
+  const tentar = (n) => db.runTransaction(updateFn).catch(err => {
+    const code = (err && err.code ? String(err.code) : '').replace('firestore/', '');
+    if (n < maxTentativas && transitorios.indexOf(code) !== -1) {
+      const espera = 300 * Math.pow(2, n - 1); // 300ms, 600ms, 1200ms...
+      console.warn('[finalizarPedido] transação falhou (' + code + ') — tentativa ' + n + '/' + maxTentativas + ', repetindo em ' + espera + 'ms');
+      return new Promise(res => setTimeout(res, espera)).then(() => tentar(n + 1));
+    }
+    throw err;
+  });
+  return tentar(1);
+}
+// garante uma sessão anônima VÁLIDA (token renovado) antes de gravar — evita permission-denied por sessão stale/vencida em cache
+async function _garantirAuthValida() {
+  const auth = firebase.auth();
+  if (!auth.currentUser) {
+    await auth.signInAnonymously(); // sem usuário em cache → cria sessão anônima
+  }
+  try {
+    await auth.currentUser.getIdToken(true); // força renovação do token
+  } catch (e) {
+    // token irrecuperável (conta anônima reciclada/inválida) → refaz a sessão do zero
+    console.warn('[finalizarPedido] token anônimo irrecuperável, refazendo login:', (e && e.code) || '', (e && e.message) || e);
+    await auth.signInAnonymously();
+    await auth.currentUser.getIdToken(true);
+  }
+  if (!auth.currentUser) throw new Error('sem-auth');
+  return auth.currentUser;
+}
+
 function finalizarPedido() {
   if (!formaPag) { alert('Selecione a forma de pagamento.'); return; }
   if (formaPag === 'balcao') formaPag = 'local'; // mesa: pagamento no balcão — registra como 'local'
@@ -1984,50 +2161,87 @@ function finalizarPedido() {
   const troco = formaPag==='dinheiro' && document.getElementById('fTroco')
     ? parseFloat(document.getElementById('fTroco').value)||0 : 0;
 
+  // mesmo reqId enquanto for a mesma intenção (reusado nas re-tentativas; zerado só no sucesso)
+  if (!_pedidoReqId) _pedidoReqId = _novoReqId();
+  const reqId = _pedidoReqId;
+
+  const pedidosRef = db.collection(`clientes/${slug}/pedidos`);
   const contadorRef = db.doc(`clientes/${slug}/config/contador`);
-  db.runTransaction(t => {
-    return t.get(contadorRef).then(doc => {
-      const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
-      const novo = atual + 1;
-      t.set(contadorRef, { ultimoPedido: novo }, { merge: true });
-      return novo;
+
+  // 0) garante sessão anônima válida (token renovado) ANTES de qualquer leitura/escrita
+  _garantirAuthValida()
+    // 1) idempotência: se uma tentativa anterior (mesmo reqId) já gravou, NÃO duplica — trata como sucesso
+    .then(() => pedidosRef.where('reqId', '==', reqId).limit(1).get())
+    .then(snap => {
+      if (!snap.empty) {
+        const doc = snap.docs[0];
+        console.warn('[finalizarPedido] pedido com reqId ' + reqId + ' já existe (id ' + doc.id + ') — tentativa anterior commitou, seguindo sem duplicar');
+        return doc.data();
+      }
+      // 2) gera o número sequencial via transação no contador, com retry/backoff em falhas transitórias
+      return _txComRetry(t => {
+        return t.get(contadorRef).then(doc => {
+          const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
+          const novo = atual + 1;
+          t.set(contadorRef, { ultimoPedido: novo }, { merge: true });
+          return novo;
+        });
+      }).then(novoId => {
+        const pedido = {
+          id: String(novoId),
+          reqId: reqId,
+          ts: Date.now(),
+          hora: new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+          data: new Date().toLocaleDateString('pt-BR'),
+          cliente: clienteData,
+          itens: cart,
+          subtotal: cartTotal(),
+          entrega: tipoEntrega,
+          taxaEntrega: taxaEntregaAtual(),
+          total: cartTotal() + taxaEntregaAtual(),
+          pagamento: formaPag,
+          troco: troco,
+          status: 'novo',
+          ...(sessionStorage.getItem('mesaAtiva') ? { mesa: sessionStorage.getItem('mesaAtiva') } : {}),
+          ...(formaPag === 'pix' ? { pixStatus: 'aguardando_geracao', cardapioOrigin: location.origin } : {})
+        };
+        return pedidosRef.doc(pedido.id).set(pedido).then(() => pedido);
+      });
+    })
+    .then(pedido => {
+      ultimoPedido = pedido;
+      const _mesaAtiva = sessionStorage.getItem('mesaAtiva');
+      if (_mesaAtiva) atualizarMesaComPedido(pedido, _mesaAtiva);
+      if (formaPag !== 'pix' && !_mesaAtiva && !pedido.mesa) enviarWhatsApp(pedido);
+      cart = [];
+      updateCartBtn();
+      renderProducts();
+      checkoutStep = 4;
+      marcarCarrinhoConvertido(clienteData?.tel);
+      _salvarEnderecoTenant();
+      renderCartContent();
+      _pedidoReqId = null; // intenção concluída → próximo pedido gera novo reqId
+    })
+    .catch(err => {
+      const code = (err && err.code) ? String(err.code) : '';
+      const msg  = (err && err.message) ? err.message : String(err);
+      console.error('[finalizarPedido] FALHA ao enviar pedido — code:', code || '(sem código)', '| message:', msg, err);
+      btn.textContent = '✓ Finalizar Pedido';
+      btn.disabled = false;
+      let aviso;
+      if (msg === 'sem-auth' || code.indexOf('auth/') !== -1) {
+        aviso = 'Não foi possível te identificar. Atualize a página (puxe a tela para baixo) e finalize novamente.';
+      } else if (code.indexOf('permission-denied') !== -1) {
+        aviso = 'Não foi possível enviar o pedido (permissão negada). Atualize a página e tente de novo. Se continuar, chame o restaurante.';
+      } else if (code.indexOf('unauthenticated') !== -1) {
+        aviso = 'Sua sessão expirou. Atualize a página (puxe a tela para baixo) e finalize novamente.';
+      } else if (code.indexOf('unavailable') !== -1 || code.indexOf('deadline') !== -1) {
+        aviso = 'Conexão instável — não conseguimos confirmar o pedido após várias tentativas. Verifique a internet e toque em Finalizar novamente.';
+      } else {
+        aviso = 'Não foi possível enviar o pedido. Toque em Finalizar novamente. Se continuar, chame o restaurante.' + (code ? ' (cód: ' + code + ')' : '');
+      }
+      alert(aviso);
     });
-  }).then(novoId => {
-    const pedido = {
-      id: String(novoId),
-      ts: Date.now(),
-      hora: new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
-      data: new Date().toLocaleDateString('pt-BR'),
-      cliente: clienteData,
-      itens: cart,
-      subtotal: cartTotal(),
-      entrega: tipoEntrega,
-      taxaEntrega: taxaEntregaAtual(),
-      total: cartTotal() + taxaEntregaAtual(),
-      pagamento: formaPag,
-      troco: troco,
-      status: 'novo',
-      ...(sessionStorage.getItem('mesaAtiva') ? { mesa: sessionStorage.getItem('mesaAtiva') } : {}),
-      ...(formaPag === 'pix' ? { pixStatus: 'aguardando_geracao', cardapioOrigin: location.origin } : {})
-    };
-    ultimoPedido = pedido;
-    return db.collection(`clientes/${slug}/pedidos`).doc(pedido.id).set(pedido).then(() => pedido);
-  }).then(pedido => {
-    const _mesaAtiva = sessionStorage.getItem('mesaAtiva');
-    if (_mesaAtiva) atualizarMesaComPedido(pedido, _mesaAtiva);
-    if (formaPag !== 'pix' && !_mesaAtiva && !pedido.mesa) enviarWhatsApp(pedido);
-    cart = [];
-    updateCartBtn();
-    renderProducts();
-    checkoutStep = 4;
-    marcarCarrinhoConvertido(clienteData?.tel);
-    _salvarEnderecoTenant();
-    renderCartContent();
-  }).catch(() => {
-    btn.textContent = '✓ Finalizar Pedido';
-    btn.disabled = false;
-    alert('Erro ao enviar pedido. Verifique sua conexão e tente novamente.');
-  });
 }
 
 function atualizarMesaComPedido(pedido, mesaNum) {
@@ -2503,6 +2717,10 @@ var _ytPlayer     = null;
 var _ytReady      = false;
 var _ytPending    = false;
 var _ytUserPaused = sessionStorage.getItem('musicPaused') === '1';
+var _ytApiReady    = false;
+var _ytConfigReady = false;
+var _ytInitDone    = false;
+var MUSICA_FIXA    = 'PLbvbU6hvzJqQksnHysbvR4GC1YyTbHy8k'; // "Joey Vibes" — padrão dos slugs não liberados
 
 function _ytUpdateBtn(playing) {
   var btn = document.getElementById('musicBtn');
@@ -2511,50 +2729,56 @@ function _ytUpdateBtn(playing) {
   btn.classList.toggle('playing', !!playing);
 }
 
-// Inicia numa posição aleatória 0-4 (playlist tem 5 músicas)
+// Início numa faixa aleatória SEM assumir nº fixo de faixas (usa o tamanho real da playlist)
 function _ytStartRandom() {
-  _ytPlayer.playVideoAt(Math.floor(Math.random() * 5));
+  if (!_ytPlayer) return;
+  var pl = _ytPlayer.getPlaylist && _ytPlayer.getPlaylist();
+  if (pl && pl.length) _ytPlayer.playVideoAt(Math.floor(Math.random() * pl.length));
+  else _ytPlayer.playVideo();
 }
 
-window.onYouTubeIframeAPIReady = function() {
+// Playlist efetiva: CONFIG.playlistMusica undefined → fixa (Joey Vibes, compat / slug não liberado);
+// '' (liberado, sem playlist) → SEM música; 'ID' → playlist do cliente.
+function _resolveMusicList() {
+  var pm = (typeof CONFIG !== 'undefined') ? CONFIG.playlistMusica : undefined;
+  if (pm === undefined || pm === null) return MUSICA_FIXA;
+  if (pm === '') return '';
+  return pm;
+}
+
+// Cria o player só quando a API do YouTube E a config já chegaram (uma única vez).
+function _maybeInitMusic() {
+  if (_ytInitDone || !_ytApiReady || !_ytConfigReady) return;
+  _ytInitDone = true;
+  var listId = _resolveMusicList();
+  if (!listId) {                                   // sem música → esconde a barra, não cria player
+    var bar = document.getElementById('musicBar');
+    if (bar) bar.style.display = 'none';
+    return;
+  }
   _ytPlayer = new YT.Player('ytPlayerEl', {
     playerVars: {
-      listType:       'playlist',
-      list:           'PLbvbU6hvzJqQksnHysbvR4GC1YyTbHy8k',
-      autoplay:       0,
-      controls:       0,
-      disablekb:      1,
-      fs:             0,
-      iv_load_policy: 3,
-      modestbranding: 1,
-      rel:            0,
-      playsinline:    1,
-      origin:         location.origin
+      listType:'playlist', list:listId, autoplay:0, controls:0, disablekb:1, fs:0,
+      iv_load_policy:3, modestbranding:1, rel:0, playsinline:1, origin:location.origin
     },
     events: {
       onReady: function() {
         _ytReady = true;
         _ytPlayer.setShuffle(true);
         _ytPlayer.setLoop(true);
-        if (_ytPending && !_ytUserPaused) {
-          _ytStartRandom();
-          _ytPending = false;
-        }
+        if (_ytPending && !_ytUserPaused) { _ytStartRandom(); _ytPending = false; }
       },
       onStateChange: function(e) {
         var playing = e.data === YT.PlayerState.PLAYING;
         _ytUpdateBtn(playing);
-        if (playing) {
-          sessionStorage.removeItem('musicPaused');
-          _ytUserPaused = false;
-        } else if (e.data === YT.PlayerState.PAUSED) {
-          sessionStorage.setItem('musicPaused', '1');
-          _ytUserPaused = true;
-        }
+        if (playing) { sessionStorage.removeItem('musicPaused'); _ytUserPaused = false; }
+        else if (e.data === YT.PlayerState.PAUSED) { sessionStorage.setItem('musicPaused', '1'); _ytUserPaused = true; }
       }
     }
   });
-};
+}
+
+window.onYouTubeIframeAPIReady = function() { _ytApiReady = true; _maybeInitMusic(); };
 
 function _ytToggle() {
   if (!_ytPlayer || !_ytReady) return;
