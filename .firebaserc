@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "pedidos-joey"
-  }
+  },
+  "targets": {
+    "gestaojoey": {
+      "hosting": {
+        "gestaojoey-painel": [
+          "gestaojoey-painel"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
