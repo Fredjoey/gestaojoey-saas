@@ -2882,41 +2882,76 @@ async function _dispararHtml(html) {
   })(1);
 }
 
-// CSS base compartilhado entre todos os templates térmicos
-function _cssTermico() {
-  return `<style>
-*{margin:0;padding:0;box-sizing:border-box;color:#000!important;font-weight:900}
-@page{margin:0;size:80mm auto}
-@media print{*{color:#000!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-body{font-family:'Courier New',Courier,monospace;font-size:11px;width:76mm;padding:1mm 1mm 1mm 3mm;margin:0;color:#000!important;background:#fff!important;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-hr.d{border:none;border-top:1px dashed #000;margin:4px 0}hr.s{border:none;border-top:2px solid #000;margin:4px 0}
-.sp{white-space:pre}.c{text-align:center}.g{font-size:16px;font-weight:900;text-align:center}
-.sub{padding-left:12px;font-size:10px;font-weight:900}.tot{font-size:16px;font-weight:900}
-</style>`;
-}
-
-// Template: comanda de mesa (sem preços — só itens para cozinha)
-function gerarHtmlComandaMesa(comanda, mesaNome) {
-  const S1 = '================================';
-  const S2 = '- - - - - - - - - - - - - - - -';
+// Template: comanda de mesa — mesmo estilo do delivery de produção (Arial Narrow, letra grande,
+// COM preços e nº do pedido). SEM cliente/endereço/garçom/pagamento (mesa paga no fechamento).
+function gerarHtmlComandaMesa(p, mesaNome) {
+  const now  = new Date();
+  const data = p.data || now.toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' });
+  const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
   const loja = (config.nome || 'JOEY').toUpperCase();
-  const hora = comanda.hora || new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
+  const mesa = (mesaNome || p.mesaNome || (p.mesa ? String(p.mesa).replace('mesa-', 'Mesa ') : 'MESA')).toUpperCase();
 
-  const itensHtml = (comanda.itens || []).map(i => {
-    const adics = (i.adicionais || []).filter(a => a && a.nome)
-      .map(a => `<div class="sub">${a.grupo ? a.grupo + ': ' + a.nome : '+ ' + (a.qty||1) + '× ' + a.nome}</div>`).join('');
-    const obs = i.obs ? `<div class="sub">Obs: ${i.obs}</div>` : '';
-    return `<div>${i.qty}x ${i.nome}</div>${adics}${obs}`;
+  const W = 28;
+  const eq = '='.repeat(W);
+  const dash = '- '.repeat(Math.floor(W/2));
+
+  const itensHtml = (p.itens || []).map(i => {
+    const unitPrice = i.precoTotal != null ? i.precoTotal : i.preco;
+    const val = 'R$ ' + ((unitPrice || 0) * i.qty).toFixed(2).replace('.', ',');
+    const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
+      const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
+      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${(a.qty||1)}× ${a.nome}`;
+      return `<div class="adic"><span>${rotulo}</span>${aVal}</div>`;
+    }).join('');
+    const obs = i.obs ? `<div class="adic"><span>Obs: ${i.obs}</span></div>` : '';
+    return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
   }).join('');
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">${_cssTermico()}</head><body>
-<div class="sp">${S1}</div>
-<div class="c">=== ${loja} ===</div>
-<div class="sp">${S1}</div>
-<div class="g">${mesaNome.toUpperCase()} — ${hora}</div>
-<div class="sp">${S2}</div>
+  const total = (p.total || p.subtotal || 0).toFixed(2).replace('.', ',');
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;color:#000;background:#fff;font-weight:normal}
+@page{margin:0;size:80mm auto}
+@media print{*{color:#000!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.line{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;text-align:center;letter-spacing:0;white-space:pre}
+.tipo-ent{font-size:18px;font-weight:900;text-align:center;letter-spacing:1px;margin:3px 0}
+.info{font-size:13px;font-weight:700;text-align:center}
+.loja{font-size:15px;font-weight:700;text-align:center;letter-spacing:1px;margin-top:2px}
+.ped-label{font-size:12px;text-align:center}
+.ped-num{font-size:30px;font-weight:900;text-align:center;letter-spacing:2px;margin:2px 0}
+.itens-label{font-size:14px;font-weight:700;margin-bottom:3px}
+.row-item{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin:2px 0}
+.item-desc{flex:1;font-weight:700;margin-right:4px;word-break:break-word}
+.item-val{white-space:nowrap;font-weight:700}
+.adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
+.cli{font-size:13px;font-weight:700;margin:1px 0}
+.row-val{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin:1px 0}
+.row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;margin-top:4px}
+</style></head><body>
+
+<div class="line">${eq}</div>
+<div class="line">${eq}</div>
+<div class="tipo-ent">${mesa}</div>
+<div class="line">${eq}</div>
+<div class="line">${eq}</div>
+
+<div class="info">${data} ${hora}</div>
+<div class="loja">${loja}</div>
+<div class="line">${dash}</div>
+
+<div class="ped-label">Pedido</div>
+<div class="ped-num">${p.id}</div>
+<div class="line">${dash}</div>
+
+<div class="itens-label">Itens</div>
 ${itensHtml}
-<div class="sp">${S1}</div>
+<div class="line">${dash}</div>
+
+<div class="row-total"><span>TOTAL:</span><span>R$ ${total}</span></div>
+<div class="line">${dash}</div>
+
 </body></html>`;
 }
 
@@ -6305,7 +6340,7 @@ function iniciarListenersFirestore() {
         if (ped.origem === 'garcom' && _garcomVistos && !_garcomVistos.has(d.id)) {
           _garcomVistos.add(d.id);
           try {
-            if (ped.tipo === 'mesa' || ped.mesa) imprimirComandaMesa({ itens: ped.itens || [], hora: ped.hora }, ped.mesaNome || ('Mesa ' + String(ped.mesa || '').replace('mesa-', '')));
+            if (ped.tipo === 'mesa' || ped.mesa) imprimirComandaMesa(ped, ped.mesaNome || ('Mesa ' + String(ped.mesa || '').replace('mesa-', '')));
             else imprimirPedidoProducao(ped);
           } catch (e) { console.warn('[garcom print]', e); }
           notify('🧑‍🍳 Pedido do garçom #' + d.id + (ped.mesaNome ? ' — ' + ped.mesaNome : ''));
