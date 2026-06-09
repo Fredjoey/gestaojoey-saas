@@ -944,7 +944,7 @@ function carregarDadosPainel() {
     CONFIG.tempo_local     = cfg.tempo_local     || '15-20 min';
     CONFIG.pedidoMinimo    = cfg.pedidoMinimo    || 0;
     CONFIG.destaque        = cfg.destaque        || null;
-    CONFIG.playlistMusica  = cfg.playlistMusica;   // undefined=fixa | ''=sem música | 'ID'=custom
+    CONFIG.playlistMusica  = cfg.playlistMusica;   // 'PL…'=toca a playlist do próprio tenant | ''/undefined=sem música (aditivo off)
     _ytConfigReady = true; _maybeInitMusic();      // libera o player (Parte 2 — música por cliente)
     const heroLogo = document.getElementById('heroLogo');
     if (heroLogo) heroLogo.textContent = CONFIG.nome;
@@ -2719,7 +2719,6 @@ var _ytUserPaused = sessionStorage.getItem('musicPaused') === '1';
 var _ytApiReady    = false;
 var _ytConfigReady = false;
 var _ytInitDone    = false;
-var MUSICA_FIXA    = 'PLbvbU6hvzJqQksnHysbvR4GC1YyTbHy8k'; // "Joey Vibes" — padrão dos slugs não liberados
 
 function _ytUpdateBtn(playing) {
   var btn = document.getElementById('musicBtn');
@@ -2736,13 +2735,12 @@ function _ytStartRandom() {
   else _ytPlayer.playVideo();
 }
 
-// Playlist efetiva: CONFIG.playlistMusica undefined → fixa (Joey Vibes, compat / slug não liberado);
-// '' (liberado, sem playlist) → SEM música; 'ID' → playlist do cliente.
+// Música SOMENTE com o aditivo "Player de música" ligado para ESTE tenant: ao ligar, o admin grava a
+// playlist do próprio cliente em config/loja.playlistMusica ('PL…'); ao desligar (ou nunca ligar), fica
+// ''/undefined. '' / undefined → SEM música. Nunca cai em playlist fixa/de outro tenant (sem default cross-tenant).
 function _resolveMusicList() {
   var pm = (typeof CONFIG !== 'undefined') ? CONFIG.playlistMusica : undefined;
-  if (pm === undefined || pm === null) return MUSICA_FIXA;
-  if (pm === '') return '';
-  return pm;
+  return (typeof pm === 'string' && pm.trim() !== '') ? pm.trim() : '';
 }
 
 // Cria o player só quando a API do YouTube E a config já chegaram (uma única vez).
