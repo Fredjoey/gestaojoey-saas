@@ -1,49 +1,96 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /pedidos/{id} {
-      allow read, write: if true;
+    function isAdmin() {
+      return request.auth != null
+        && (request.auth.token.email == 'fred@joey.app.br'
+         || request.auth.token.email == 'isabela@joey.app.br');
     }
 
-    match /config/{id} {
-      allow read, write: if true;
+    function isOwner(slug) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/clientes/$(slug)).data.authUid == request.auth.uid;
     }
 
-    match /botConfig/{id} {
-      allow read, write: if true;
+    // App Garçom: custom token com claim slug + role (gerado pela function garcomLogin após validar o PIN).
+    function isGarcom(slug) {
+      return request.auth != null
+        && request.auth.token.slug == slug
+        && request.auth.token.role == 'garcom';
     }
 
-    match /catalogoStatus/{id} {
-      allow read, write: if true;
+    match /clientes/{slug} {
+      allow read, write: if isAdmin() || isOwner(slug);
     }
 
-    match /notasFiscais/{id} {
-      allow read, write: if true;
+    match /clientes/{slug}/config/cardapio       { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    match /clientes/{slug}/config/catOrdem       { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    match /clientes/{slug}/config/configuracoes  { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    match /clientes/{slug}/config/cors           { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    match /clientes/{slug}/config/loja           { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    match /clientes/{slug}/config/prodOrdem      { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+
+    match /clientes/{slug}/config/{doc} {
+      allow read, write: if isAdmin() || isOwner(slug);
     }
 
-    match /mesas/{id} {
-      allow read, write: if true;
+    match /clientes/{slug}/categorias/{id}     { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    match /clientes/{slug}/adicionais/{id}     { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    match /clientes/{slug}/catalogoStatus/{id} { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+    // mesas (estado): leitura pública (cardápio/QR); escrita só dono OU garçom (status quo: cardápio
+    // QR já gravava best-effort e era owner-only — mantido. O estado da conta é derivado do pedido ativo).
+    match /clientes/{slug}/mesas/{id}          { allow read: if true; allow write: if isAdmin() || isOwner(slug) || isGarcom(slug); }
+    match /clientes/{slug}/recipes/{id}        { allow read: if true; allow write: if isAdmin() || isOwner(slug); }
+
+    // mesas-config (definições das mesas): garçom lê (mapa de mesas); só dono edita.
+    match /clientes/{slug}/mesas-config/{id} {
+      allow read: if isAdmin() || isOwner(slug) || isGarcom(slug);
+      allow write: if isAdmin() || isOwner(slug);
     }
 
-    match /fechamentos/{id} {
-      allow read, write: if true;
+    // fechamentos: o garçom registra ao fechar a conta; dono também.
+    match /clientes/{slug}/fechamentos/{id} {
+      allow read, write: if isAdmin() || isOwner(slug) || isGarcom(slug);
     }
 
-    match /backups/{id} {
-      allow read, write: if true;
+    match /clientes/{slug}/pedidos/{id} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin() || isOwner(slug) || isGarcom(slug);
     }
 
-    match /mensagensProgramadas/{id} {
-      allow read, write: if true;
+    match /clientes/{slug}/carrinhos/{id} {
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow read, delete: if isAdmin() || isOwner(slug);
     }
 
-    match /clientes/{clienteId} {
-      allow read, write: if request.auth != null;
+    match /clientes/{slug}/config/contador {
+      allow read, update: if request.auth != null;
     }
 
-    match /conversas/{numero} {
-      allow read, write: if request.auth != null;
+    match /clientes/{slug}/{document=**} {
+      allow read, write: if isAdmin() || isOwner(slug);
+    }
+
+    // PIN do App Garçom — privado. Nenhum acesso de client (só Admin SDK via Cloud Functions).
+    match /garcomSecrets/{slug} {
+      allow read, write: if false;
+    }
+
+    match /leads/{leadId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
 
   }
