@@ -751,7 +751,7 @@
               </div>
               <div><label class="cal-lbl">Recorrência</label><select id="calEvRec"><option value="nenhuma">Nenhuma</option><option value="diario">Diária (todo dia)</option><option value="semanal">Semanal (mesmo dia da semana)</option><option value="mensal">Mensal (todo mês no mesmo dia)</option></select></div>
               <div><label class="cal-lbl">Observação</label><textarea id="calEvObs" rows="2" placeholder="opcional"></textarea></div>
-              <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;"><input id="calEvConcluido" type="checkbox" style="width:auto;"> Concluído</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;"><input id="calEvConcluido" type="checkbox" style="width:auto;"> <span id="calEvConcluidoLbl">Concluído</span></label>
             </div>
             <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
               <button class="secondary" id="calEvExcluir" onclick="calExcluirEvento()" style="background:#c0392b;color:#fff;border-color:#c0392b;display:none;">🗑 Excluir</button>
@@ -2338,6 +2338,7 @@
         let _calMes = new Date().getMonth(); // 0-11
         let _calDiaSel = null;   // "YYYY-MM-DD" do dia aberto no modal
         let _calEditId = null;   // id do evento em edição (null = novo)
+        let _calOcorrSel = null; // "YYYY-MM-DD" da ocorrência sendo concluída (recorrentes: conclusão por data)
 
         function _calFmtBRL(v) { return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
         function _calPad(n) { return String(n).padStart(2, '0'); }
@@ -2346,6 +2347,14 @@
         function _calEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
         // O evento ocorre nesse dia do calendário? (recorrência mensal renderiza virtualmente)
+        // Conclusão por ocorrência: recorrentes guardam as datas concluídas em concluidasEm[];
+        // não recorrentes usam o boolean concluido (compat com docs antigos sem o array).
+        function _calEhRecorrente(ev) { return !!(ev && ev.recorrencia && ev.recorrencia !== 'nenhuma'); }
+        function _calEvConcluidoNaData(ev, dateStr) {
+            if (!ev) return false;
+            if (_calEhRecorrente(ev)) return Array.isArray(ev.concluidasEm) && ev.concluidasEm.includes(dateStr);
+            return !!ev.concluido;
+        }
         function _calOcorre(ev, y, m0, d) {
             if (ev.recorrencia === 'mensal') {
                 const dm = Number(ev.diaMes) || 1;
@@ -2396,7 +2405,7 @@
                 let tags = evs.slice(0, max).map(ev => {
                     const t = CAL_TIPOS[ev.tipo] || { cor: '#7f8c8d' };
                     const val = (ev.valor != null && ev.valor !== '') ? ' · ' + _calFmtBRL(ev.valor) : '';
-                    return `<div class="cal-tag ${ev.concluido ? 'cal-done' : ''}" style="background:${t.cor};${t.dark ? 'color:#1a1a1a;' : ''}" title="${_calEsc(ev.titulo)}">${_calEsc(ev.titulo)}${val}</div>`;
+                    return `<div class="cal-tag ${_calEvConcluidoNaData(ev, dateStr) ? 'cal-done' : ''}" style="background:${t.cor};${t.dark ? 'color:#1a1a1a;' : ''}" title="${_calEsc(ev.titulo)}">${_calEsc(ev.titulo)}${val}</div>`;
                 }).join('');
                 if (evs.length > max) tags += `<div class="cal-mais">+${evs.length - max}</div>`;
                 html += `<div class="cal-cell ${dateStr === hojeStr ? 'cal-today' : ''}" onclick="abrirDiaModal('${dateStr}')"><span class="cal-cell-num">${d}</span>${tags}</div>`;
@@ -2412,8 +2421,9 @@
             const lista = [];
             for (let i = 0; i <= 7; i++) {
                 const dt = new Date(hoje0); dt.setDate(dt.getDate() + i);
+                const _dtStr = _calDateStr(dt.getFullYear(), dt.getMonth(), dt.getDate());
                 _calEventosNoDia(dt.getFullYear(), dt.getMonth(), dt.getDate()).forEach(ev => {
-                    if (!ev.concluido) lista.push({ ev, dt: new Date(dt) });
+                    if (!_calEvConcluidoNaData(ev, _dtStr)) lista.push({ ev, dt: new Date(dt) });
                 });
             }
             const proxEl = document.getElementById('calProximos');
@@ -2454,7 +2464,8 @@
                 const t = CAL_TIPOS[ev.tipo] || { cor: '#7f8c8d', label: ev.tipo };
                 const val = (ev.valor != null && ev.valor !== '') ? `<span class="cal-dia-ev-val">${_calFmtBRL(ev.valor)}</span>` : '';
                 const rec = (ev.recorrencia && ev.recorrencia !== 'nenhuma') ? ` · 🔁 ${({ mensal: 'mensal', semanal: 'semanal', diario: 'diária' })[ev.recorrencia] || ev.recorrencia}` : '';
-                return `<div class="cal-dia-ev ${ev.concluido ? 'cal-done' : ''}" style="border-left-color:${t.cor}" onclick="abrirEventoModal('${ev.id}')"><div><div class="cal-dia-ev-tit">${_calEsc(ev.titulo)}</div><div class="cal-dia-ev-tipo">${t.label}${rec}${ev.concluido ? ' · ✓ concluído' : ''}</div></div>${val}</div>`;
+                const _done = _calEvConcluidoNaData(ev, _calDiaSel);
+                return `<div class="cal-dia-ev ${_done ? 'cal-done' : ''}" style="border-left-color:${t.cor}" onclick="abrirEventoModal('${ev.id}', null, '${_calDiaSel}')"><div><div class="cal-dia-ev-tit">${_calEsc(ev.titulo)}</div><div class="cal-dia-ev-tipo">${t.label}${rec}${_done ? ' · ✓ concluído' : ''}</div></div>${val}</div>`;
             }).join('') : `<div style="font-size:13px;color:var(--text2);text-align:center;padding:1rem;">Nenhum evento neste dia.</div>`;
             document.getElementById('calDiaModal').classList.add('show');
         }
@@ -2470,10 +2481,12 @@
             if (_calEditId) return; // só sugere recorrência ao criar
             document.getElementById('calEvRec').value = CAL_TIPOS[document.getElementById('calEvTipo').value]?.rec || 'nenhuma';
         }
-        function abrirEventoModal(id, dataPadrao) {
+        function abrirEventoModal(id, dataPadrao, ocorrData) {
             _calPopularTipos();
             _calEditId = id || null;
             const ev = id ? _agenda.find(e => e.id === id) : null;
+            const _hojeOc = new Date();
+            _calOcorrSel = ocorrData || dataPadrao || _calDiaSel || ev?.data || _calDateStr(_hojeOc.getFullYear(), _hojeOc.getMonth(), _hojeOc.getDate());
             document.getElementById('calEvTitulo').textContent = ev ? 'Editar evento' : 'Novo evento';
             document.getElementById('calEvTit').value = ev?.titulo || '';
             document.getElementById('calEvTipo').value = ev?.tipo || 'conta';
@@ -2482,7 +2495,9 @@
             document.getElementById('calEvValor').value = (ev && ev.valor != null) ? ev.valor : '';
             document.getElementById('calEvRec').value = ev?.recorrencia || (CAL_TIPOS[document.getElementById('calEvTipo').value]?.rec || 'nenhuma');
             document.getElementById('calEvObs').value = ev?.obs || '';
-            document.getElementById('calEvConcluido').checked = !!ev?.concluido;
+            document.getElementById('calEvConcluido').checked = _calEvConcluidoNaData(ev, _calOcorrSel);
+            const _lblConc = document.getElementById('calEvConcluidoLbl');
+            if (_lblConc) _lblConc.textContent = _calEhRecorrente(ev) ? `Concluído nesta data (${(_calOcorrSel || '').split('-').reverse().slice(0, 2).join('/')})` : 'Concluído';
             document.getElementById('calEvExcluir').style.display = id ? '' : 'none';
             calFecharDia();
             document.getElementById('calEvModal').classList.add('show');
@@ -2497,13 +2512,23 @@
             const _recSel = document.getElementById('calEvRec').value;
             const rec = ['mensal', 'semanal', 'diario'].includes(_recSel) ? _recSel : 'nenhuma';
             const obs = document.getElementById('calEvObs').value.trim();
-            const concluido = document.getElementById('calEvConcluido').checked;
+            const marcado = document.getElementById('calEvConcluido').checked;
             if (!titulo) { alert('Informe o título do evento.'); return; }
             if (!data) { alert('Informe a data do evento.'); return; }
+            const _prev = _calEditId ? _agenda.find(e => e.id === _calEditId) : null;
             const ev = {
-                titulo, tipo, data, recorrencia: rec, concluido,
-                criadoEm: _calEditId ? (_agenda.find(e => e.id === _calEditId)?.criadoEm || Date.now()) : Date.now(),
+                titulo, tipo, data, recorrencia: rec,
+                criadoEm: _prev?.criadoEm || Date.now(),
             };
+            if (rec === 'nenhuma') {
+                ev.concluido = marcado; // ocorrência única: boolean no doc
+            } else {
+                // recorrente: conclusão por data — toggle a ocorrência selecionada em concluidasEm[]
+                const _set = new Set(Array.isArray(_prev?.concluidasEm) ? _prev.concluidasEm : []);
+                const _ocorr = _calOcorrSel || data;
+                if (marcado) _set.add(_ocorr); else _set.delete(_ocorr);
+                ev.concluidasEm = [..._set].sort();
+            }
             if (valorRaw !== '' && !isNaN(parseFloat(valorRaw))) ev.valor = parseFloat(valorRaw);
             if (rec === 'mensal') ev.diaMes = Number(data.split('-')[2]);
             if (obs) ev.obs = obs;
