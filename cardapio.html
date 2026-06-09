@@ -945,6 +945,7 @@ function carregarDadosPainel() {
     CONFIG.pedidoMinimo    = cfg.pedidoMinimo    || 0;
     CONFIG.destaque        = cfg.destaque        || null;
     CONFIG.playlistMusica  = cfg.playlistMusica;   // 'PL…'=toca a playlist do próprio tenant | ''/undefined=sem música (aditivo off)
+    CONFIG.playlistShuffle = cfg.playlistShuffle === true;   // true=embaralha (toggle do admin) | false/ausente=ordem da playlist
     _ytConfigReady = true; _maybeInitMusic();      // libera o player (Parte 2 — música por cliente)
     const heroLogo = document.getElementById('heroLogo');
     if (heroLogo) heroLogo.textContent = CONFIG.nome;
@@ -2719,6 +2720,7 @@ var _ytUserPaused = sessionStorage.getItem('musicPaused') === '1';
 var _ytApiReady    = false;
 var _ytConfigReady = false;
 var _ytInitDone    = false;
+var _ytShuffleAplicado = false; // setShuffle já aplicado à playlist carregada (uma vez)
 
 function _ytUpdateBtn(playing) {
   var btn = document.getElementById('musicBtn');
@@ -2733,6 +2735,29 @@ function _ytStartRandom() {
   var pl = _ytPlayer.getPlaylist && _ytPlayer.getPlaylist();
   if (pl && pl.length) _ytPlayer.playVideoAt(Math.floor(Math.random() * pl.length));
   else _ytPlayer.playVideo();
+}
+
+// Shuffle por tenant (config/loja.playlistShuffle, gravado pelo admin): aplica setShuffle assim que a
+// playlist carrega e inicia a reprodução SE permitido (mesma trava de autoplay/mute: só com _ytPending).
+// shuffle on → setShuffle(true) + faixa aleatória; off/ausente → setShuffle(false) + ordem da playlist.
+function _ytPrepararEIniciar(tentativa) {
+  if (!_ytPlayer || !_ytReady) return;
+  var shuffleOn = !!(typeof CONFIG !== 'undefined' && CONFIG.playlistShuffle === true);
+  if (!_ytShuffleAplicado) {
+    var pl = _ytPlayer.getPlaylist && _ytPlayer.getPlaylist();
+    if (shuffleOn && (!pl || !pl.length) && (tentativa || 0) < 30) {
+      setTimeout(function(){ _ytPrepararEIniciar((tentativa || 0) + 1); }, 100); // espera a playlist p/ o setShuffle pegar
+      return;
+    }
+    _ytPlayer.setShuffle(shuffleOn);
+    _ytPlayer.setLoop(true);
+    _ytShuffleAplicado = true;
+  }
+  if (_ytPending && !_ytUserPaused) {
+    _ytPending = false;
+    if (shuffleOn) _ytStartRandom();   // embaralhado: começa numa faixa aleatória
+    else _ytPlayer.playVideo();        // ordem normal: começa do início da playlist
+  }
 }
 
 // Música SOMENTE com o aditivo "Player de música" ligado para ESTE tenant: ao ligar, o admin grava a
@@ -2761,9 +2786,7 @@ function _maybeInitMusic() {
     events: {
       onReady: function() {
         _ytReady = true;
-        _ytPlayer.setShuffle(true);
-        _ytPlayer.setLoop(true);
-        if (_ytPending && !_ytUserPaused) { _ytStartRandom(); _ytPending = false; }
+        _ytPrepararEIniciar(0);   // setShuffle conforme o tenant (espera a playlist se preciso) + inicia se permitido
       },
       onStateChange: function(e) {
         var playing = e.data === YT.PlayerState.PLAYING;
@@ -2793,8 +2816,8 @@ function _ytNext() { if (_ytPlayer && _ytReady) _ytPlayer.nextVideo(); }
     document.removeEventListener('click',      _onFirstInteraction, true);
     document.removeEventListener('touchstart', _onFirstInteraction, true);
     if (_ytUserPaused) return;
-    if (_ytReady) { _ytStartRandom(); }
-    else          { _ytPending = true; }
+    _ytPending = true;
+    if (_ytReady) _ytPrepararEIniciar(0);
   }
   document.addEventListener('click',      _onFirstInteraction, true);
   document.addEventListener('touchstart', _onFirstInteraction, true);
