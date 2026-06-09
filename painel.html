@@ -6152,15 +6152,6 @@ async function epConfirmar() {
   }
 }
 
-async function _migrarContador() {
-  const ref = db.doc(`clientes/${slug}/config/contador`);
-  await db.runTransaction(async t => {
-    const doc = await t.get(ref);
-    const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
-    if (atual < 32302) t.set(ref, { ultimoPedido: 32302 }, { merge: true });
-  });
-}
-
 auth.onAuthStateChanged(user => {
   document.getElementById('loginScreen').style.display = user ? 'none' : 'flex';
   if (user) {
@@ -6169,7 +6160,6 @@ auth.onAuthStateChanged(user => {
     atualizarBtnNotificacao();
     _anivVerificado = ''; // reseta guard para rodar com auth
     verificarAniversariantes();
-    _migrarContador().catch(e => console.warn('[migrarContador]', e));
   }
 });
 
