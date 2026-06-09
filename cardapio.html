@@ -1745,6 +1745,24 @@ function _enderecoSalvo() {
 // localStorage) → nome+endereço por uma Cloud Function (server-side; o anônimo não lê
 // tokens/clientes direto). Grava no MESMO localStorage que o checkout já lê → totalmente
 // editável e o "Entregar em outro endereço?" (limparEndereco) continua funcionando.
+// Telefone verificado do WhatsApp (via token): quando o nº real vem do bot, o campo é preenchido + travado.
+let _telVerificado = false;
+function _fmtTelBR(d) {
+  d = String(d || '').replace(/\D/g, '');
+  if (d.length > 11 && d.slice(0, 2) === '55') d = d.slice(2); // tira código país, se vier
+  if (d.length === 11) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+  if (d.length === 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+  return d;
+}
+// "usar outro número": destrava o campo pra edição manual (caso raro) sem re-renderizar (preserva o resto)
+function _usarOutroTelefone() {
+  _telVerificado = false;
+  const campo = document.getElementById('fTel');
+  if (campo) { campo.readOnly = false; campo.value = ''; campo.focus(); }
+  const wrap = document.getElementById('telVerificadoWrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
 const _CF_RESOLVE_TOKEN = 'https://southamerica-east1-gestaojoey.cloudfunctions.net/resolverEnderecoToken';
 async function _resolverTokenEndereco() {
   try {
@@ -1783,6 +1801,19 @@ async function _resolverTokenEndereco() {
         bairro: atual.bairro || e.bairro || '',
       };
       try { localStorage.setItem('joey_endereco_' + slug, JSON.stringify(novo)); } catch(e){}
+    }
+    // Telefone verificado do WhatsApp — número real (10-13 díg) ou '' (@lid sem número). '' → não mexe no campo.
+    if (typeof data.telefone === 'string' && data.telefone) {
+      const telFmt = _fmtTelBR(data.telefone);
+      if (telFmt) {
+        _telVerificado = true;
+        if (!clienteData) clienteData = {};
+        clienteData.tel = telFmt;   // número do WhatsApp tem prioridade (é o verificado do cliente)
+        try {
+          const cli = JSON.parse(localStorage.getItem('joey_cliente') || 'null') || {};
+          cli.tel = telFmt; localStorage.setItem('joey_cliente', JSON.stringify(cli));
+        } catch(e){}
+      }
     }
     // Se o cliente já está na etapa de dados, re-renderiza pra refletir (campos editáveis)
     if (checkoutStep === 2 && typeof renderCartContent === 'function') {
@@ -1861,7 +1892,11 @@ function renderStepDados(el) {
       </div>
       <div class="form-group">
         <label class="form-label">WhatsApp *</label>
-        <input class="form-input" id="fTel" placeholder="(00) 00000-0000" value="${c.tel||''}" type="tel">
+        <input class="form-input" id="fTel" placeholder="(00) 00000-0000" value="${c.tel||''}" type="tel"${_telVerificado ? ' readonly' : ''}>
+        ${_telVerificado ? `<div id="telVerificadoWrap" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px">
+          <span style="font-size:12px;color:#22c55e;font-weight:700">✓ número do seu WhatsApp</span>
+          <a onclick="_usarOutroTelefone()" style="font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline">usar outro número</a>
+        </div>` : ''}
       </div>
     </div>
     <div class="form-group">
