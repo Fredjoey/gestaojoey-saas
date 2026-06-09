@@ -498,9 +498,10 @@ function joeyApiBaseFor(slug) {
 }
 
 function cardapioUrlFor(slug) {
+  // /l = rota de OG dinâmico (só no domínio compartilhado). joey vive no domínio legado → sem /l.
   return slug === 'joey'
     ? 'https://hamburgueriajoey.com.br'
-    : `https://${slug}.gestaojoey.com.br`;
+    : `https://${slug}.gestaojoey.com.br/l`;
 }
 
 exports.verificarCarrinhosAbandonados = onSchedule(
