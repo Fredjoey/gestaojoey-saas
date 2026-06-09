@@ -3655,7 +3655,13 @@
 
         async function carregarCategorias() {
             if (!window._fb) return;
-            const docs = await window._fb.fbGetAll('categorias').catch(() => []);
+            let docs;
+            try {
+                docs = await window._fb.fbGetAll('categorias');
+            } catch (err) {
+                console.error('[Categorias] falha ao carregar — mantendo lista anterior:', err);
+                return;
+            }
             console.log('[Categorias]', docs.length, 'docs encontrados');
             categoriasDB = docs.sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
             popularSelectsCategorias();
@@ -3759,6 +3765,8 @@
             const id = editandoId ? Number(editandoId) : Date.now();
             if (window._fb) await window._fb.fbSave('categorias', String(id), { id, nome, emoji });
             fecharFormCategoria();
+            await carregarCategorias();
+            renderCategoriasManager();
         }
 
         async function excluirCategoria(catId) {
@@ -3771,6 +3779,8 @@
                 if (window._fb) await window._fb.fbSave('recipes', r.id, r).catch(() => {});
             }
             if (window._fb) await window._fb.fbDelete('categorias', String(catId));
+            await carregarCategorias();
+            renderCategoriasManager();
         }
 
         function abrirPainelReceitasCategoria(catNome, catId) {
