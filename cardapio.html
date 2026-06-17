@@ -1763,6 +1763,20 @@ function _usarOutroTelefone() {
   if (wrap) wrap.style.display = 'none';
 }
 
+// Toast curto (usado quando chega um carrinho montado pela IA do WhatsApp)
+function _toastCarrinhoIA(msg) {
+  try {
+    const t = document.createElement('div');
+    t.textContent = msg || 'Pedido do WhatsApp carregado!';
+    t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:9999;'
+      + 'background:#E87722;color:#fff;padding:12px 18px;border-radius:24px;font-size:14px;font-weight:600;'
+      + 'box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:90vw;text-align:center;opacity:0;transition:opacity .25s';
+    document.body.appendChild(t);
+    requestAnimationFrame(() => { t.style.opacity = '1'; });
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3500);
+  } catch (e) {}
+}
+
 const _CF_RESOLVE_TOKEN = 'https://southamerica-east1-gestaojoey.cloudfunctions.net/resolverEnderecoToken';
 async function _resolverTokenEndereco() {
   try {
@@ -1815,6 +1829,28 @@ async function _resolverTokenEndereco() {
         } catch(e){}
       }
     }
+    // Carrinho montado pela IA no WhatsApp (Fase 2 Opção B) — vem no MESMO retorno do token.
+    // Injeta UMA vez, só se o carrinho local estiver vazio (não duplica em reload). A estrutura
+    // do item já é idêntica à do cart[] do site (id/nome/preco/qty/obs/emoji/adicionais).
+    try {
+      if (data.carrinho && Array.isArray(data.carrinho.itens) && data.carrinho.itens.length && cart.length === 0) {
+        data.carrinho.itens.forEach(it => {
+          cart.push({
+            id: it.id,
+            nome: it.nome,
+            preco: Number(it.preco) || 0,
+            qty: Number(it.qty) || 1,
+            obs: it.obs || '',
+            emoji: it.emoji || '🍽️',
+            adicionais: Array.isArray(it.adicionais) ? it.adicionais : []
+          });
+        });
+        if (typeof updateCartBtn === 'function') updateCartBtn();
+        if (typeof renderProducts === 'function') renderProducts();
+        _toastCarrinhoIA('Pedido do WhatsApp carregado! 🛒');
+      }
+    } catch (e) { console.warn('[carrinho IA]', e); }
+
     // Se o cliente já está na etapa de dados, re-renderiza pra refletir (campos editáveis)
     if (checkoutStep === 2 && typeof renderCartContent === 'function') {
       try { renderCartContent(); } catch(e){}
