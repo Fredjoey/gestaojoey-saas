@@ -3477,6 +3477,8 @@ function renderCardapioEditor() {
     itens.forEach((r, pIdx) => {
       const ativo   = catalogoStatusMap[r.id]?.ativo === true;
       const fotoUrl = catalogoStatusMap[r.id]?.foto || null;
+      const _estAtual = catalogoStatusMap[r.id]?.estoque;
+      const _estoqueVal = (typeof _estAtual === 'number') ? _estAtual : '';
       const margem  = (r.price||0) - (r.cost||0);
       const corMarg = margem >= 0 ? '#34d399' : '#ff6b6b';
       const thumbHtml = fotoUrl
@@ -3512,6 +3514,11 @@ function renderCardapioEditor() {
           <div style="grid-column:1/-1;margin-top:2px">
             <input type="text" maxlength="200" value="${_esc(catalogoStatusMap[r.id]?.descricaoCliente || '')}" placeholder="✍️ Descrição p/ o cliente (aparece no cardápio)" onchange="salvarDescricaoProduto('${r.id}', this.value)" style="width:100%;padding:7px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
           </div>
+          <div style="grid-column:1/-1;margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:600;color:#ffb380">📦 Estoque do dia</span>
+            <input type="number" min="0" inputmode="numeric" value="${_estoqueVal}" placeholder="ilimitado" onchange="salvarEstoqueDia('${r.id}', this.value)" style="width:96px;padding:6px 9px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-family:inherit;outline:none" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
+            <span style="font-size:11px;color:var(--text3)">vazio = ilimitado · 0 = some do cardápio</span>
+          </div>
         </div>`;
     });
   });
@@ -3528,6 +3535,17 @@ function salvarDescricaoProduto(id, valor) {
   db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ descricaoCliente: (valor || '').trim() }, { merge: true })
     .then(() => notify('✓ Descrição salva.'))
     .catch(e => notify('Erro ao salvar descrição: ' + (e.message || ''), 'error'));
+}
+
+// Estoque do dia: catalogoStatus/{id}.estoque com merge (não toca ativo/foto/descrição).
+// Vazio = ilimitado (null); número >=0 = limite do dia (0 some do cardápio). A baixa/devolução
+// é automática via Cloud Function (onCreate/onUpdate de pedidos).
+function salvarEstoqueDia(id, valor) {
+  const v = String(valor == null ? '' : valor).trim();
+  const estoque = (v === '') ? null : Math.max(0, parseInt(v, 10) || 0);
+  db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ estoque }, { merge: true })
+    .then(() => notify(estoque === null ? '✓ Estoque ilimitado.' : '✓ Estoque do dia: ' + estoque))
+    .catch(e => notify('Erro ao salvar estoque: ' + (e.message || ''), 'error'));
 }
 
 // Liga/desliga a categoria INTEIRA no cardápio do cliente. Flag próprio (config/catOrdem.ocultas)
