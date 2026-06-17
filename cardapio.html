@@ -862,7 +862,13 @@ firebase.auth().onAuthStateChanged(user => {
   }
 });
 firebase.auth().signInAnonymously().catch(e => console.error('Auth anônimo falhou:', e));
-_resolverTokenEndereco(); // Parte 2: pré-preenchimento de endereço via token do WhatsApp (independe do auth)
+// URL da Cloud Function que resolve o token (endereço + carrinho da IA). Declarada AQUI,
+// ANTES da chamada abaixo: _resolverTokenEndereco roda na top-level e usa _CF_RESOLVE_TOKEN
+// na parte SÍNCRONA (arg do fetch, antes do await), então o const TEM que já estar
+// inicializado neste ponto — senão dá TDZ ("Cannot access '_CF_RESOLVE_TOKEN' before
+// initialization") e a função aborta antes de pré-preencher endereço / injetar o carrinho.
+const _CF_RESOLVE_TOKEN = 'https://southamerica-east1-gestaojoey.cloudfunctions.net/resolverEnderecoToken';
+_resolverTokenEndereco(); // Parte 2: pré-preenchimento de endereço + carrinho da IA via token (independe do auth)
 
 // Splash: saída sincronizada com o load da imagem (não mais setTimeout cego)
 (function(){
@@ -1777,7 +1783,6 @@ function _toastCarrinhoIA(msg) {
   } catch (e) {}
 }
 
-const _CF_RESOLVE_TOKEN = 'https://southamerica-east1-gestaojoey.cloudfunctions.net/resolverEnderecoToken';
 async function _resolverTokenEndereco() {
   try {
     const lsKey = 'joey_linktoken_' + slug;
