@@ -971,7 +971,10 @@ function carregarDadosPainel() {
     _recipesRaw.forEach(r => {
       const _cat = r.categoria || 'Outros';
       if (_catsOcultas.has(_cat)) return;               // categoria oculta pelo gestor → some inteira do cardápio
-      if (_catalogoStatusMap[r.id]?.ativo !== true) return;
+      const _st = _catalogoStatusMap[r.id];
+      if (_st?.ativo !== true) return;
+      // Estoque do dia: campo number em catalogoStatus.estoque. null/ausente = ilimitado; <=0 some do cardápio.
+      if (typeof _st.estoque === 'number' && _st.estoque <= 0) return;
       CARDAPIO.push({
         id:         r.id,
         nome:       r.name || r.nome || '—',

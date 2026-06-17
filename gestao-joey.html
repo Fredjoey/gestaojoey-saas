@@ -2091,6 +2091,12 @@
             await setDoc(doc(db, `clientes/${slug}/${colecao}`, String(id)), dados);
         }
 
+        // merge=true: grava só os campos passados sem apagar o resto do doc (ex.: estoque sem
+        // sobrescrever ativo/foto/descricaoCliente do catalogoStatus). Usado no Estoque do dia.
+        async function fbMerge(colecao, id, dados) {
+            await setDoc(doc(db, `clientes/${slug}/${colecao}`, String(id)), dados, { merge: true });
+        }
+
         async function fbDelete(colecao, id) {
             await deleteDoc(doc(db, `clientes/${slug}/${colecao}`, String(id)));
         }
@@ -2168,7 +2174,7 @@
             return map;
         }
 
-        window._fb = { fbSave, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbGetEntreguesMes, fbGetCatalogoStatus, slug };
+        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbGetEntreguesMes, fbGetCatalogoStatus, slug };
 
     </script>
     <script>
@@ -2180,6 +2186,7 @@
 
         // Dados em memória
         let recipes = [];
+        let _catStatusMap = {}; // catalogoStatus por id ({ativo, estoque, foto…}) — p/ o Estoque do dia
         let categoriasDB = [];
         const _CAT_EMOJIS = ['🍕','🍔','🍟','🍝','🍰','🥤','🥗','🍗','🥩','🫕','🍺','☕'];
         let fixedCosts = [];
@@ -2215,6 +2222,13 @@
                 _migrarSubInsumos();
                 renderRecipesList();
                 updateAnalysis();
+            });
+
+            // Status do cardápio (ativo/estoque/foto) — alimenta o "Estoque do dia" no gestor.
+            onSnapshot(collection(db, `clientes/${slug}/catalogoStatus`), (snap) => {
+                _catStatusMap = {};
+                snap.docs.forEach(d => { _catStatusMap[d.id] = d.data() || {}; });
+                renderRecipesList();
             });
 
             // Custos Fixos
@@ -3566,6 +3580,8 @@
                     ${receitasCat.map(recipe => {
                         const margin = recipe.price - recipe.cost;
                         const marginPct = ((margin / recipe.price) * 100).toFixed(1);
+                        const _estAtual = _catStatusMap[recipe.id] && _catStatusMap[recipe.id].estoque;
+                        const _estoqueVal = (typeof _estAtual === 'number') ? _estAtual : '';
                         const cmv = ((recipe.cost / recipe.price) * 100).toFixed(1);
                         const adicionaisAtribuidos = (recipe.adicionais||[]).filter(x => typeof x !== 'object');
                         const _nAdicTotal = adicionaisAtribuidos.length + (recipe.adicionaisGrupos||[]).length;
@@ -3611,6 +3627,14 @@
                                         <div class="detail-value">${recipe.yield} ${recipe.yield === 1 ? 'unidade' : 'unidades'}</div>
                                     </div>
                                 </div>
+                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #333">
+                                    <span style="font-size:12px;font-weight:600;color:#ffb380">📦 Estoque do dia</span>
+                                    <input type="number" min="0" inputmode="numeric" value="${_estoqueVal}" placeholder="ilimitado"
+                                        onchange="salvarEstoqueDia(${recipe.id}, this.value)"
+                                        style="width:96px;padding:6px 9px;background:#0f0f0f;border:1px solid #444;border-radius:6px;color:#eee;font-size:13px;outline:none"
+                                        onfocus="this.style.borderColor='#ff6b35'" onblur="this.style.borderColor='#444'">
+                                    <span style="font-size:11px;color:#777">vazio = ilimitado · 0 = some do cardápio</span>
+                                </div>
                             </div>
                         `;
                     }).join('')}
@@ -3620,6 +3644,17 @@
 
         function filterRecipes() {
             renderRecipesList();
+        }
+
+        // Estoque do dia: grava em catalogoStatus/{id}.estoque com MERGE (não apaga ativo/foto).
+        // Vazio = ilimitado (estoque:null); número >=0 = limite do dia (0 some do cardápio).
+        function salvarEstoqueDia(id, valor) {
+            if (!window._fb) return;
+            const v = String(valor == null ? '' : valor).trim();
+            const estoque = (v === '') ? null : Math.max(0, parseInt(v, 10) || 0);
+            _catStatusMap[id] = Object.assign({}, _catStatusMap[id], { estoque }); // reflete já no mapa local
+            window._fb.fbMerge('catalogoStatus', id, { estoque })
+                .catch(e => console.error('Erro ao salvar estoque do dia:', e));
         }
 
         function categorizarReceita(id, categoria) {
