@@ -1833,8 +1833,10 @@ async function _resolverTokenEndereco() {
     // Injeta UMA vez, só se o carrinho local estiver vazio (não duplica em reload). A estrutura
     // do item já é idêntica à do cart[] do site (id/nome/preco/qty/obs/emoji/adicionais).
     try {
-      if (data.carrinho && Array.isArray(data.carrinho.itens) && data.carrinho.itens.length && cart.length === 0) {
-        data.carrinho.itens.forEach(it => {
+      const _iaItens = (data.carrinho && Array.isArray(data.carrinho.itens)) ? data.carrinho.itens : [];
+      console.log('[carrinho IA] recebido do WhatsApp:', _iaItens.length, 'item(ns) | cart local:', cart.length);
+      if (_iaItens.length && cart.length === 0) {
+        _iaItens.forEach(it => {
           cart.push({
             id: it.id,
             nome: it.nome,
@@ -1847,7 +1849,18 @@ async function _resolverTokenEndereco() {
         });
         if (typeof updateCartBtn === 'function') updateCartBtn();
         if (typeof renderProducts === 'function') renderProducts();
+        // Abre a SACOLA automaticamente p/ o cliente VER o pedido carregado (sem ser silencioso).
+        // Mostra a sacola direto (sem o guard de loja fechada do openCart) — só exibir os itens.
+        try {
+          checkoutStep = 1;
+          if (typeof renderCartContent === 'function') renderCartContent();
+          const _ov = document.getElementById('cartOverlay');
+          if (_ov) { _ov.classList.add('show'); if (typeof lockBodyScroll === 'function') lockBodyScroll(); }
+        } catch (e2) { console.warn('[carrinho IA] abrir sacola falhou:', e2); }
         _toastCarrinhoIA('Pedido do WhatsApp carregado! 🛒');
+        console.log('[carrinho IA] injetado:', cart.length, 'item(ns) no carrinho');
+      } else if (_iaItens.length) {
+        console.log('[carrinho IA] cart local NÃO vazio — injeção pulada (evita duplicar)');
       }
     } catch (e) { console.warn('[carrinho IA]', e); }
 
