@@ -190,6 +190,7 @@ body{background:var(--bg);color:var(--text);display:flex;overflow:hidden}
 .oc-timer-orange{background:rgba(255,159,28,.14);color:#ffb02e;border:1px solid rgba(255,159,28,.32)}
 .oc-timer-red{background:rgba(239,68,68,.16);color:#ff6b6b;border:1px solid rgba(239,68,68,.36)}
 .oc-agendado{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;letter-spacing:.2px;color:#ffb02e;background:rgba(255,159,28,.16);border:1px solid rgba(255,159,28,.45);border-radius:8px;padding:5px 10px;margin:2px 0 8px}
+.oc-naopago{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#ff6b6b;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.45);border-radius:8px;padding:5px 10px;margin:-4px 0 8px}
 .oc-itens{font-size:11px;color:rgba(255,255,255,.4);line-height:1.5;margin-bottom:8px;border-top:1px solid rgba(255,255,255,.05);padding-top:8px;}
 .oc-footer{display:flex;align-items:center;justify-content:space-between}
 .oc-pag{font-size:10px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.5px}
@@ -2372,7 +2373,9 @@ let _entregaTimerInt = null;
 // com pedido pra agora. dataHoraAgendada já vem formatada ("DD/MM HH:MM") do bot.
 function _agendadoBadgeHtml(p) {
   if (!p || p.origem !== 'whatsapp' || !p.agendado || !p.dataHoraAgendada) return '';
-  return `<div class="oc-agendado">📅 Agendado: ${p.dataHoraAgendada}</div>`;
+  let html = `<div class="oc-agendado">📅 Agendado: ${p.dataHoraAgendada}</div>`;
+  if (p.agendadoNaoPago === true) html += `<div class="oc-naopago">⚠️ Agendado não pago — Pix antecipado pendente</div>`;
+  return html;
 }
 
 function _timerEntregaInfo(p) {
@@ -6485,6 +6488,7 @@ function iniciarListenersFirestore() {
       // Primeira carga — apenas inicializa, sem disparar som
       _knownPedidoIds = novosIds;
       _garcomVistos = new Set(snap.docs.filter(d => (d.data().origem) === 'garcom').map(d => d.id));
+      _disparadosVistos = new Set(snap.docs.filter(d => d.data().disparado === true).map(d => d.id));
     } else {
       // App Garçom: pedidos (origem 'garcom') chegam como 'producao' — o painel imprime a comanda
       // na chegada (mesa = comanda de mesa; balcão/retirada = comanda de produção). Reusa as funções existentes.
@@ -6497,6 +6501,14 @@ function iniciarListenersFirestore() {
             else imprimirPedidoProducao(ped);
           } catch (e) { console.warn('[garcom print]', e); }
           notify('🧑‍🍳 Pedido do garçom #' + d.id + (ped.mesaNome ? ' — ' + ped.mesaNome : ''));
+          if (_somAtivo) tocarSomPedido();
+        }
+        // Pedido AGENDADO disparado pela Cloud Function (status→producao, disparado=true):
+        // imprime a comanda de produção uma única vez (mesma lógica de impressão do garçom/auto-aceite).
+        if (ped.disparado === true && _disparadosVistos && !_disparadosVistos.has(d.id)) {
+          _disparadosVistos.add(d.id);
+          try { imprimirPedidoProducao(ped); } catch (e) { console.warn('[disparo print]', e); }
+          notify('📅 Pedido agendado #' + d.id + ' entrou em produção' + (ped.dataHoraAgendada ? ' (entrega ' + ped.dataHoraAgendada + ')' : ''));
           if (_somAtivo) tocarSomPedido();
         }
       });
@@ -7463,6 +7475,7 @@ async function enviarParabens(tel, nome) {
 let _pedidosAnt = [];
 let _knownPedidoIds = null; // null = primeira carga, não dispara som
 let _garcomVistos = null;   // ids de pedidos do App Garçom já impressos (evita reimprimir)
+let _disparadosVistos = null; // ids de pedidos agendados já disparados+impressos (evita reimprimir)
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
