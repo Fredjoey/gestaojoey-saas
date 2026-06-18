@@ -2334,7 +2334,7 @@ function orderCardHtml(p) {
       <div class="oc-itens">${itensStr}</div>
       ${p.desconto && p.desconto.valorAplicado > 0 ? `<div style="font-size:11px;color:#34d399;margin-top:4px">Desconto: − R$ ${p.desconto.valorAplicado.toFixed(2).replace('.',',')}</div>` : ''}
       <div class="oc-footer">
-        <span class="oc-pag">${p.pagamento?.toUpperCase()||'—'}</span>
+        <span class="oc-pag">${p.pagamento?.toUpperCase()||'—'}${(p.pagamento==='pix'&&p.pagamentoManual)?' (na entrega)':''}</span>
         <span class="oc-total">R$ ${(p.total||0).toFixed(2).replace('.',',')}</span>
       </div>
       <div class="oc-actions" onclick="event.stopPropagation()">${botoes}</div>
