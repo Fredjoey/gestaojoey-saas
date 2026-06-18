@@ -604,9 +604,23 @@ textarea.fi{resize:vertical;min-height:60px}
       </label>
     </div>
     <div class="bot-item">
+      <div><div id="iaAtdLabel" class="auto-label-off" style="font-size:12px;font-weight:700">💬 IA Atendimento: OFF</div></div>
+      <label class="auto-switch">
+        <input type="checkbox" id="iaAtdInput" onchange="toggleIaFlag('IA_ATENDIMENTO',this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="bot-item">
+      <div><div id="iaPedLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🛒 IA Pedido: OFF</div></div>
+      <label class="auto-switch">
+        <input type="checkbox" id="iaPedInput" onchange="toggleIaFlag('IA_PEDIDO',this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="bot-item">
       <div><div id="pedProgLabel" class="auto-label-off" style="font-size:12px;font-weight:700">📅 Pedido programado: OFF</div></div>
       <label class="auto-switch">
-        <input type="checkbox" id="pedProgInput" onchange="togglePedidoProgramado(this)">
+        <input type="checkbox" id="pedProgInput" onchange="toggleIaFlag('botPedidoAgendado',this)">
         <span class="slider"></span>
       </label>
     </div>
@@ -2454,34 +2468,51 @@ async function toggleAutoAceitar(input) {
   }
 }
 
-// ── PEDIDO PROGRAMADO (flag config/features.botPedidoAgendado, lida fresca pelo bot) ──
-function _setPedProgUI(ativo) {
-  const input = document.getElementById('pedProgInput');
-  const label = document.getElementById('pedProgLabel');
-  if (input) input.checked = ativo;
-  if (label) {
-    label.textContent = ativo ? '📅 Pedido programado: ATIVO' : '📅 Pedido programado: OFF';
-    label.className   = ativo ? 'auto-label-on' : 'auto-label-off';
-  }
+// ── IA (atendimento / pedido / programado) — flags em config/features, LIBERADAS pelo
+// entitlement config/aditivos.ia (premium). Sem o aditivo: toggles bloqueados (🔒 Premium) e
+// o bot ignora as flags. O admin libera (aditivos.ia); o cliente liga cada flag aqui.
+let _iaLiberada = false;   // entitlement (admin) — fonte de verdade
+let _iaFeatures = {};      // config/features atual
+const _IA_TOGS = [
+  { key:'IA_ATENDIMENTO',    input:'iaAtdInput',   label:'iaAtdLabel',   emoji:'💬', nome:'IA Atendimento' },
+  { key:'IA_PEDIDO',         input:'iaPedInput',   label:'iaPedLabel',   emoji:'🛒', nome:'IA Pedido' },
+  { key:'botPedidoAgendado', input:'pedProgInput', label:'pedProgLabel', emoji:'📅', nome:'Pedido programado' },
+];
+function _setIaTogglesUI() {
+  _IA_TOGS.forEach(t => {
+    const input = document.getElementById(t.input);
+    const label = document.getElementById(t.label);
+    const on = _iaFeatures[t.key] === true;
+    if (input) { input.checked = _iaLiberada && on; input.disabled = !_iaLiberada; }
+    if (label) {
+      if (!_iaLiberada) { label.textContent = `${t.emoji} ${t.nome}: 🔒 Premium`; label.className = 'auto-label-off'; label.style.opacity = '.6'; }
+      else { label.textContent = `${t.emoji} ${t.nome}: ${on ? 'ATIVO' : 'OFF'}`; label.className = on ? 'auto-label-on' : 'auto-label-off'; label.style.opacity = '1'; }
+    }
+  });
 }
-// Reflete o estado em TEMPO REAL (onSnapshot) — se mudar em qualquer lugar, o toggle acompanha.
-function iniciarPedProgListener() {
+// Tempo real: features (flags) + aditivos (entitlement). Qualquer mudança reflete nos toggles.
+function iniciarIaListeners() {
   db.doc(`clientes/${slug}/config/features`).onSnapshot(
-    snap => _setPedProgUI(snap.exists ? snap.data().botPedidoAgendado === true : false),
-    e => console.error('[PEDPROG] listener erro:', e)
-  );
+    s => { _iaFeatures = s.exists ? (s.data() || {}) : {}; _setIaTogglesUI(); },
+    e => console.error('[IA] features listener:', e));
+  db.doc(`clientes/${slug}/config/aditivos`).onSnapshot(
+    s => { _iaLiberada = !!(s.exists && s.data().ia === true); _setIaTogglesUI(); },
+    e => console.error('[IA] aditivos listener:', e));
 }
-async function togglePedidoProgramado(input) {
+async function toggleIaFlag(key, input) {
+  if (!_iaLiberada) {           // recurso premium não liberado → bloqueia (não grava flag de uso)
+    input.checked = false;
+    notify('🔒 Recurso de IA é premium — peça a liberação para a equipe Joey.', 'error');
+    return;
+  }
   const ativo = input.checked;
-  _setPedProgUI(ativo);
-  console.log('[PEDPROG] toggle →', ativo ? 'ATIVO' : 'OFF');
   try {
-    // merge: NÃO apaga IA_ATENDIMENTO/IA_PEDIDO. O bot lê a flag fresca a cada msg.
-    await db.doc(`clientes/${slug}/config/features`).set({ botPedidoAgendado: ativo }, { merge: true });
-    notify(ativo ? '📅 Pedido programado ATIVADO' : '📅 Pedido programado desativado');
+    // merge: não apaga as outras flags. O bot lê fresca a cada msg (e só usa se o aditivo estiver on).
+    await db.doc(`clientes/${slug}/config/features`).set({ [key]: ativo }, { merge: true });
   } catch (e) {
-    console.error('[PEDPROG] erro ao salvar:', e);
-    notify('Erro ao salvar Pedido programado', 'error');
+    console.error('[IA] erro ao salvar flag', key, e);
+    notify('Erro ao salvar configuração de IA', 'error');
+    input.checked = !ativo;
   }
 }
 
@@ -6398,7 +6429,7 @@ _atualizarBtnSom();
 let _listenersIniciados = false;
 function iniciarListenersFirestore() {
   carregarAutoAceitar();
-  iniciarPedProgListener();
+  iniciarIaListeners();
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
     const defaults = { nome:'Joey Pizza', wpp:'', taxa:5, end:'', aberto:true, horarios:{}, bairros:[], impressaoAtiva:true, viasImpressao:1, impressoraNome:'' };
     config = snap.exists ? { ...defaults, ...snap.data() } : defaults;
