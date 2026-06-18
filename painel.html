@@ -604,6 +604,13 @@ textarea.fi{resize:vertical;min-height:60px}
       </label>
     </div>
     <div class="bot-item">
+      <div><div id="pedProgLabel" class="auto-label-off" style="font-size:12px;font-weight:700">📅 Pedido programado: OFF</div></div>
+      <label class="auto-switch">
+        <input type="checkbox" id="pedProgInput" onchange="togglePedidoProgramado(this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="bot-item">
       <div><div id="impTopLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🖨️ Impressora: PAUSADA</div></div>
       <label class="auto-switch">
         <input type="checkbox" id="impTopInput" onchange="toggleImpressaoTopo(this)">
@@ -2444,6 +2451,37 @@ async function toggleAutoAceitar(input) {
   } catch (e) {
     console.error('[AUTO] erro ao salvar toggle:', e);
     notify('Erro ao salvar configuração de auto-aceite', 'error');
+  }
+}
+
+// ── PEDIDO PROGRAMADO (flag config/features.botPedidoAgendado, lida fresca pelo bot) ──
+function _setPedProgUI(ativo) {
+  const input = document.getElementById('pedProgInput');
+  const label = document.getElementById('pedProgLabel');
+  if (input) input.checked = ativo;
+  if (label) {
+    label.textContent = ativo ? '📅 Pedido programado: ATIVO' : '📅 Pedido programado: OFF';
+    label.className   = ativo ? 'auto-label-on' : 'auto-label-off';
+  }
+}
+// Reflete o estado em TEMPO REAL (onSnapshot) — se mudar em qualquer lugar, o toggle acompanha.
+function iniciarPedProgListener() {
+  db.doc(`clientes/${slug}/config/features`).onSnapshot(
+    snap => _setPedProgUI(snap.exists ? snap.data().botPedidoAgendado === true : false),
+    e => console.error('[PEDPROG] listener erro:', e)
+  );
+}
+async function togglePedidoProgramado(input) {
+  const ativo = input.checked;
+  _setPedProgUI(ativo);
+  console.log('[PEDPROG] toggle →', ativo ? 'ATIVO' : 'OFF');
+  try {
+    // merge: NÃO apaga IA_ATENDIMENTO/IA_PEDIDO. O bot lê a flag fresca a cada msg.
+    await db.doc(`clientes/${slug}/config/features`).set({ botPedidoAgendado: ativo }, { merge: true });
+    notify(ativo ? '📅 Pedido programado ATIVADO' : '📅 Pedido programado desativado');
+  } catch (e) {
+    console.error('[PEDPROG] erro ao salvar:', e);
+    notify('Erro ao salvar Pedido programado', 'error');
   }
 }
 
@@ -6360,6 +6398,7 @@ _atualizarBtnSom();
 let _listenersIniciados = false;
 function iniciarListenersFirestore() {
   carregarAutoAceitar();
+  iniciarPedProgListener();
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
     const defaults = { nome:'Joey Pizza', wpp:'', taxa:5, end:'', aberto:true, horarios:{}, bairros:[], impressaoAtiva:true, viasImpressao:1, impressoraNome:'' };
     config = snap.exists ? { ...defaults, ...snap.data() } : defaults;
