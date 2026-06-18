@@ -184,6 +184,11 @@ body{background:var(--bg);color:var(--text);display:flex;overflow:hidden}
 .oc-time{font-size:11px;color:rgba(255,255,255,.3)}
 .oc-cliente{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
 .oc-tipo{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.4);background:rgba(255,255,255,.05);border-radius:4px;padding:2px 7px;margin-bottom:8px;}
+.oc-timer-wrap{margin:-3px 0 8px}
+.oc-timer{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;letter-spacing:.3px;padding:2px 8px;border-radius:999px;font-variant-numeric:tabular-nums}
+.oc-timer-green{background:rgba(52,211,153,.14);color:#34d399;border:1px solid rgba(52,211,153,.3)}
+.oc-timer-orange{background:rgba(255,159,28,.14);color:#ffb02e;border:1px solid rgba(255,159,28,.32)}
+.oc-timer-red{background:rgba(239,68,68,.16);color:#ff6b6b;border:1px solid rgba(239,68,68,.36)}
 .oc-itens{font-size:11px;color:rgba(255,255,255,.4);line-height:1.5;margin-bottom:8px;border-top:1px solid rgba(255,255,255,.05);padding-top:8px;}
 .oc-footer{display:flex;align-items:center;justify-content:space-between}
 .oc-pag{font-size:10px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.5px}
@@ -2181,6 +2186,7 @@ function renderKanban() {
       </div>`;
   }).join('');
   startPixTimers();
+  startEntregaTimers();
 }
 
 function contarPedidosCliente(tel) {
@@ -2318,6 +2324,7 @@ function orderCardHtml(p) {
       <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
+      ${_timerPillHtml(p)}
       ${p.entrega==='delivery'&&p.cliente?`<div style="font-size:11px;color:var(--text2);margin:-2px 0 8px;line-height:1.35">📍 ${((p.cliente.rua||'')+(p.cliente.numero?', '+p.cliente.numero:''))||'—'}${p.cliente.bairro?' · '+p.cliente.bairro:''}${p.cliente.ref?`<br><span style="color:var(--orange)">Ref: ${p.cliente.ref}</span>`:''}</div>`:''}
       ${p.mesa ? `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--orange);color:#fff;border-radius:6px;padding:4px 10px;margin-bottom:8px;font-size:12px;font-weight:700;letter-spacing:.2px">🍽️ ${p.mesaNome || ('Mesa ' + p.mesa)}</div>` : ''}
       ${pixTarjaHtml(p)}
@@ -2330,6 +2337,63 @@ function orderCardHtml(p) {
       </div>
       <div class="oc-actions" onclick="event.stopPropagation()">${botoes}</div>
     </div>`;
+}
+
+// ── TIMER REGRESSIVO DE ENTREGA ──────────────────────────────────────────────
+// Conta o tempo até a entrega prometida (criadoEm + tempo de entrega). Só delivery
+// e retirada (mesa não tem). O tempo de entrega reaproveita a config já editável no
+// painel (modal de tempo): limite superior do range; fallback delivery 45 / retirada 20.
+let _entregaTimerInt = null;
+
+function _timerEntregaInfo(p) {
+  const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
+  if (isMesa) return null;
+  if (p.entrega !== 'delivery' && p.entrega !== 'retirada') return null;
+  // base = momento que o pedido entrou
+  let baseMs = null;
+  if (p.criadoEm && typeof p.criadoEm.toMillis === 'function')      baseMs = p.criadoEm.toMillis();
+  else if (p.criadoEm && typeof p.criadoEm.toDate === 'function')   baseMs = p.criadoEm.toDate().getTime();
+  else if (typeof p.ts === 'number')                                baseMs = p.ts;
+  if (!baseMs) return null;
+  // tempo de entrega (min) — reaproveita config.tempo_delivery / tempo_retirada
+  let min;
+  if (p.entrega === 'delivery') { const t = _parseTempo(config.tempo_delivery); min = t ? t.max : 45; }
+  else                          { const t = _parseTempo(config.tempo_retirada); min = t ? t.max : 20; }
+  if (!min || min <= 0) return null;
+  return { limite: baseMs + min * 60000 };
+}
+
+function _timerPillHtml(p) {
+  const info = _timerEntregaInfo(p);
+  if (!info) return '';
+  return `<div class="oc-timer-wrap"><span class="oc-timer" id="octimer-${p.id}" data-limite="${info.limite}"></span></div>`;
+}
+
+function tickEntregaTimers() {
+  const els = document.querySelectorAll('.oc-timer[data-limite]');
+  if (!els.length) return;
+  const agora = Date.now();
+  els.forEach(el => {
+    const limite = parseInt(el.getAttribute('data-limite'), 10);
+    if (!limite) return;
+    const restante = limite - agora;                 // ms (negativo = atrasado)
+    const atrasado = restante <= 0;
+    const totalSeg = Math.floor(Math.abs(restante) / 1000);
+    const mm = String(Math.floor(totalSeg / 60)).padStart(2, '0');
+    const ss = String(totalSeg % 60).padStart(2, '0');
+    let cor;
+    if (atrasado)                    cor = 'red';     // restante <= 0
+    else if (restante <= 20 * 60000) cor = 'orange';  // <= 20 min e > 0
+    else                             cor = 'green';    // > 20 min
+    el.textContent = '⏱ ' + (atrasado ? '+' : '') + mm + ':' + ss;
+    el.className = 'oc-timer oc-timer-' + cor;
+  });
+}
+
+function startEntregaTimers() {
+  if (_entregaTimerInt) clearInterval(_entregaTimerInt);
+  tickEntregaTimers();                                // pinta imediatamente (sem flash)
+  _entregaTimerInt = setInterval(tickEntregaTimers, 1000);
 }
 
 // ── AUTO-ACEITAR PEDIDOS ─────────────────────────────────────────────────────
@@ -2556,6 +2620,7 @@ function filtrarEntregues(val) {
   body.innerHTML = cpFiltrado.length===0
     ? `<div class="col-empty"><div class="col-empty-icon">📭</div>${q?'Nenhum resultado':'Nenhum pedido no momento'}</div>`
     : cpFiltrado.map(p => orderCardHtml(p)).join('');
+  tickEntregaTimers();                                // preenche os pills recém-criados sem esperar 1s
 }
 
 function avancarStatus(id) {
