@@ -189,6 +189,7 @@ body{background:var(--bg);color:var(--text);display:flex;overflow:hidden}
 .oc-timer-green{background:rgba(52,211,153,.14);color:#34d399;border:1px solid rgba(52,211,153,.3)}
 .oc-timer-orange{background:rgba(255,159,28,.14);color:#ffb02e;border:1px solid rgba(255,159,28,.32)}
 .oc-timer-red{background:rgba(239,68,68,.16);color:#ff6b6b;border:1px solid rgba(239,68,68,.36)}
+.oc-agendado{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;letter-spacing:.2px;color:#ffb02e;background:rgba(255,159,28,.16);border:1px solid rgba(255,159,28,.45);border-radius:8px;padding:5px 10px;margin:2px 0 8px}
 .oc-itens{font-size:11px;color:rgba(255,255,255,.4);line-height:1.5;margin-bottom:8px;border-top:1px solid rgba(255,255,255,.05);padding-top:8px;}
 .oc-footer{display:flex;align-items:center;justify-content:space-between}
 .oc-pag{font-size:10px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.5px}
@@ -2322,6 +2323,7 @@ function orderCardHtml(p) {
     <div class="order-card${_cardCls}" onclick="openOrderModal('${p.id}')">
       <div class="oc-top"><span style="display:flex;align-items:center;gap:6px"><span class="oc-id">${p.id}</span>${_badgeAuto}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${p.id}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${p.hora}</span></span></div>
       <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
+      ${_agendadoBadgeHtml(p)}
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
       ${_timerPillHtml(p)}
@@ -2345,7 +2347,15 @@ function orderCardHtml(p) {
 // painel (modal de tempo): limite superior do range; fallback delivery 45 / retirada 20.
 let _entregaTimerInt = null;
 
+// Etiqueta de pedido AGENDADO (origem whatsapp + agendado). Destacada p/ não confundir
+// com pedido pra agora. dataHoraAgendada já vem formatada ("DD/MM HH:MM") do bot.
+function _agendadoBadgeHtml(p) {
+  if (!p || p.origem !== 'whatsapp' || !p.agendado || !p.dataHoraAgendada) return '';
+  return `<div class="oc-agendado">📅 Agendado: ${p.dataHoraAgendada}</div>`;
+}
+
 function _timerEntregaInfo(p) {
+  if (p && p.agendado) return null;   // pedido agendado mostra a etiqueta 📅, não a contagem regressiva
   const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
   if (isMesa) return null;
   if (p.entrega !== 'delivery' && p.entrega !== 'retirada') return null;
@@ -6431,6 +6441,7 @@ function iniciarListenersFirestore() {
         if (_autoAceitar) {
           chegaram.forEach(d => {
             const ped = d.data();
+            if (ped.agendado) return;   // pedido AGENDADO não é auto-aceito (é p/ depois) — staff confirma na hora
             if (ped.pagamento === 'pix') _autoMarcarAguardandoPix(ped);
             else                        _autoAceitarDinheiro(ped);
           });
@@ -6446,8 +6457,8 @@ function iniciarListenersFirestore() {
         if (ant && ant.pixStatus !== 'pago') {
           tocarSomPixPago();
           notify('💚 PIX confirmado! Pedido ' + p.id + ' — clique Confirmar');
-          // Auto-aceitar CASO 2 — PIX confirmado: move para produção
-          if (_autoAceitar && p.status === 'novo' && !_autoProcessados.has(p.id)) {
+          // Auto-aceitar CASO 2 — PIX confirmado: move para produção (agendado fica p/ a hora certa)
+          if (_autoAceitar && p.status === 'novo' && !p.agendado && !_autoProcessados.has(p.id)) {
             _autoProcessados.add(p.id);
             console.log(`[AUTO-PIX] Pedido #${p.id} PIX confirmado, movendo para produção`);
             if (!_botConectado) {
