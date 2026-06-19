@@ -619,13 +619,6 @@ textarea.fi{resize:vertical;min-height:60px}
       </label>
     </div>
     <div class="bot-item">
-      <div><div id="pedProgLabel" class="auto-label-off" style="font-size:12px;font-weight:700">📅 Pedido programado: OFF</div></div>
-      <label class="auto-switch">
-        <input type="checkbox" id="pedProgInput" onchange="toggleIaFlag('botPedidoAgendado',this)">
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="bot-item">
       <div><div id="impTopLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🖨️ Impressora: PAUSADA</div></div>
       <label class="auto-switch">
         <input type="checkbox" id="impTopInput" onchange="toggleImpressaoTopo(this)">
@@ -2471,15 +2464,15 @@ async function toggleAutoAceitar(input) {
   }
 }
 
-// ── IA (atendimento / pedido / programado) — flags em config/features, LIBERADAS pelo
+// ── IA (atendimento / pedido) — flags em config/features, LIBERADAS pelo
 // entitlement config/aditivos.ia (premium). Sem o aditivo: toggles bloqueados (🔒 Premium) e
 // o bot ignora as flags. O admin libera (aditivos.ia); o cliente liga cada flag aqui.
+// O pedido pelo chat (IA_PEDIDO) é SEMPRE pra agora — não existe mais agendamento.
 let _iaLiberada = false;   // entitlement (admin) — fonte de verdade
 let _iaFeatures = {};      // config/features atual
 const _IA_TOGS = [
   { key:'IA_ATENDIMENTO',    input:'iaAtdInput',   label:'iaAtdLabel',   emoji:'💬', nome:'IA Atendimento' },
   { key:'IA_PEDIDO',         input:'iaPedInput',   label:'iaPedLabel',   emoji:'🛒', nome:'IA Pedido' },
-  { key:'botPedidoAgendado', input:'pedProgInput', label:'pedProgLabel', emoji:'📅', nome:'Pedido programado' },
 ];
 function _setIaTogglesUI() {
   _IA_TOGS.forEach(t => {
