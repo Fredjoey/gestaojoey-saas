@@ -331,6 +331,11 @@ textarea.fi{resize:vertical;min-height:60px}
 .tm-btn-save:hover{background:var(--orange2)}
 .tm-btn-cancel{padding:10px 18px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
 .tm-btn-cancel:hover{border-color:var(--border2);color:var(--text)}
+.ia-novo-badge{display:inline-block;background:var(--orange);color:#fff;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:1px 6px;border-radius:8px;margin-left:4px;vertical-align:middle;}
+.instr-ta{width:100%;min-height:96px;resize:vertical;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:13px;line-height:1.45;padding:10px 12px;box-sizing:border-box;}
+.instr-ta:focus{outline:none;border-color:var(--orange);}
+.instr-ta::placeholder{color:var(--text3);}
+.instr-count{font-size:10px;color:var(--text3);text-align:right;margin-top:4px;}
 
 .toggle-switch{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
 .toggle-switch input{opacity:0;width:0;height:0;position:absolute}
@@ -617,6 +622,10 @@ textarea.fi{resize:vertical;min-height:60px}
         <input type="checkbox" id="iaPedInput" onchange="toggleIaFlag('IA_PEDIDO',this)">
         <span class="slider"></span>
       </label>
+    </div>
+    <div class="bot-item" id="botInstrucoesItem" style="display:none;cursor:pointer" onclick="abrirModalInstrucoes()">
+      <div><div class="auto-label-off" style="font-size:12px;font-weight:700">📝 Instruções do bot <span class="ia-novo-badge">novo</span></div></div>
+      <span class="tempo-edit-icon">✏️</span>
     </div>
     <div class="bot-item">
       <div><div id="impTopLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🖨️ Impressora: PAUSADA</div></div>
@@ -1563,6 +1572,33 @@ textarea.fi{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- MODAL INSTRUÇÕES DO BOT (só Joey) -->
+<div class="tm-overlay" id="instrOverlay" onclick="if(event.target===this)fecharModalInstrucoes()">
+  <div class="tm-box" style="max-width:480px">
+    <div class="tm-head">
+      <div>
+        <div class="tm-title">📝 Instruções do bot</div>
+        <div class="tm-sub">Diga ao atendente virtual como atender e o que avisar. Vale na próxima mensagem.</div>
+      </div>
+      <button class="tm-close-btn" onclick="fecharModalInstrucoes()">✕</button>
+    </div>
+    <div class="tm-section">
+      <div class="tm-section-lbl">Como atender (tom + informações fixas)</div>
+      <textarea id="instrComoAtende" class="instr-ta" maxlength="1500" oninput="_instrCount()" placeholder="Ex.: Seja simpático e use emojis. Mais vendido: X-Bacon Duplo. Recomende o combo da casa. Entregamos nos bairros Centro e Jardins. Aceitamos Pix, dinheiro e cartão."></textarea>
+      <div class="instr-count"><span id="instrComoAtendeCount">0</span>/1500</div>
+    </div>
+    <div class="tm-section">
+      <div class="tm-section-lbl">Aviso do momento (promoção/recado que muda)</div>
+      <textarea id="instrAviso" class="instr-ta" maxlength="1500" oninput="_instrCount()" placeholder="Ex.: Hoje na compra de 2 burgers a Coca sai grátis! 🥤 (o bot avisa o cliente; o desconto é aplicado no cardápio)"></textarea>
+      <div class="instr-count"><span id="instrAvisoCount">0</span>/1500</div>
+    </div>
+    <div class="tm-footer">
+      <button class="tm-btn-cancel" onclick="fecharModalInstrucoes()">Cancelar</button>
+      <button class="tm-btn-save" onclick="salvarInstrucoes()">Salvar instruções</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL NFCe -->
 <div class="modal-overlay" id="nfceModal" onclick="if(event.target===this)closeNfceModal()">
   <div class="modal-box">
@@ -2488,6 +2524,8 @@ function _setIaTogglesUI() {
 }
 // Tempo real: features (flags) + aditivos (entitlement). Qualquer mudança reflete nos toggles.
 function iniciarIaListeners() {
+  // "Instruções do bot" é recurso só do Joey (a IA do bot vive no joeyapi, slug joey).
+  if (slug === 'joey') { const el = document.getElementById('botInstrucoesItem'); if (el) el.style.display = ''; }
   db.doc(`clientes/${slug}/config/features`).onSnapshot(
     s => { _iaFeatures = s.exists ? (s.data() || {}) : {}; _setIaTogglesUI(); },
     e => console.error('[IA] features listener:', e));
@@ -5987,6 +6025,33 @@ function salvarModalTempo() {
   atualizarTempoStrip();
   fecharModalTempo();
   notify('Tempos de entrega atualizados!');
+}
+
+// ── Instruções do bot (config/iaInstrucoes) — só Joey. O bot (joeyapi) lê fresco e injeta no prompt.
+function _instrCount() {
+  const a = document.getElementById('instrComoAtende'), b = document.getElementById('instrAviso');
+  if (a) document.getElementById('instrComoAtendeCount').textContent = (a.value || '').length;
+  if (b) document.getElementById('instrAvisoCount').textContent = (b.value || '').length;
+}
+function abrirModalInstrucoes() {
+  const ta1 = document.getElementById('instrComoAtende'), ta2 = document.getElementById('instrAviso');
+  ta1.value = ''; ta2.value = ''; _instrCount();
+  db.doc(`clientes/${slug}/config/iaInstrucoes`).get().then(s => {
+    const d = s.exists ? (s.data() || {}) : {};
+    ta1.value = d.comoAtende || ''; ta2.value = d.avisoMomento || ''; _instrCount();
+  }).catch(e => console.error('[instr] load:', e));
+  document.getElementById('instrOverlay').classList.add('show');
+}
+function fecharModalInstrucoes() { document.getElementById('instrOverlay').classList.remove('show'); }
+async function salvarInstrucoes() {
+  const comoAtende = (document.getElementById('instrComoAtende').value || '').trim().slice(0, 1500);
+  const avisoMomento = (document.getElementById('instrAviso').value || '').trim().slice(0, 1500);
+  try {
+    await db.doc(`clientes/${slug}/config/iaInstrucoes`).set(
+      { comoAtende, avisoMomento, atualizadoEm: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    fecharModalInstrucoes();
+    notify('Instruções salvas — já valem na próxima mensagem do bot! 🤖', 'success');
+  } catch (e) { console.error('[instr] save:', e); notify('Erro ao salvar instruções: ' + e.message, 'error'); }
 }
 
 function toggleBot() {
