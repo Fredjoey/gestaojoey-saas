@@ -470,24 +470,52 @@ textarea.fi{resize:vertical;min-height:60px}
 #wpp-panel.com-chat{width:700px}
 .wpp-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg3);flex-shrink:0}
 .wpp-body{display:flex;flex:1;overflow:hidden}
-.wpp-lista{width:380px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border)}
-.wpp-conv-item{padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s}
-.wpp-conv-item:hover,.wpp-conv-item.ativo{background:var(--bg3)}
-.wpp-conv-nome{font-weight:600;font-size:13px;color:var(--text)}
+.wpp-lista-col{width:380px;flex-shrink:0;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--border)}
+.wpp-busca{flex-shrink:0;padding:10px 12px;border-bottom:1px solid var(--border)}
+.wpp-busca-campo{display:flex;align-items:center;gap:8px;background:#1e1e1e;border:1px solid var(--border);border-radius:20px;padding:7px 13px}
+.wpp-busca-campo input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:13px;font-family:inherit}
+.wpp-busca-campo input::placeholder{color:var(--text3)}
+.wpp-busca-ico{color:var(--text3);font-size:13px;flex-shrink:0;line-height:1}
+.wpp-lista{flex:1;overflow-y:auto;min-height:0}
+.wpp-conv-item{padding:11px 14px 11px 13px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);border-left:3px solid transparent;transition:background .15s;display:flex;align-items:center;gap:11px}
+.wpp-conv-avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;letter-spacing:.5px}
+.wpp-conv-main{flex:1;min-width:0}
+.wpp-conv-item:hover{background:rgba(255,255,255,.03)}
+.wpp-conv-item.ativo{background:#1c1c1c;border-left-color:#E87722}
+.wpp-conv-nome{font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wpp-conv-ultima{font-size:12px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
-.wpp-s-bot{color:var(--text3);font-size:11px}
-.wpp-s-humano{color:var(--orange);font-size:11px;font-weight:600}
-.wpp-s-aguardando{color:#f87171;font-size:11px;font-weight:600}
+.wpp-s-bot,.wpp-s-humano,.wpp-s-aguardando{font-size:11px;font-weight:600;padding:2px 8px;border-radius:7px;white-space:nowrap;flex-shrink:0}
+.wpp-s-bot{background:#2e2114;color:#c98a4a}
+.wpp-s-humano{background:#13332a;color:#7BC47F}
+.wpp-s-aguardando{background:#33270c;color:#e0a23c}
 .wpp-chat{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .wpp-chat-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--bg3)}
-.wpp-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:6px}
-.wpp-msg{max-width:78%;padding:8px 12px;border-radius:10px;font-size:13px;line-height:1.5;word-break:break-word}
-.wpp-msg.recebida{background:var(--bg3);align-self:flex-start;border-radius:10px 10px 10px 2px}
-.wpp-msg.enviada{background:rgba(245,158,11,.2);color:var(--text);align-self:flex-end;border-radius:10px 10px 2px 10px}
-.wpp-msg-ts{font-size:10px;color:var(--text3);margin-top:3px;text-align:right}
-.wpp-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
-.wpp-footer input{flex:1;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
+.wpp-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#E87722,#b85e16);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#3a1f0a;flex-shrink:0;letter-spacing:.5px}
+.wpp-tel{white-space:nowrap;cursor:pointer;color:var(--text2);border-bottom:1px dotted var(--text3);transition:color .15s}
+.wpp-tel:hover{color:var(--text)}
+.wpp-btn-assumir{font-size:12px;font-weight:700;white-space:nowrap;background:#E87722;color:#3a1f0a;border:none;border-radius:8px;padding:7px 13px;cursor:pointer;font-family:inherit}
+.wpp-btn-assumir:hover{filter:brightness(1.08)}
+.wpp-btn-devolver{font-size:12px;white-space:nowrap;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;cursor:pointer;font-family:inherit}
+.wpp-btn-devolver:hover{color:var(--text);border-color:var(--text3)}
+.wpp-btn-apagar{font-size:13px;white-space:nowrap;background:transparent;color:#ef4444;border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:6px 9px;cursor:pointer;font-family:inherit}
+.wpp-btn-apagar:hover{background:rgba(239,68,68,.12)}
+.wpp-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:7px;background:#0e0e0e}
+.wpp-msg{max-width:min(74%,420px);padding:8px 11px;border-radius:14px;font-size:13px;line-height:1.45;word-break:break-word}
+.wpp-msg.recebida{background:#232323;color:#EAEAEA;align-self:flex-start;border-radius:14px 14px 14px 4px}
+.wpp-msg.enviada{background:#3a2814;color:#F2DFC8;align-self:flex-end;border-radius:14px 14px 4px 14px}
+.wpp-msg-ts{font-size:11px;color:rgba(255,255,255,.4);margin-top:3px;display:flex;gap:4px;align-items:center;justify-content:flex-end}
+.wpp-msg.enviada .wpp-msg-ts{color:rgba(242,223,200,.55)}
+.wpp-check{color:#E89A55;letter-spacing:-1.5px}
+.wpp-dia{align-self:center;margin:6px 0}
+.wpp-dia span{background:#1c1c1c;color:#9a9a9a;font-size:11px;font-weight:600;padding:3px 12px;border-radius:999px}
+.wpp-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0}
+.wpp-footer input{flex:1;padding:10px 16px;background:#1e1e1e;border:1px solid var(--border);border-radius:22px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
 .wpp-footer input:focus{border-color:var(--orange)}
+#wppSendBtn{flex-shrink:0;width:40px;height:40px;border-radius:50%;background:#E87722;color:#3a1f0a;border:none;cursor:pointer;padding:0;font-size:0;display:flex;align-items:center;justify-content:center;transition:filter .15s}
+#wppSendBtn:hover{filter:brightness(1.08)}
+#wppSendBtn::before{content:'➤';font-size:15px;line-height:1}
+#wppSendBtn:disabled{opacity:.55;cursor:default}
+#wppSendBtn:disabled::before{content:'⏳'}
 .wpp-aviso-humano{margin:8px 14px 0;padding:8px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;font-size:12px;color:#f59e0b;flex-shrink:0}
 #wpp-fab{position:relative}
 #wpp-badge{position:absolute;top:-5px;right:-5px;background:var(--orange);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 5px;min-width:16px;text-align:center;display:none;line-height:16px}
@@ -9920,6 +9948,7 @@ async function emitirNfceFechamento(srcId, mesaNome, total) {
 let _wppOpen = false;
 let _wppConversas = [];
 let _wppConvAtiva = null;
+let _wppBuscaTermo = '';   // filtro de busca da lista (só em memória, não toca no Firestore)
 let _wppIniciado = false;
 // id → ultimaAtividade da última vez que foi visto (para detectar mensagens novas)
 const _wppPrevAtiv = new Map();
@@ -10030,6 +10059,11 @@ function fecharWppPanel() {
   document.getElementById('wppChat').style.display = 'none';
 }
 
+function wppFiltrar(v) {
+  _wppBuscaTermo = (v || '').trim().toLowerCase();
+  _wppRenderLista();
+}
+
 function _wppRenderLista() {
   const el = document.getElementById('wppLista');
   if (!el) return;
@@ -10037,28 +10071,42 @@ function _wppRenderLista() {
     el.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:13px">Nenhuma conversa ainda.</div>';
     return;
   }
-  el.innerHTML = _wppConversas.map(c => {
+  const _t = _wppBuscaTermo;
+  const _lista = _t
+    ? _wppConversas.filter(c =>
+        String(c.nome || '').toLowerCase().includes(_t) ||
+        String(c.ultimaMensagem || '').toLowerCase().includes(_t) ||
+        String(c.id || '').toLowerCase().includes(_t))
+    : _wppConversas;
+  if (!_lista.length) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:13px">Nenhuma conversa encontrada.</div>';
+    return;
+  }
+  el.innerHTML = _lista.map(c => {
     const ativo = c.id === _wppConvAtiva ? ' ativo' : '';
     const naoLida = _wppTemNaoLida(c);
     const sl = c.status === 'humano'
-      ? '<span class="wpp-s-humano">👤 Humano</span>'
+      ? '<span class="wpp-s-humano">Humano</span>'
       : c.status === 'aguardando'
-      ? '<span class="wpp-s-aguardando">⚠️ Aguardando</span>'
-      : '<span class="wpp-s-bot">🤖 Bot</span>';
+      ? '<span class="wpp-s-aguardando">Aguardando</span>'
+      : '<span class="wpp-s-bot">Bot</span>';
     const ts = c.ultimaAtividade
       ? new Date(c.ultimaAtividade).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
       : '';
     return `<div class="wpp-conv-item${ativo}" onclick="wppSelecionarConv('${c.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="display:flex;align-items:center;gap:0;min-width:0">
-          <div class="wpp-conv-nome" style="${naoLida ? 'color:var(--text)' : ''}">${c.nome || c.id}</div>
-          ${naoLida ? '<span class="wpp-unread-dot"></span>' : ''}
+      <div class="wpp-conv-avatar" style="background:${_wppAvatarCor(c.nome || c.id)}">${_wppIniciais(c.nome || c.id)}</div>
+      <div class="wpp-conv-main">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:0;min-width:0">
+            <div class="wpp-conv-nome" style="${naoLida ? 'color:var(--text)' : ''}">${c.nome || c.id}</div>
+            ${naoLida ? '<span class="wpp-unread-dot"></span>' : ''}
+          </div>
+          <div style="font-size:10px;color:var(--text3);white-space:nowrap;margin-left:6px">${ts}</div>
         </div>
-        <div style="font-size:10px;color:var(--text3);white-space:nowrap;margin-left:6px">${ts}</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
-        <div class="wpp-conv-ultima" style="${naoLida ? 'color:var(--text);font-weight:500' : ''}">${c.ultimaMensagem || ''}</div>
-        ${sl}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;gap:8px">
+          <div class="wpp-conv-ultima" style="${naoLida ? 'color:var(--text);font-weight:500' : ''}">${c.ultimaMensagem || ''}</div>
+          ${sl}
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -10080,22 +10128,76 @@ function wppSelecionarConv(id) {
   _wppRenderChat(conv);
 }
 
+function _wppIniciais(nome) {
+  const s = String(nome || '').trim();
+  if (!s) return '#';
+  const p = s.split(/\s+/);
+  const a = p[0] ? p[0][0] : '';
+  const b = p.length > 1 ? p[p.length - 1][0] : '';
+  return ((a + b) || s[0] || '#').toUpperCase();
+}
+
+function _wppAvatarCor(key) {
+  const cores = ['#5b6dad','#c0573f','#3f8f6b','#9c6b3f','#7a5ba6','#3f7f9c','#a65b7a','#6b8f3f'];
+  const s = String(key || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return cores[h % cores.length];
+}
+
+function _wppFmtTel(raw) {
+  // Só apresentação: extrai dígitos (tira sufixo @s.whatsapp.net/@lid etc.) e formata BR.
+  const all = String(raw || '').replace(/\D/g, '');
+  if (!all) return '';
+  const local = (all.startsWith('55') && all.length >= 12) ? all.slice(2) : all;
+  if (local.length === 11) return `+55 ${local.slice(0,2)} ${local.slice(2,7)}-${local.slice(7)}`;
+  if (local.length === 10) return `+55 ${local.slice(0,2)} ${local.slice(2,6)}-${local.slice(6)}`;
+  return all.startsWith('55') ? ('+' + all) : ('+55 ' + all);
+}
+
+function wppCopiarTel(digits, el) {
+  if (!digits || !navigator.clipboard) return;
+  navigator.clipboard.writeText('+' + digits).then(() => {
+    if (!el) return;
+    const orig = el.textContent;
+    el.textContent = '✓ copiado';
+    setTimeout(() => { el.textContent = orig; }, 1200);
+  }).catch(() => {});
+}
+
+function _wppDiaLabel(ts) {
+  if (!ts) return '';
+  const fmt = d => d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const dia = fmt(new Date(ts));
+  if (dia === fmt(new Date())) return 'Hoje';
+  if (dia === fmt(new Date(Date.now() - 86400000))) return 'Ontem';
+  return dia;
+}
+
 function _wppRenderChat(conv) {
   // Marca como lida sempre que rerrenderiza a conversa ativa
   if (conv.id === _wppConvAtiva) _wppVistas.add(_wppChaveVista(conv));
   const head = document.getElementById('wppChatHead');
   const isHumano = conv.status === 'humano' || conv.status === 'aguardando';
+  const statusTxt = conv.status === 'humano' ? '👤 Atendimento humano'
+                  : conv.status === 'aguardando' ? '⚠️ Aguardando'
+                  : '🤖 Bot ativo';
+  const _telDigits = String(conv.telefone || conv.numero || conv.tel || conv.id || conv.jid || '').replace(/\D/g, '');
+  const _telFmt = _wppFmtTel(_telDigits);
+  const _telHtml = _telFmt
+    ? ` · <span class="wpp-tel" title="Copiar número" onclick="wppCopiarTel('${_telDigits}', this)">${_telFmt}</span>`
+    : '';
   head.innerHTML = `
-    <div style="width:36px;height:36px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👤</div>
+    <div class="wpp-avatar">${_wppIniciais(conv.nome || conv.id)}</div>
     <div style="flex:1;min-width:0">
       <div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${conv.nome || conv.id}</div>
-      <div style="font-size:11px;color:var(--text2)">${conv.id}</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.35">${statusTxt}${_telHtml}</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
       ${isHumano
-        ? `<button class="tb-btn tb-btn-ghost" style="font-size:12px;white-space:nowrap" onclick="wppDevolverBot('${conv.id}')">🤖 Devolver ao bot</button>`
-        : `<button class="tb-btn tb-btn-primary" style="font-size:12px;white-space:nowrap" onclick="wppAssumirAtendimento('${conv.id}')">👤 Assumir</button>`}
-      <button class="tb-btn tb-btn-ghost" style="font-size:12px;white-space:nowrap;color:#ef4444;border-color:#ef4444" onclick="wppApagarConversa('${conv.id}')">🗑️</button>
+        ? `<button class="wpp-btn-devolver" onclick="wppDevolverBot('${conv.id}')">🤖 Devolver ao bot</button>`
+        : `<button class="wpp-btn-assumir" onclick="wppAssumirAtendimento('${conv.id}')">Assumir</button>`}
+      <button class="wpp-btn-apagar" onclick="wppApagarConversa('${conv.id}')">🗑️</button>
     </div>
   `;
   document.getElementById('wppAviso').style.display = conv.status === 'humano' ? 'block' : 'none';
@@ -10104,9 +10206,15 @@ function _wppRenderChat(conv) {
   if (!msgs.length) {
     msgsEl.innerHTML = '<div style="color:var(--text2);font-size:12px;text-align:center;margin:24px 0">Sem mensagens registradas.</div>';
   } else {
+    let _diaAnt = null;
     msgsEl.innerHTML = msgs.map(m => {
+      const tipo = m.tipo === 'enviada' ? 'enviada' : 'recebida';
       const ts = m.ts ? new Date(m.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
-      return `<div class="wpp-msg ${m.tipo || 'recebida'}">${m.texto}<div class="wpp-msg-ts">${ts}</div></div>`;
+      const check = tipo === 'enviada' ? ' <span class="wpp-check">✓✓</span>' : '';
+      const dia = m.ts ? new Date(m.ts).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+      let divisor = '';
+      if (dia && dia !== _diaAnt) { divisor = `<div class="wpp-dia"><span>${_wppDiaLabel(m.ts)}</span></div>`; _diaAnt = dia; }
+      return `${divisor}<div class="wpp-msg ${tipo}">${m.texto}<div class="wpp-msg-ts">${ts}${check}</div></div>`;
     }).join('');
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -10242,8 +10350,16 @@ document.addEventListener('DOMContentLoaded', () => {
     <button onclick="fecharWppPanel()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">&times;</button>
   </div>
   <div class="wpp-body">
-    <div class="wpp-lista" id="wppLista">
-      <div style="padding:16px;color:var(--text2);font-size:13px">Carregando...</div>
+    <div class="wpp-lista-col">
+      <div class="wpp-busca">
+        <div class="wpp-busca-campo">
+          <span class="wpp-busca-ico">🔍</span>
+          <input id="wppBusca" type="text" placeholder="Buscar" autocomplete="off" oninput="wppFiltrar(this.value)">
+        </div>
+      </div>
+      <div class="wpp-lista" id="wppLista">
+        <div style="padding:16px;color:var(--text2);font-size:13px">Carregando...</div>
+      </div>
     </div>
     <div class="wpp-chat" id="wppChat" style="display:none;flex-direction:column">
       <div class="wpp-chat-head" id="wppChatHead"></div>
@@ -10251,7 +10367,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="wpp-msgs" id="wppMsgs"></div>
       <div class="wpp-footer">
         <input type="text" id="wppInput" placeholder="Mensagem...">
-        <button id="wppSendBtn" class="tb-btn tb-btn-primary">Enviar</button>
+        <button id="wppSendBtn" title="Enviar">Enviar</button>
       </div>
     </div>
   </div>
