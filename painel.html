@@ -554,7 +554,7 @@ textarea.fi{resize:vertical;min-height:60px}
 <!-- TELA DE LOGIN -->
 <div id="loginScreen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
   <div class="login-card">
-    <div class="login-logo">JOEY</div>
+    <div class="login-logo">Gestão Joey</div>
     <div class="login-sub">PAINEL DE PEDIDOS</div>
     <div class="fg" style="margin-bottom:10px">
       <label class="fl">E-mail</label>
@@ -572,7 +572,7 @@ textarea.fi{resize:vertical;min-height:60px}
 <!-- TELA: resolvendo o restaurante do usuário (apenas hosts universais / app único do SaaS) -->
 <div id="universalLoading" style="position:fixed;inset:0;background:var(--bg);z-index:9998;display:none;align-items:center;justify-content:center">
   <div class="login-card" style="text-align:center">
-    <div class="login-logo">JOEY</div>
+    <div class="login-logo">Gestão Joey</div>
     <div class="login-sub">Carregando seu restaurante…</div>
     <div style="margin-top:18px;font-size:26px">🔄</div>
   </div>
@@ -581,7 +581,7 @@ textarea.fi{resize:vertical;min-height:60px}
 <!-- TELA: conta logada sem restaurante vinculado (apenas hosts universais). NUNCA abre painel de outro tenant. -->
 <div id="semRestaurante" style="position:fixed;inset:0;background:var(--bg);z-index:9998;display:none;align-items:center;justify-content:center">
   <div class="login-card" style="text-align:center">
-    <div class="login-logo">JOEY</div>
+    <div class="login-logo">Gestão Joey</div>
     <div class="login-sub" id="semRestauranteMsg" style="margin-bottom:18px">Não encontramos um restaurante vinculado a esta conta.</div>
     <button class="btn btn-primary" onclick="_sairLogin()" style="width:100%;padding:12px;font-size:14px">Sair</button>
   </div>
@@ -589,7 +589,7 @@ textarea.fi{resize:vertical;min-height:60px}
 
 <aside class="sidebar">
   <div class="sb-brand">
-    <div class="sb-logo"><img src="/joey_dog_refined.png" alt="Joey"></div>
+    <div class="sb-logo"><img id="sbLogoImg" alt="" style="display:none"></div>
     <div class="sb-name" id="sbNome"></div>
     <div class="sb-tag">Painel de controle</div>
   </div>
@@ -1044,7 +1044,7 @@ textarea.fi{resize:vertical;min-height:60px}
             <h3 style="margin:0 0 12px 0">🖼️ Logo da Loja</h3>
             <p style="font-size:13px;color:var(--muted);margin:0 0 12px 0">Aparece no header do sistema de Gestão. Recomendado: 200x200px PNG transparente.</p>
             <div id="logoPreview" style="margin-bottom:12px"></div>
-            <input type="file" id="logoFileInput" accept="image/*" style="display:none">
+            <input type="file" id="logoFileInput" accept="image/*" style="display:none" onchange="uploadLogo(this.files[0])">
             <button onclick="document.getElementById('logoFileInput').click()" style="padding:8px 16px;background:var(--orange);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:8px">📤 Trocar logo</button>
             <button onclick="removerLogo()" style="padding:8px 16px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer">🗑️ Remover</button>
           </div>
@@ -2119,6 +2119,13 @@ function atualizarSidebar() {
   document.getElementById('sbNome').textContent  = n;
   document.getElementById('sbNome2').textContent = n;
   document.getElementById('sbAvatar').textContent = n[0].toUpperCase();
+  // Logo da sidebar = logo do PRÓPRIO tenant (config.logoUrl). Sem logo → esconde a imagem
+  // (mostra só o nome) — nunca cai numa logo fixa de outro restaurante (white-label).
+  const _logoImg = document.getElementById('sbLogoImg');
+  if (_logoImg) {
+    if (config.logoUrl) { _logoImg.src = config.logoUrl; _logoImg.style.display = ''; }
+    else { _logoImg.removeAttribute('src'); _logoImg.style.display = 'none'; }
+  }
   // Status aberto/fechado na sidebar
   const aberto = estaAberto();
   const dot  = document.querySelector('.status-dot');
@@ -4232,10 +4239,8 @@ function renderLogoPreview(url) {
   }
 }
 
-(function() {
-  const inp = document.getElementById('logoFileInput');
-  if (inp) inp.addEventListener('change', e => uploadLogo(e.target.files[0]));
-})();
+// Listener do logo é inline no input (onchange="uploadLogo(this.files[0])") — não depende de timing
+// de attachment no load (era o motivo de não disparar). Padrão igual aos outros controles do painel.
 
 // ── PAGAMENTO PIX (Mercado Pago) ─────────────────────────────────────────────
 // ── PAGAMENTO ONLINE (multi-gateway) ─────────────────────────────────────────
