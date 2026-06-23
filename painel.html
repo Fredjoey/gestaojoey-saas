@@ -569,6 +569,24 @@ textarea.fi{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- TELA: resolvendo o restaurante do usuário (apenas hosts universais / app único do SaaS) -->
+<div id="universalLoading" style="position:fixed;inset:0;background:var(--bg);z-index:9998;display:none;align-items:center;justify-content:center">
+  <div class="login-card" style="text-align:center">
+    <div class="login-logo">JOEY</div>
+    <div class="login-sub">Carregando seu restaurante…</div>
+    <div style="margin-top:18px;font-size:26px">🔄</div>
+  </div>
+</div>
+
+<!-- TELA: conta logada sem restaurante vinculado (apenas hosts universais). NUNCA abre painel de outro tenant. -->
+<div id="semRestaurante" style="position:fixed;inset:0;background:var(--bg);z-index:9998;display:none;align-items:center;justify-content:center">
+  <div class="login-card" style="text-align:center">
+    <div class="login-logo">JOEY</div>
+    <div class="login-sub" id="semRestauranteMsg" style="margin-bottom:18px">Não encontramos um restaurante vinculado a esta conta.</div>
+    <button class="btn btn-primary" onclick="_sairLogin()" style="width:100%;padding:12px;font-size:14px">Sair</button>
+  </div>
+</div>
+
 <aside class="sidebar">
   <div class="sb-brand">
     <div class="sb-logo"><img src="/joey_dog_refined.png" alt="Joey"></div>
@@ -1998,19 +2016,31 @@ const db      = firebase.firestore();
 const auth    = firebase.auth();
 const storage = firebase.storage();
 const hostname = window.location.hostname;
-const slug = (
+// Hosts "universais" (app único do SaaS): o tenant NÃO vem do hostname — vem do usuário logado
+// (query por authUid, após o login). app.gestaojoey.com.br = instalador novo do SaaS;
+// pedidos-joey.web.app = app Electron já instalado (transição, pra não quebrar quem já usa).
+const HOSTS_UNIVERSAIS = new Set(['app.gestaojoey.com.br', 'pedidos-joey.web.app']);
+const IS_UNIVERSAL = HOSTS_UNIVERSAIS.has(hostname);
+// Slug pelo hostname (subdomínio do tenant) — comportamento ATUAL, inalterado. Serve de fallback.
+const hostnameSlug = (
   hostname === 'pedidos.hamburgueriajoey.com.br' ||
   hostname === 'pedidos-joey-painel.web.app' ||
   hostname === 'localhost' ||
   hostname === '127.0.0.1'
 ) ? 'joey' : hostname.split('.')[0];
+// Em subdomínio o slug é imediato (SEM query — idêntico ao de hoje). Em host universal começa null
+// e é resolvido após o login (onAuthStateChanged). 'let' porque o universal o define depois.
+let slug = IS_UNIVERSAL ? null : hostnameSlug;
 
 let CLIENTE_PLANO = 'essencial';
-db.doc('clientes/'+slug).onSnapshot(s => {
-  CLIENTE_PLANO = s.data()?.plano || 'essencial';
-  const navFiscal = document.getElementById('nav-fiscal');
-  if (navFiscal) navFiscal.style.display = CLIENTE_PLANO === 'pro' ? '' : 'none';
-});
+function iniciarPlanoListener() {
+  db.doc('clientes/'+slug).onSnapshot(s => {
+    CLIENTE_PLANO = s.data()?.plano || 'essencial';
+    const navFiscal = document.getElementById('nav-fiscal');
+    if (navFiscal) navFiscal.style.display = CLIENTE_PLANO === 'pro' ? '' : 'none';
+  });
+}
+if (slug) iniciarPlanoListener(); // subdomínio: no load (idêntico a hoje). Universal: chamado após resolver o slug.
 
 // URLs absolutas das Cloud Functions de NFCe.
 // Functions vivem no projeto pedidos-joey (legado), mas o site pode rodar em qualquer projeto.
@@ -2129,15 +2159,21 @@ function showPanel(panel, navEl) {
 }
 
 // ── Conexão WhatsApp ──────────────────────────────────────────────
-const WA_API     = slug === 'joey' ? 'https://joeyapi-production.up.railway.app' : `https://joeyapi-${slug}-production.up.railway.app`;
-const BOT_URL    = WA_API;
-const GESTAO_URL = slug === 'joey'
-  ? 'https://gestao.hamburgueriajoey.com.br'
-  : `https://${slug}.gestaojoey.com.br/gestao`;
-const CARDAPIO_URL = slug === 'joey'
-  ? 'https://hamburgueriajoey.com.br'
-  : `https://${slug}.gestaojoey.com.br`;
-const CARDAPIO_URL_DISPLAY = CARDAPIO_URL.replace(/^https?:\/\//, '');
+// URLs derivadas do slug. Como o slug pode só ser conhecido após o login (host universal),
+// são definidas por definirUrlsDoSlug(): no load (subdomínio) ou após resolver o usuário (universal).
+let WA_API, BOT_URL, GESTAO_URL, CARDAPIO_URL, CARDAPIO_URL_DISPLAY;
+function definirUrlsDoSlug() {
+  WA_API     = slug === 'joey' ? 'https://joeyapi-production.up.railway.app' : `https://joeyapi-${slug}-production.up.railway.app`;
+  BOT_URL    = WA_API;
+  GESTAO_URL = slug === 'joey'
+    ? 'https://gestao.hamburgueriajoey.com.br'
+    : `https://${slug}.gestaojoey.com.br/gestao`;
+  CARDAPIO_URL = slug === 'joey'
+    ? 'https://hamburgueriajoey.com.br'
+    : `https://${slug}.gestaojoey.com.br`;
+  CARDAPIO_URL_DISPLAY = CARDAPIO_URL.replace(/^https?:\/\//, '');
+}
+if (slug) definirUrlsDoSlug(); // subdomínio: slug já conhecido no load (inalterado). Universal: chamado após o login.
 
 // (Cards de contas a pagar na sidebar removidos — essa informação fica na aba Compras do gestao-joey.)
 
@@ -6600,15 +6636,60 @@ async function epConfirmar() {
   }
 }
 
-auth.onAuthStateChanged(user => {
-  document.getElementById('loginScreen').style.display = user ? 'none' : 'flex';
-  if (user) {
-    if (user.isAnonymous) { auth.signOut(); return; }
-    if (!_listenersIniciados) { iniciarListenersFirestore(); _listenersIniciados = true; }
-    atualizarBtnNotificacao();
-    _anivVerificado = ''; // reseta guard para rodar com auth
-    verificarAniversariantes();
+// Resolve o slug do usuário pelo vínculo clientes/{slug}.authUid == uid (Opção A). Retorna slug ou null.
+async function _resolverSlugDoUsuario(uid) {
+  const qs = await db.collection('clientes').where('authUid', '==', uid).limit(1).get();
+  return qs.empty ? null : qs.docs[0].id;
+}
+function _sairLogin() { auth.signOut(); }
+function _mostrarTela(id) { // id = 'loginScreen' | 'universalLoading' | 'semRestaurante' | null (painel)
+  ['loginScreen', 'universalLoading', 'semRestaurante'].forEach((t) => {
+    const el = document.getElementById(t);
+    if (el) el.style.display = (t === id) ? 'flex' : 'none';
+  });
+}
+
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    // Em host universal, ao deslogar depois de ter resolvido um tenant, recarrega pra limpar slug+listeners
+    // do usuário anterior (senão um novo login no mesmo app herdaria o slug antigo). Subdomínio: nunca recarrega.
+    if (IS_UNIVERSAL && _listenersIniciados) { location.reload(); return; }
+    _mostrarTela('loginScreen');
+    return;
   }
+  if (user.isAnonymous) { auth.signOut(); return; }
+
+  // Host universal (app único do SaaS): o tenant vem do USUÁRIO logado (query authUid), não do hostname.
+  // Em subdomínio, IS_UNIVERSAL é false e o slug já foi definido no load → este bloco é PULADO (inalterado).
+  if (IS_UNIVERSAL && !slug) {
+    _mostrarTela('universalLoading');
+    let resolvido = null;
+    try {
+      resolvido = await _resolverSlugDoUsuario(user.uid);
+    } catch (e) {
+      console.error('[universal] erro resolvendo slug do usuário:', e);
+      const m = document.getElementById('semRestauranteMsg');
+      if (m) m.textContent = 'Não consegui carregar seu restaurante agora. Verifique a conexão e tente novamente.';
+      _mostrarTela('semRestaurante');
+      return; // NÃO sobe listeners sem slug
+    }
+    if (!resolvido) { // conta sem restaurante vinculado → NUNCA abre painel de outro tenant
+      const m = document.getElementById('semRestauranteMsg');
+      if (m) m.textContent = 'Não encontramos um restaurante vinculado a esta conta. Confira se entrou com o e-mail certo ou fale com o suporte.';
+      _mostrarTela('semRestaurante');
+      return; // NÃO sobe listeners sem slug
+    }
+    slug = resolvido;
+    definirUrlsDoSlug();
+    iniciarPlanoListener();
+  }
+
+  // Daqui pra baixo o slug está resolvido (subdomínio: desde o load; universal: pela query acima).
+  _mostrarTela(null); // esconde login/carregando/sem-restaurante → revela o painel
+  if (!_listenersIniciados) { iniciarListenersFirestore(); _listenersIniciados = true; }
+  atualizarBtnNotificacao();
+  _anivVerificado = ''; // reseta guard para rodar com auth
+  verificarAniversariantes();
 });
 
 function loginUser() {
