@@ -666,10 +666,8 @@ textarea.fi{resize:vertical;min-height:60px}
         <span class="slider"></span>
       </label>
     </div>
-    <div class="bot-item" id="botInstrucoesItem" style="display:none;cursor:pointer" onclick="abrirModalInstrucoes()">
-      <div><div class="auto-label-off" style="font-size:12px;font-weight:700">📝 Instruções do bot <span class="ia-novo-badge">novo</span></div></div>
-      <span class="tempo-edit-icon">✏️</span>
-    </div>
+    <!-- Instruções do bot agora vivem na seção "🧠 Atendente Inteligente" da aba Robô (modal antigo dormente). -->
+
     <div class="bot-item">
       <div><div id="impTopLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🖨️ Impressora: PAUSADA</div></div>
       <label class="auto-switch">
@@ -1178,6 +1176,43 @@ textarea.fi{resize:vertical;min-height:60px}
       <div class="panel-inner">
         <div class="panel-head"><h2>🤖 Robô WhatsApp</h2></div>
 
+        <!-- 0. Atendente Inteligente (IA) — só Joey por enquanto -->
+        <div class="card-box" id="secaoAtendenteIA" style="display:none">
+          <div class="robo-sec-hdr" onclick="toggleRoboSection('ia')">
+            <span>🧠 Atendente Inteligente <span class="ia-novo-badge">novo</span></span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-ia">▲</button>
+          </div>
+          <div id="robo-sec-body-ia">
+            <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Com a IA ligada (toggles no topo da tela), o atendente virtual responde seus clientes usando o cardápio, os horários e a entrega (que vêm dos seus dados) mais as informações abaixo.</p>
+
+            <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Identidade</div>
+            <label class="fl" style="display:block;margin-bottom:4px">Nome do atendente</label>
+            <input id="ia-nome" class="fi" maxlength="40" style="margin-bottom:10px" placeholder="Ex.: Léo">
+            <label class="fl" style="display:block;margin-bottom:4px">Tom de voz</label>
+            <textarea id="ia-tom" class="fi" rows="3" maxlength="1500" style="width:100%;resize:vertical;margin-bottom:16px;font-family:inherit;font-size:12px" placeholder="Ex.: Simpático e descontraído, usa emojis com moderação."></textarea>
+
+            <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">O que o atendente deve saber</div>
+            <label class="fl" style="display:block;margin-bottom:4px">Formas de pagamento</label>
+            <textarea id="ia-pagamento" class="fi" rows="2" maxlength="500" style="width:100%;resize:vertical;margin-bottom:10px;font-family:inherit;font-size:12px" placeholder="Ex.: Pix, dinheiro e cartão (crédito e débito)."></textarea>
+            <label class="fl" style="display:block;margin-bottom:4px">Resposta para "cadê meu pedido?"</label>
+            <textarea id="ia-status-pedido" class="fi" rows="2" maxlength="500" style="width:100%;resize:vertical;margin-bottom:10px;font-family:inherit;font-size:12px" placeholder="Ex.: Está sendo preparado! Te aviso quando sair pra entrega. Pra detalhes, é só digitar atendente."></textarea>
+            <div style="font-size:11px;color:var(--text2);background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:16px">🔒 Tempo de entrega: <b id="ia-ro-tempo">—</b> · Pedido mínimo: <b id="ia-ro-minimo">—</b> <span style="color:var(--text3)">— vêm das Configurações; a IA já usa automaticamente.</span></div>
+
+            <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Aviso do momento</div>
+            <label class="fl" style="display:block;margin-bottom:4px">Promoção / recado que muda</label>
+            <textarea id="ia-aviso" class="fi" rows="2" maxlength="1500" style="width:100%;resize:vertical;margin-bottom:16px;font-family:inherit;font-size:12px" placeholder="Ex.: Hoje, na compra de 2 burgers a Coca vem grátis! 🥤"></textarea>
+
+            <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">O que nunca fazer</div>
+            <label class="fl" style="display:block;margin-bottom:4px">Uma regra por linha</label>
+            <textarea id="ia-nunca" class="fi" rows="4" maxlength="1500" style="width:100%;resize:vertical;margin-bottom:6px;font-family:inherit;font-size:12px" placeholder="Nunca prometa desconto que não esteja no cardápio&#10;Nunca fale mal de concorrentes&#10;Nunca peça número de cartão pelo chat"></textarea>
+            <p style="font-size:11px;color:var(--text3);margin-bottom:14px">As travas de segurança do sistema (preço sempre do cardápio, loja fechada, etapas do pedido) têm prioridade — suas regras não as anulam.</p>
+
+            <button class="btn btn-primary" onclick="salvarAtendenteIA()">✓ Salvar atendente</button>
+          </div>
+        </div>
+
+        <hr class="robo-divider">
+
         <!-- 1. Status do bot -->
         <div class="card-box">
           <div class="robo-sec-hdr" onclick="toggleRoboSection('status')">
@@ -1221,10 +1256,10 @@ textarea.fi{resize:vertical;min-height:60px}
         <!-- 3. Mensagens do Robô -->
         <div class="card-box">
           <div class="robo-sec-hdr" onclick="toggleRoboSection('msgs')">
-            <span>Mensagens do Robô</span>
-            <button class="robo-sec-toggle" id="robo-sec-btn-msgs">▲</button>
+            <span>⚙️ Mensagens do Robô <span style="font-weight:400;color:var(--text2);font-size:11px">— modo antigo, usado só quando a IA está desligada</span></span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-msgs">▼</button>
           </div>
-          <div id="robo-sec-body-msgs">
+          <div id="robo-sec-body-msgs" style="display:none">
             <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Clique num card para editar. Use <b>{nome}</b> para o nome do cliente e <b>{saudacao}</b> para Bom dia/Boa tarde/Boa noite.</p>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px">
 
@@ -1394,10 +1429,10 @@ textarea.fi{resize:vertical;min-height:60px}
         <!-- 4. Gatilhos personalizados -->
         <div class="card-box">
           <div class="robo-sec-hdr" onclick="toggleRoboSection('gatilhos')">
-            <span>➕ Gatilhos Personalizados</span>
-            <button class="robo-sec-toggle" id="robo-sec-btn-gatilhos">▲</button>
+            <span>➕ Gatilhos personalizados <span style="font-weight:400;color:var(--text2);font-size:11px">— modo antigo (fallback)</span></span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-gatilhos">▼</button>
           </div>
-          <div id="robo-sec-body-gatilhos">
+          <div id="robo-sec-body-gatilhos" style="display:none">
             <p style="font-size:11px;color:var(--text2);margin-bottom:1rem">Crie respostas automáticas para palavras-chave específicas do seu negócio.</p>
             <div id="customGatilhosContainer" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
             <button id="btnAdicionarGatilho" class="btn btn-ghost" onclick="abrirNovoGatilhoForm()">+ Adicionar gatilho</button>
@@ -2699,8 +2734,8 @@ function _setIaTogglesUI() {
 }
 // Tempo real: features (flags) + aditivos (entitlement). Qualquer mudança reflete nos toggles.
 function iniciarIaListeners() {
-  // "Instruções do bot" é recurso só do Joey (a IA do bot vive no joeyapi, slug joey).
-  if (slug === 'joey') { const el = document.getElementById('botInstrucoesItem'); if (el) el.style.display = ''; }
+  // Seção "Atendente Inteligente" é só do Joey por enquanto (a IA do bot vive no joeyapi, slug joey).
+  if (slug === 'joey') { const el = document.getElementById('secaoAtendenteIA'); if (el) el.style.display = ''; }
   db.doc(`clientes/${slug}/config/features`).onSnapshot(
     s => { _iaFeatures = s.exists ? (s.data() || {}) : {}; _setIaTogglesUI(); },
     e => console.error('[IA] features listener:', e));
@@ -6234,6 +6269,42 @@ async function salvarInstrucoes() {
   } catch (e) { console.error('[instr] save:', e); notify('Erro ao salvar instruções: ' + e.message, 'error'); }
 }
 
+// ── Atendente Inteligente (IA) — config/iaInstrucoes, só Joey. O bot (joeyapi) lê fresco e injeta no prompt.
+// Tempo de entrega e pedido mínimo são data-driven (config/loja) → aqui são só LEITURA.
+function carregarAtendenteIA(loja) {
+  if (!document.getElementById('secaoAtendenteIA')) return;
+  const _tempo = (loja && loja.tempo_delivery) || config.tempo_delivery || '—';
+  const _min   = Number((loja && loja.pedidoMinimo) || config.pedidoMinimo || 0);
+  const roT = document.getElementById('ia-ro-tempo'); if (roT) roT.textContent = _tempo;
+  const roM = document.getElementById('ia-ro-minimo'); if (roM) roM.textContent = _min > 0 ? ('R$ ' + _min.toFixed(2).replace('.', ',')) : '—';
+  db.doc(`clientes/${slug}/config/iaInstrucoes`).get().then(s => {
+    const d = s.exists ? (s.data() || {}) : {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    set('ia-nome', d.nomeAtendente);
+    set('ia-tom', d.comoAtende);
+    set('ia-pagamento', d.formasPagamento);
+    set('ia-status-pedido', d.respostaStatusPedido);
+    set('ia-aviso', d.avisoMomento);
+    set('ia-nunca', d.nuncaFazer);
+  }).catch(e => console.error('[IA] load instrucoes:', e));
+}
+async function salvarAtendenteIA() {
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  const payload = {
+    nomeAtendente:        val('ia-nome').slice(0, 40),
+    comoAtende:           val('ia-tom').slice(0, 1500),
+    formasPagamento:      val('ia-pagamento').slice(0, 500),
+    respostaStatusPedido: val('ia-status-pedido').slice(0, 500),
+    avisoMomento:         val('ia-aviso').slice(0, 1500),
+    nuncaFazer:           val('ia-nunca').slice(0, 1500),
+    atualizadoEm:         firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.doc(`clientes/${slug}/config/iaInstrucoes`).set(payload, { merge: true });
+    notify('Atendente atualizado — já vale na próxima mensagem do bot! 🤖', 'success');
+  } catch (e) { console.error('[IA] save instrucoes:', e); notify('Erro ao salvar: ' + e.message, 'error'); }
+}
+
 function toggleBot() {
   config.botAtivo = config.botAtivo === false ? true : false;
   saveConfig();
@@ -7760,6 +7831,7 @@ async function carregarRobo() {
     if (loja.wppNotifs) config.wppNotifs = loja.wppNotifs;
     renderNotifConfig();
     setBotToggle(loja.botAtivo !== false);
+    if (slug === 'joey') carregarAtendenteIA(loja);
 
     const saved = {};
     botSnap.forEach(d => { saved[d.id] = d.data(); });
