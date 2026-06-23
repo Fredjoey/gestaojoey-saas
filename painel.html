@@ -3982,7 +3982,12 @@ const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
 function renderHorariosDias() {
   const horarios = config.horarios || {};
-  document.getElementById('horariosDias').innerHTML = DIAS_SEMANA.map((dia, i) => {
+  // Ordem de EXIBIÇÃO começando na segunda (Seg→Dom). É SÓ visual: o índice `i` de cada dia
+  // (0=Dom .. 6=Sáb) continua sendo a CHAVE salva em config.horarios — os dados e a leitura
+  // dos horários em outros lugares (bot etc.) NÃO mudam.
+  const ORDEM_EXIBICAO = [1, 2, 3, 4, 5, 6, 0];
+  document.getElementById('horariosDias').innerHTML = ORDEM_EXIBICAO.map((i) => {
+    const dia = DIAS_SEMANA[i];
     const h = horarios[i] || { ativo: false, abre: '18:00', fecha: '23:00' };
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;min-height:44px">
