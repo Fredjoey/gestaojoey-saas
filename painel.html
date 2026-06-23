@@ -642,30 +642,13 @@ textarea.fi{resize:vertical;min-height:60px}
       <span class="tempo-edit-icon">✏️</span>
     </div>
     <div class="bot-item">
-      <div><div class="bot-label">🤖 Bot WhatsApp</div></div>
-      <button class="bot-toggle" id="btnBot" onclick="toggleBot()">Ativo</button>
-    </div>
-    <div class="bot-item">
       <div><div id="autoAceitarLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🤖 Auto-aceitar: OFF</div></div>
       <label class="auto-switch">
         <input type="checkbox" id="autoAceitarInput" onchange="toggleAutoAceitar(this)">
         <span class="slider"></span>
       </label>
     </div>
-    <div class="bot-item">
-      <div><div id="iaAtdLabel" class="auto-label-off" style="font-size:12px;font-weight:700">💬 IA Atendimento: OFF</div></div>
-      <label class="auto-switch">
-        <input type="checkbox" id="iaAtdInput" onchange="toggleIaFlag('IA_ATENDIMENTO',this)">
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="bot-item">
-      <div><div id="iaPedLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🛒 IA Pedido: OFF</div></div>
-      <label class="auto-switch">
-        <input type="checkbox" id="iaPedInput" onchange="toggleIaFlag('IA_PEDIDO',this)">
-        <span class="slider"></span>
-      </label>
-    </div>
+    <!-- Bot WhatsApp + IA Atendimento + IA Pedido movidos pra fileira "Controles do robô" na aba Robô. -->
     <!-- Instruções do bot agora vivem na seção "🧠 Atendente Inteligente" da aba Robô (modal antigo dormente). -->
 
     <div class="bot-item">
@@ -1176,6 +1159,35 @@ textarea.fi{resize:vertical;min-height:60px}
       <div class="panel-inner">
         <div class="panel-head"><h2>🤖 Robô WhatsApp</h2></div>
 
+        <!-- Controles do robô (universal — NÃO gated por slug; liga/desliga do bot + flags de IA) -->
+        <div class="card-box">
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            <div class="bot-item" style="min-width:180px;border-radius:8px">
+              <div><div id="botAtivoLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🤖 Bot WhatsApp</div></div>
+              <label class="auto-switch">
+                <input type="checkbox" id="cfgBotAtivo" onchange="salvarStatusBot(this)">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="bot-item" style="min-width:180px;border-radius:8px">
+              <div><div id="iaAtdLabel" class="auto-label-off" style="font-size:12px;font-weight:700">💬 IA Atendimento: OFF</div></div>
+              <label class="auto-switch">
+                <input type="checkbox" id="iaAtdInput" onchange="toggleIaFlag('IA_ATENDIMENTO',this)">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="bot-item" style="min-width:180px;border-radius:8px">
+              <div><div id="iaPedLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🛒 IA Pedido: OFF</div></div>
+              <label class="auto-switch">
+                <input type="checkbox" id="iaPedInput" onchange="toggleIaFlag('IA_PEDIDO',this)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <hr class="robo-divider">
+
         <!-- 0. Atendente Inteligente (IA) — só Joey por enquanto -->
         <div class="card-box" id="secaoAtendenteIA" style="display:none">
           <div class="robo-sec-hdr" onclick="toggleRoboSection('ia')">
@@ -1208,29 +1220,6 @@ textarea.fi{resize:vertical;min-height:60px}
             <p style="font-size:11px;color:var(--text3);margin-bottom:14px">As travas de segurança do sistema (preço sempre do cardápio, loja fechada, etapas do pedido) têm prioridade — suas regras não as anulam.</p>
 
             <button class="btn btn-primary" onclick="salvarAtendenteIA()">✓ Salvar atendente</button>
-          </div>
-        </div>
-
-        <hr class="robo-divider">
-
-        <!-- 1. Status do bot -->
-        <div class="card-box">
-          <div class="robo-sec-hdr" onclick="toggleRoboSection('status')">
-            <span>Status do Robô</span>
-            <button class="robo-sec-toggle" id="robo-sec-btn-status">▲</button>
-          </div>
-          <div id="robo-sec-body-status">
-            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-              <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text)" id="botAtivoLabel">Robô ativo</div>
-                <div style="font-size:11px;color:var(--text2);margin-top:2px">Responde automaticamente mensagens no WhatsApp</div>
-              </div>
-              <label style="position:relative;display:inline-block;width:46px;height:26px;cursor:pointer">
-                <input type="checkbox" id="cfgBotAtivo" style="opacity:0;width:0;height:0" onchange="salvarStatusBot(this)">
-                <span id="botAtivoTrack" style="position:absolute;inset:0;border-radius:13px;background:var(--bg3);border:1px solid var(--border2);transition:all .2s"></span>
-                <span id="botAtivoThumb" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text3);transition:all .2s"></span>
-              </label>
-            </div>
           </div>
         </div>
 
@@ -6171,7 +6160,6 @@ function atualizarTempoStrip() {
   if (d) d.textContent = config.tempo_delivery || '40-60 min';
   if (r) r.textContent = config.tempo_retirada || '20-30 min';
   if (l) l.textContent = config.tempo_local    || '15-20 min';
-  atualizarBotStatus();
 }
 
 let _tv = {};
@@ -6305,22 +6293,8 @@ async function salvarAtendenteIA() {
   } catch (e) { console.error('[IA] save instrucoes:', e); notify('Erro ao salvar: ' + e.message, 'error'); }
 }
 
-function toggleBot() {
-  config.botAtivo = config.botAtivo === false ? true : false;
-  saveConfig();
-  atualizarBotStatus();
-  notify(config.botAtivo !== false ? '🤖 Bot ativado!' : '⏸ Bot pausado — você assumiu o atendimento.', config.botAtivo !== false ? 'success' : 'warning');
-}
-
-function atualizarBotStatus() {
-  const btn = document.getElementById('btnBot');
-  if (!btn) return;
-  const ativo = config.botAtivo !== false;
-  btn.textContent    = ativo ? 'Ativo' : 'Pausado';
-  btn.style.background  = ativo ? 'rgba(52,211,153,.15)' : 'rgba(245,158,11,.15)';
-  btn.style.color       = ativo ? '#34d399' : '#f59e0b';
-  btn.style.borderColor = ativo ? 'rgba(52,211,153,.3)' : 'rgba(245,158,11,.3)';
-}
+// toggleBot/atualizarBotStatus removidos — o liga/desliga do bot agora é ÚNICO:
+// cfgBotAtivo/salvarStatusBot na fileira "Controles do robô" da aba Robô.
 
 // =================== NOTIFICAÇÕES PUSH ===================
 function mostrarNotificacaoPush(titulo, corpo) {
@@ -7805,14 +7779,13 @@ const BOT_DEFAULTS = {
 };
 
 function setBotToggle(ativo) {
-  const lbl   = document.getElementById('botAtivoLabel');
-  const track = document.getElementById('botAtivoTrack');
-  const thumb = document.getElementById('botAtivoThumb');
-  const cb    = document.getElementById('cfgBotAtivo');
-  if (cb)    cb.checked            = ativo;
-  if (lbl)   lbl.textContent       = ativo ? 'Robô ativo' : 'Robô desativado';
-  if (track) track.style.background = ativo ? 'var(--orange)' : 'var(--bg3)';
-  if (thumb) { thumb.style.left = ativo ? '25px' : '3px'; thumb.style.background = ativo ? '#fff' : 'var(--text3)'; }
+  const lbl = document.getElementById('botAtivoLabel');
+  const cb  = document.getElementById('cfgBotAtivo');
+  if (cb) cb.checked = ativo;
+  if (lbl) {
+    lbl.textContent = ativo ? '🤖 Bot WhatsApp: ATIVO' : '🤖 Bot WhatsApp: PAUSADO';
+    lbl.className = ativo ? 'auto-label-on' : 'auto-label-off';
+  }
 }
 
 async function carregarRobo() {
@@ -7870,6 +7843,7 @@ async function carregarRobo() {
 
 async function salvarStatusBot(cb) {
   const ativo = cb.checked;
+  config.botAtivo = ativo; // sincroniza a memória — senão um saveConfig posterior regrava o valor antigo e religa o bot sozinho
   setBotToggle(ativo);
   try {
     await db.doc(`clientes/${slug}/config/loja`).set({ botAtivo: ativo }, { merge: true });
