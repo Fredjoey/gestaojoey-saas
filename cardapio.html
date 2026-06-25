@@ -970,6 +970,7 @@ function carregarDadosPainel() {
     CONFIG.tempo_local     = cfg.tempo_local     || '15-20 min';
     CONFIG.pedidoMinimo    = cfg.pedidoMinimo    || 0;
     CONFIG.destaque        = cfg.destaque        || null;
+    CONFIG.premioJogo      = cfg.premioJogo      || '';   // frase do prêmio do jogo da cobrinha (editável no painel; ''=fallback)
     CONFIG.playlistMusica  = cfg.playlistMusica;   // 'PL…'=toca a playlist do próprio tenant | ''/undefined=sem música (aditivo off)
     CONFIG.playlistShuffle = cfg.playlistShuffle === true;   // true=embaralha (toggle do admin) | false/ausente=ordem da playlist
     _ytConfigReady = true; _maybeInitMusic();      // libera o player (Parte 2 — música por cliente)
@@ -2443,7 +2444,7 @@ function renderStepSucesso(el) {
         Tempo estimado: <strong>${tempoLabel}</strong>
       </div>
       <button class="btn-main" onclick="closeCart();openMeusPedidos()" style="margin-top:1.5rem">📋 Acompanhar meu pedido</button>
-      <button class="btn-secondary" onclick="openJogo()">🐍 Joga enquanto espera</button>
+      ${slug === 'joey' ? '<button class="btn-secondary" onclick="openJogo()">🐍 Joga enquanto espera</button>' : ''}
       <button class="btn-secondary" onclick="closeCart()">Fazer novo pedido</button>
     </div>
   `;
@@ -2497,15 +2498,29 @@ function _telDigits() { return String(clienteData?.tel || '').replace(/\D/g, '')
 function _telMasc(t) { const d = String(t || '').replace(/\D/g, ''); return d.length >= 4 ? '••••' + d.slice(-4) : ''; }
 function _escG(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 let _snakeAtivo = null; // { parar } da partida em andamento (limpeza ao fechar/recomeçar)
+// Teardown IDEMPOTENTE — seguro de chamar a qualquer hora (abrir/fechar/recomeçar/perder foco).
+// Garante que NUNCA sobre loop (setInterval) ou listener órfão — a causa do travamento ao sair e voltar.
+function _pararSnake() { if (_snakeAtivo) { _snakeAtivo.parar(); _snakeAtivo = null; } }
+// Se a aba/app perde o foco durante a partida, encerra o jogo e deixa o botão pronto pra recomeçar
+// (em vez de rodar escondido/congelar). Registrado uma vez — o script roda no load.
+function _onVisChangeSnake() {
+  if (document.hidden && _snakeAtivo) {
+    _pararSnake();
+    const b = document.getElementById('snakeStartBtn');
+    if (b) { b.textContent = '▶ Recomeçar'; b.style.display = ''; }
+  }
+}
+document.addEventListener('visibilitychange', _onVisChangeSnake);
 
 function openJogo() {
+  _pararSnake();                 // mata qualquer loop/listener de sessão anterior → reabre SEMPRE limpo
   document.getElementById('gameOverlay').classList.add('show');
   lockBodyScroll();
-  renderJogo();
+  renderJogo();                  // DOM fresco: canvas novo + botão ▶ Começar funcional
   carregarRankingCobrinha();
 }
 function closeJogo() {
-  if (_snakeAtivo) { _snakeAtivo.parar(); _snakeAtivo = null; }
+  _pararSnake();
   document.getElementById('gameOverlay').classList.remove('show');
   unlockBodyScroll();
 }
@@ -2520,7 +2535,8 @@ function renderJogo() {
       <div style="width:100%;margin-top:.75rem">
         <div class="sheet-title" style="font-size:1.05rem;margin:.25rem 0 .75rem">🏆 Ranking de ${_mesNome()}</div>
         <div class="rank-list" id="rankList"><div class="game-hint">Carregando…</div></div>
-        <div class="game-hint" style="margin-top:.6rem">1º lugar do mês ganha um lanche! 🍔 (o ranking zera sozinho todo dia 1º)</div>
+        <div class="game-hint" style="margin-top:.6rem">${_escG(CONFIG.premioJogo || 'O 1º lugar do mês ganha um lanche! 🍔')}</div>
+        <div class="game-hint" style="margin-top:.25rem;color:var(--text3)">O ranking zera sozinho todo dia 1º.</div>
       </div>
     </div>`;
 }
@@ -2530,7 +2546,7 @@ function _novaComida(snake, N) {
   return livres.length ? livres[Math.floor(Math.random() * livres.length)] : null; // null = tabuleiro cheio
 }
 function iniciarPartida() {
-  if (_snakeAtivo) { _snakeAtivo.parar(); _snakeAtivo = null; }
+  _pararSnake();                 // mata qualquer loop/listener anterior antes de começar
   const canvas = document.getElementById('snakeCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');

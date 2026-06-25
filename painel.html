@@ -1014,6 +1014,7 @@ textarea.fi{resize:vertical;min-height:60px}
             <div class="fg"><label class="fl">Valor mínimo do pedido (Delivery)</label><input class="fi" id="cfgPedidoMinimo" placeholder="0.00" type="number" step="0.01" min="0"></div>
             <div class="fg"><label class="fl">Endereço</label><input class="fi" id="cfgEnd" placeholder="Rua das Pizzas, 123 — Centro"></div>
           </div>
+          <div class="fg"><label class="fl">🐍 Frase do prêmio do jogo</label><input class="fi" id="cfgPremioJogo" placeholder="O 1º lugar do mês ganha um lanche! 🍔" maxlength="120"><small style="color:var(--text2,#999)">Aparece no ranking da cobrinha do cardápio. Vazio = usa a frase padrão.</small></div>
           <div class="form-grid">
             <div class="fg">
               <label class="fl">🔑 PIN do App Garçom</label>
@@ -4388,6 +4389,7 @@ function carregarConfig() {
   document.getElementById('cfgTaxa').value         = config.taxa         || '5.00';
   document.getElementById('cfgPedidoMinimo').value = config.pedidoMinimo > 0 ? config.pedidoMinimo : '';
   document.getElementById('cfgEnd').value          = config.end          || '';
+  { const _pj = document.getElementById('cfgPremioJogo'); if (_pj) _pj.value = config.premioJogo || ''; }
   const _gp = document.getElementById('cfgGarcomPin'); if (_gp) _gp.value = '';  // PIN é write-only (privado); em branco = não altera
   _setBannerPreview(config.bannerUrl || null);
   renderLogoPreview(config.logoUrl || null);
@@ -4435,6 +4437,7 @@ function salvarConfig() {
     viasImpressao:    parseInt(document.getElementById('cfgViasImpressao').value) || 1,
     impressoraNome:   (document.getElementById('cfgImpressoraNome')?.value || '').trim(),
     destaque:       document.getElementById('cfgDestaque').value || null,
+    premioJogo:     (document.getElementById('cfgPremioJogo')?.value || '').trim().slice(0, 120),
     bannerUrl:      config.bannerUrl || null,
     // Preserva notificações (saveConfig faz set total). O PIN do garçom NÃO fica mais aqui
     // (era público) — vai pro doc privado garcomSecrets via Cloud Function garcomSetPin.
