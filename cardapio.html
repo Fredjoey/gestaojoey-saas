@@ -337,8 +337,8 @@ body{
 }
 
 /* carrinho, histórico e perfil da loja centralizados */
-#cartOverlay,#histOverlay,#infoOverlay{align-items:center;padding:0 1rem}
-#cartSheet,#histSheet,#infoSheet{border-radius:20px;max-height:85vh;max-width:480px}
+#cartOverlay,#histOverlay,#infoOverlay,#gameOverlay{align-items:center;padding:0 1rem}
+#cartSheet,#histSheet,#infoSheet,#gameSheet{border-radius:20px;max-height:85vh;max-width:480px}
 
 .sheet-handle{
   width:40px;height:4px;border-radius:2px;
@@ -350,6 +350,18 @@ body{
   font-size:1.4rem;font-weight:700;
   color:var(--cream);margin-bottom:1.25rem;
 }
+
+/* JOGO DA COBRINHA (tela de acompanhamento) */
+#gameWrap{display:flex;flex-direction:column;align-items:center;gap:.6rem}
+#snakeCanvas{background:#0f0f0f;border:2px solid var(--orange);border-radius:12px;touch-action:none;width:300px;max-width:88vw;height:auto;aspect-ratio:1/1;display:block}
+.game-score{font-weight:700;color:var(--orange);font-size:1.1rem}
+.game-hint{font-size:.78rem;color:var(--text2);text-align:center;line-height:1.45}
+.rank-list{width:100%;display:flex;flex-direction:column;gap:5px}
+.rank-row{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;background:var(--bg3);border-radius:10px;font-size:.86rem}
+.rank-row.me{background:rgba(255,107,53,.16);border:1px solid var(--orange)}
+.rank-pos{min-width:1.7rem;text-align:center;font-weight:700;color:var(--text2)}
+.rank-nome{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-score{font-weight:700;color:var(--orange)}
 
 /* CARRINHO */
 .cart-item{
@@ -831,6 +843,14 @@ body{
   <div class="sheet" id="infoSheet">
     <div class="sheet-handle"></div>
     <div id="infoContent"></div>
+  </div>
+</div>
+
+<!-- OVERLAY JOGO DA COBRINHA (tela de acompanhamento) -->
+<div class="overlay" id="gameOverlay" onclick="if(event.target===this)closeJogo()">
+  <div class="sheet" id="gameSheet">
+    <div class="sheet-handle"></div>
+    <div id="gameContent"></div>
   </div>
 </div>
 
@@ -2423,6 +2443,7 @@ function renderStepSucesso(el) {
         Tempo estimado: <strong>${tempoLabel}</strong>
       </div>
       <button class="btn-main" onclick="closeCart();openMeusPedidos()" style="margin-top:1.5rem">📋 Acompanhar meu pedido</button>
+      <button class="btn-secondary" onclick="openJogo()">🐍 Joga enquanto espera</button>
       <button class="btn-secondary" onclick="closeCart()">Fazer novo pedido</button>
     </div>
   `;
@@ -2463,6 +2484,154 @@ function openInfoLoja() {
 function closeInfoLoja() {
   document.getElementById('infoOverlay').classList.remove('show');
   unlockBodyScroll();
+}
+
+// =================== JOGO DA COBRINHA + RANKING MENSAL ===================
+// Brincadeira casual na tela de acompanhamento. Multi-tenant: caminho clientes/{slug}/ranking_cobrinha
+// (ATIVO só pro joey agora — é o único cardápio no ar). Identidade = nome/telefone do checkout (clienteData).
+const SCORE_MAX = 500;                  // teto anti-trapaça — fácil de ajustar (validado também nas Firestore Rules)
+const RANKING_COL = 'ranking_cobrinha';
+function _mesAnoAtual() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+function _mesNome() { return ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'][new Date().getMonth()]; }
+function _telDigits() { return String(clienteData?.tel || '').replace(/\D/g, ''); }
+function _telMasc(t) { const d = String(t || '').replace(/\D/g, ''); return d.length >= 4 ? '••••' + d.slice(-4) : ''; }
+function _escG(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+let _snakeAtivo = null; // { parar } da partida em andamento (limpeza ao fechar/recomeçar)
+
+function openJogo() {
+  document.getElementById('gameOverlay').classList.add('show');
+  lockBodyScroll();
+  renderJogo();
+  carregarRankingCobrinha();
+}
+function closeJogo() {
+  if (_snakeAtivo) { _snakeAtivo.parar(); _snakeAtivo = null; }
+  document.getElementById('gameOverlay').classList.remove('show');
+  unlockBodyScroll();
+}
+function renderJogo() {
+  document.getElementById('gameContent').innerHTML = `
+    <div class="sheet-title">🐍 Cobrinha do Joey</div>
+    <div id="gameWrap">
+      <div class="game-score">Pontos: <span id="snakeScore">0</span></div>
+      <canvas id="snakeCanvas" width="300" height="300"></canvas>
+      <div class="game-hint">No teclado: setas ou WASD. No celular: deslize o dedo na tela.<br>Pegue a 🍔 — não bata na parede nem em você mesmo.</div>
+      <button class="btn-main" id="snakeStartBtn" onclick="iniciarPartida()">▶ Começar</button>
+      <div style="width:100%;margin-top:.75rem">
+        <div class="sheet-title" style="font-size:1.05rem;margin:.25rem 0 .75rem">🏆 Ranking de ${_mesNome()}</div>
+        <div class="rank-list" id="rankList"><div class="game-hint">Carregando…</div></div>
+        <div class="game-hint" style="margin-top:.6rem">1º lugar do mês ganha um lanche! 🍔 (o ranking zera sozinho todo dia 1º)</div>
+      </div>
+    </div>`;
+}
+function _novaComida(snake, N) {
+  const livres = [];
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (!snake.some(s => s.x === x && s.y === y)) livres.push({ x, y });
+  return livres.length ? livres[Math.floor(Math.random() * livres.length)] : null; // null = tabuleiro cheio
+}
+function iniciarPartida() {
+  if (_snakeAtivo) { _snakeAtivo.parar(); _snakeAtivo = null; }
+  const canvas = document.getElementById('snakeCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const N = 15, CELL = canvas.width / N;
+  let snake = [{ x: 7, y: 7 }], dir = { x: 1, y: 0 }, nextDir = { x: 1, y: 0 };
+  let food = _novaComida(snake, N), score = 0, tickMs = 160, loop = null;
+  const scoreEl = document.getElementById('snakeScore');
+  const startBtn = document.getElementById('snakeStartBtn');
+  if (scoreEl) scoreEl.textContent = '0';
+  if (startBtn) startBtn.style.display = 'none';
+  const setDir = (nx, ny) => { if (nx === -dir.x && ny === -dir.y) return; nextDir = { x: nx, y: ny }; }; // sem 180°
+  const onKey = (e) => {
+    const k = e.key;
+    if (k === 'ArrowUp' || k === 'w' || k === 'W') setDir(0, -1);
+    else if (k === 'ArrowDown' || k === 's' || k === 'S') setDir(0, 1);
+    else if (k === 'ArrowLeft' || k === 'a' || k === 'A') setDir(-1, 0);
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') setDir(1, 0);
+    else return;
+    e.preventDefault();
+  };
+  let tsx = 0, tsy = 0;
+  const onTS = (e) => { const t = e.touches[0]; tsx = t.clientX; tsy = t.clientY; };
+  const onTM = (e) => { e.preventDefault(); }; // bloqueia scroll durante o swipe
+  const onTE = (e) => {
+    const t = e.changedTouches[0], dx = t.clientX - tsx, dy = t.clientY - tsy;
+    if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0); else setDir(0, dy > 0 ? 1 : -1);
+  };
+  document.addEventListener('keydown', onKey);
+  canvas.addEventListener('touchstart', onTS, { passive: true });
+  canvas.addEventListener('touchmove', onTM, { passive: false });
+  canvas.addEventListener('touchend', onTE, { passive: true });
+  const parar = () => {
+    clearInterval(loop);
+    document.removeEventListener('keydown', onKey);
+    canvas.removeEventListener('touchstart', onTS);
+    canvas.removeEventListener('touchmove', onTM);
+    canvas.removeEventListener('touchend', onTE);
+  };
+  const desenhar = () => {
+    ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (food) { ctx.font = `${CELL - 2}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🍔', food.x * CELL + CELL / 2, food.y * CELL + CELL / 2); }
+    snake.forEach((s, i) => { ctx.fillStyle = i === 0 ? '#ff6b35' : '#ff8c5a'; ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2); });
+  };
+  const gameOver = () => {
+    parar(); _snakeAtivo = null;
+    ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff6b35'; ctx.font = 'bold 22px sans-serif'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 12);
+    ctx.fillStyle = '#f0ede8'; ctx.font = '15px sans-serif'; ctx.fillText(`${score} ponto${score === 1 ? '' : 's'}`, canvas.width / 2, canvas.height / 2 + 16);
+    if (startBtn) { startBtn.textContent = '▶ Jogar de novo'; startBtn.style.display = ''; }
+    salvarScoreCobrinha(score);
+  };
+  const tick = () => {
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    if (head.x < 0 || head.y < 0 || head.x >= N || head.y >= N || snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
+    snake.unshift(head);
+    if (food && head.x === food.x && head.y === food.y) {
+      score++; if (scoreEl) scoreEl.textContent = score;
+      food = _novaComida(snake, N);
+      if (!food) return gameOver(); // tabuleiro cheio (venceu) — encerra
+      tickMs = Math.max(70, 160 - score * 4); // acelera conforme cresce
+      clearInterval(loop); loop = setInterval(tick, tickMs);
+    } else { snake.pop(); }
+    desenhar();
+  };
+  _snakeAtivo = { parar };
+  desenhar();
+  loop = setInterval(tick, tickMs);
+}
+async function salvarScoreCobrinha(score) {
+  // SALVAGUARDA: teto de score (anti-trapaça) + ignora zero/inválido + exige identidade do checkout
+  if (!Number.isInteger(score) || score <= 0 || score > SCORE_MAX) return;
+  const tel = _telDigits();
+  if (!tel || !clienteData?.nome) return; // sem nome/telefone do checkout → não grava (não polui o ranking)
+  const mesAno = _mesAnoAtual();
+  try {
+    await _garantirAuthValida();
+    const ref = db.collection(`clientes/${slug}/${RANKING_COL}`).doc(`${mesAno}__${tel}`); // 1 doc por jogador/mês = guarda só o MELHOR
+    const snap = await ref.get();
+    if (snap.exists && (snap.data().score || 0) >= score) return; // só grava se superou o próprio recorde do mês
+    await ref.set({ nome: String(clienteData.nome).slice(0, 60), telefone: tel.slice(0, 20), score, mesAno, criadoEm: firebase.firestore.FieldValue.serverTimestamp() });
+    carregarRankingCobrinha();
+  } catch (e) { console.warn('[cobrinha] não salvou score:', (e && e.message) || e); }
+}
+async function carregarRankingCobrinha() {
+  const el = document.getElementById('rankList');
+  if (!el) return;
+  try {
+    const mesAno = _mesAnoAtual(), meuTel = _telDigits();
+    const snap = await db.collection(`clientes/${slug}/${RANKING_COL}`).where('mesAno', '==', mesAno).get();
+    const todos = snap.docs.map(d => d.data()).sort((a, b) => (b.score || 0) - (a.score || 0)); // ordena no cliente (sem índice composto)
+    if (!todos.length) { el.innerHTML = '<div class="game-hint">Ninguém pontuou esse mês ainda. Seja o primeiro! 🐍</div>'; return; }
+    const medalha = (p) => p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : p + 'º';
+    const linha = (x, p, eu) => `<div class="rank-row${eu ? ' me' : ''}"><span class="rank-pos">${medalha(p)}</span><span class="rank-nome">${_escG(x.nome || '—')} <span style="color:var(--text3);font-size:.72rem">${_telMasc(x.telefone)}</span>${eu ? ' • você' : ''}</span><span class="rank-score">${x.score || 0}</span></div>`;
+    let html = todos.slice(0, 10).map((x, i) => linha(x, i + 1, !!meuTel && x.telefone === meuTel)).join('');
+    const meuIdx = meuTel ? todos.findIndex(x => x.telefone === meuTel) : -1;
+    if (meuIdx >= 10) html += `<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:2px 0">⋯</div>` + linha(todos[meuIdx], meuIdx + 1, true); // destaca o jogador fora do top 10
+    el.innerHTML = html;
+  } catch (e) { console.warn('[cobrinha] ranking:', (e && e.message) || e); el.innerHTML = '<div class="game-hint">Ranking indisponível agora.</div>'; }
 }
 
 function renderInfoLoja() {
