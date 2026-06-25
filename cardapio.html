@@ -353,7 +353,17 @@ body{
 
 /* JOGO DA COBRINHA (tela de acompanhamento) */
 #gameWrap{display:flex;flex-direction:column;align-items:center;gap:.6rem}
-#snakeCanvas{background:#0f0f0f;border:2px solid var(--orange);border-radius:12px;touch-action:none;width:300px;max-width:88vw;height:auto;aspect-ratio:1/1;display:block}
+#snakeStage{position:relative;width:300px;max-width:88vw;aspect-ratio:1/1}
+#snakeCanvas{background:#121212;border:2px solid var(--orange);border-radius:12px;touch-action:none;width:100%;height:100%;display:block;box-shadow:0 0 18px rgba(255,107,53,.18)}
+#snakeOver{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:.45rem;text-align:center;padding:1rem;border-radius:12px;background:rgba(15,15,15,.9)}
+#snakeOver.show{display:flex;animation:fadeIn .25s ease}
+#snakeOver .go-title{font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:700;color:var(--orange)}
+#snakeOver .go-score{color:var(--text);font-size:1rem}
+#snakeOver .go-rank{color:var(--cream);font-size:.95rem;font-weight:700}
+.shake{animation:snakeShake .26s ease}
+@keyframes snakeShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-4px,2px)}40%{transform:translate(4px,-2px)}60%{transform:translate(-3px,-2px)}80%{transform:translate(3px,2px)}}
+#snakeScore.bump{display:inline-block;animation:scoreBump .25s ease}
+@keyframes scoreBump{0%{transform:scale(1)}40%{transform:scale(1.4);color:var(--orange2)}100%{transform:scale(1)}}
 .game-score{font-weight:700;color:var(--orange);font-size:1.1rem}
 .game-hint{font-size:.78rem;color:var(--text2);text-align:center;line-height:1.45}
 .rank-list{width:100%;display:flex;flex-direction:column;gap:5px}
@@ -2529,8 +2539,11 @@ function renderJogo() {
     <div class="sheet-title">🐍 Cobrinha do Joey</div>
     <div id="gameWrap">
       <div class="game-score">Pontos: <span id="snakeScore">0</span></div>
-      <canvas id="snakeCanvas" width="300" height="300"></canvas>
-      <div class="game-hint">No teclado: setas ou WASD. No celular: deslize o dedo na tela.<br>Pegue a 🍔 — não bata na parede nem em você mesmo.</div>
+      <div id="snakeStage">
+        <canvas id="snakeCanvas" width="300" height="300"></canvas>
+        <div id="snakeOver"></div>
+      </div>
+      <div class="game-hint">No teclado: setas ou WASD. No celular: deslize o dedo na tela.<br>Pegue a comida e cresça — não bata na parede nem em você mesmo.</div>
       <button class="btn-main" id="snakeStartBtn" onclick="iniciarPartida()">▶ Começar</button>
       <div style="width:100%;margin-top:.75rem">
         <div class="sheet-title" style="font-size:1.05rem;margin:.25rem 0 .75rem">🏆 Ranking de ${_mesNome()}</div>
@@ -2545,19 +2558,105 @@ function _novaComida(snake, N) {
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (!snake.some(s => s.x === x && s.y === y)) livres.push({ x, y });
   return livres.length ? livres[Math.floor(Math.random() * livres.length)] : null; // null = tabuleiro cheio
 }
+
+// ===== Camada VISUAL do jogo (tudo em Canvas/paths — sem emoji como sprite). A mecânica/grid não dependem disto. =====
+function _roundRectPath(ctx, x, y, w, h, rad) {
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+function desenharFundo(ctx, LOG, N, CELL) {
+  ctx.fillStyle = '#121212'; ctx.fillRect(0, 0, LOG, LOG);
+  ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = 1; i < N; i++) { const p = i * CELL; ctx.moveTo(p, 0); ctx.lineTo(p, LOG); ctx.moveTo(0, p); ctx.lineTo(LOG, p); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,107,53,.45)'; ctx.lineWidth = 2; ctx.strokeRect(1.5, 1.5, LOG - 3, LOG - 3); // toque laranja na borda
+}
+// CABEÇA — ISOLADA e fácil de trocar depois. Neutra: segmento arredondado + 2 olhos virados pra direção.
+function desenharCabeca(ctx, cx, cy, r, dir) {
+  ctx.fillStyle = '#ff6b35';
+  _roundRectPath(ctx, cx - r, cy - r, r * 2, r * 2, r * 0.55); ctx.fill();
+  const off = r * 0.4, sep = r * 0.42, eyeR = r * 0.23;
+  const fx = cx + dir.x * off, fy = cy + dir.y * off;        // base dos olhos à frente, na direção
+  const px = -dir.y, py = dir.x;                             // eixo perpendicular ao movimento
+  for (const s of [-1, 1]) {
+    const ox = fx + px * sep * s, oy = fy + py * sep * s;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ox, oy, eyeR, 0, 7); ctx.fill();
+    ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(ox + dir.x * eyeR * 0.45, oy + dir.y * eyeR * 0.45, eyeR * 0.55, 0, 7); ctx.fill();
+  }
+}
+function desenharSegmento(ctx, cx, cy, r, claro) {
+  ctx.fillStyle = claro ? '#e3a85a' : '#d99a4e';            // cor de pão, 2 tons sutis (corpo uniforme)
+  _roundRectPath(ctx, cx - r, cy - r, r * 2, r * 2, r * 0.5); ctx.fill();
+}
+// COMIDA: alterna 'burger'/'pizza' a cada item; formas simples reconhecíveis; 'pulse' = escala oscilante.
+function desenharComida(ctx, cx, cy, r, tipo, pulse) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(pulse, pulse);
+  if (tipo === 'pizza') {
+    ctx.fillStyle = '#d9803a'; ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r * 0.85, r * 0.72); ctx.lineTo(-r * 0.85, r * 0.72); ctx.closePath(); ctx.fill(); // fatia (crosta)
+    ctx.fillStyle = '#f2c44e'; ctx.beginPath(); ctx.moveTo(0, -r * 0.7); ctx.lineTo(r * 0.6, r * 0.48); ctx.lineTo(-r * 0.6, r * 0.48); ctx.closePath(); ctx.fill(); // queijo
+    ctx.fillStyle = '#c0392b'; for (const d of [[-r * 0.2, r * 0.06], [r * 0.18, r * 0.22], [0, -r * 0.28]]) { ctx.beginPath(); ctx.arc(d[0], d[1], r * 0.11, 0, 7); ctx.fill(); } // pepperoni
+  } else {
+    ctx.fillStyle = '#d99a4e'; _roundRectPath(ctx, -r * 0.8, r * 0.34, r * 1.6, r * 0.42, r * 0.16); ctx.fill();   // pão de baixo
+    ctx.fillStyle = '#3aa757'; ctx.fillRect(-r * 0.84, r * 0.26, r * 1.68, r * 0.13);                              // alface
+    ctx.fillStyle = '#7a4a22'; _roundRectPath(ctx, -r * 0.78, 0, r * 1.56, r * 0.32, r * 0.14); ctx.fill();        // carne
+    ctx.fillStyle = '#e3a85a'; ctx.beginPath(); ctx.arc(0, r * 0.02, r * 0.82, Math.PI, 0, true); ctx.closePath(); ctx.fill(); // pão de cima (cúpula)
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; for (const dx of [-r * 0.32, 0, r * 0.32]) { ctx.beginPath(); ctx.ellipse(dx, -r * 0.34, r * 0.07, r * 0.045, 0, 0, 7); ctx.fill(); } // gergelim
+  }
+  ctx.restore();
+}
+function mostrarFimDeJogo(score) {
+  const el = document.getElementById('snakeOver');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="go-title">Fim de jogo!</div>
+    <div class="go-score">Você fez <strong>${score}</strong> ponto${score === 1 ? '' : 's'}</div>
+    <div class="go-rank" id="snakeRankFim">🏆 calculando posição…</div>
+    <button class="btn-main" style="margin-top:.4rem" onclick="iniciarPartida()">▶ Jogar de novo</button>`;
+  el.classList.add('show');
+}
+function _setRankFim(pos) {
+  const el = document.getElementById('snakeRankFim');
+  if (!el) return;
+  el.textContent = pos ? `🏆 #${pos} no ranking de ${_mesNome()}` : '🏆 jogue mais pra entrar no ranking!';
+}
+async function _posicaoNoRanking() {
+  const tel = _telDigits(); if (!tel) return null;
+  try {
+    const snap = await db.collection(`clientes/${slug}/${RANKING_COL}`).where('mesAno', '==', _mesAnoAtual()).get();
+    const todos = snap.docs.map(d => d.data()).sort((a, b) => (b.score || 0) - (a.score || 0));
+    const idx = todos.findIndex(x => x.telefone === tel);
+    return idx >= 0 ? idx + 1 : null;
+  } catch (e) { return null; }
+}
 function iniciarPartida() {
   _pararSnake();                 // mata qualquer loop/listener anterior antes de começar
   const canvas = document.getElementById('snakeCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const N = 15, CELL = canvas.width / N;
-  let snake = [{ x: 7, y: 7 }], dir = { x: 1, y: 0 }, nextDir = { x: 1, y: 0 };
-  let food = _novaComida(snake, N), score = 0, tickMs = 160, loop = null;
+  const N = 15, LOG = 300, CELL = LOG / N;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);    // nitidez (cap 2 p/ não pesar no mobile)
+  canvas.width = LOG * dpr; canvas.height = LOG * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);                    // desenho sempre em coords lógicas 0..300
+  // ESTADO DE GRID — mecânica INTOCADA (posições por célula). prevSnake = só p/ interpolar o desenho.
+  let snake = [{ x: 7, y: 7 }], prevSnake = [{ x: 7, y: 7 }];
+  let dir = { x: 1, y: 0 }, nextDir = { x: 1, y: 0 };
+  let food = _novaComida(snake, N), foodTipo = 'burger';
+  let score = 0, tickMs = 160;
+  let lastStep = 0, raf = 0, rodando = true;
+  const particles = [];
   const scoreEl = document.getElementById('snakeScore');
   const startBtn = document.getElementById('snakeStartBtn');
+  const overEl = document.getElementById('snakeOver');
   if (scoreEl) scoreEl.textContent = '0';
   if (startBtn) startBtn.style.display = 'none';
-  const setDir = (nx, ny) => { if (nx === -dir.x && ny === -dir.y) return; nextDir = { x: nx, y: ny }; }; // sem 180°
+  if (overEl) overEl.classList.remove('show');
+  // ---- controles INTOCADOS: teclado + swipe, sem 180° ----
+  const setDir = (nx, ny) => { if (nx === -dir.x && ny === -dir.y) return; nextDir = { x: nx, y: ny }; };
   const onKey = (e) => {
     const k = e.key;
     if (k === 'ArrowUp' || k === 'w' || k === 'W') setDir(0, -1);
@@ -2579,44 +2678,68 @@ function iniciarPartida() {
   canvas.addEventListener('touchstart', onTS, { passive: true });
   canvas.addEventListener('touchmove', onTM, { passive: false });
   canvas.addEventListener('touchend', onTE, { passive: true });
-  const parar = () => {
-    clearInterval(loop);
+  const parar = () => {                                      // teardown: cancela o rAF + remove listeners (não vaza loop)
+    rodando = false; cancelAnimationFrame(raf);
     document.removeEventListener('keydown', onKey);
     canvas.removeEventListener('touchstart', onTS);
     canvas.removeEventListener('touchmove', onTM);
     canvas.removeEventListener('touchend', onTE);
   };
-  const desenhar = () => {
-    ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (food) { ctx.font = `${CELL - 2}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🍔', food.x * CELL + CELL / 2, food.y * CELL + CELL / 2); }
-    snake.forEach((s, i) => { ctx.fillStyle = i === 0 ? '#ff6b35' : '#ff8c5a'; ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2); });
+  const burst = (cx, cy) => {                                // partículas ao comer (limitadas p/ performance)
+    for (let i = 0; i < 8; i++) { const a = Math.PI * 2 * i / 8; particles.push({ x: cx, y: cy, vx: Math.cos(a) * 1.7, vy: Math.sin(a) * 1.7, life: 1 }); }
+    if (particles.length > 36) particles.splice(0, particles.length - 36);
   };
-  const gameOver = () => {
+  const gameOver = () => {                                   // fim de jogo: mesma condição (mecânica) + polish
     parar(); _snakeAtivo = null;
-    ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ff6b35'; ctx.font = 'bold 22px sans-serif'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 12);
-    ctx.fillStyle = '#f0ede8'; ctx.font = '15px sans-serif'; ctx.fillText(`${score} ponto${score === 1 ? '' : 's'}`, canvas.width / 2, canvas.height / 2 + 16);
-    if (startBtn) { startBtn.textContent = '▶ Jogar de novo'; startBtn.style.display = ''; }
-    salvarScoreCobrinha(score);
+    const stage = document.getElementById('snakeStage');
+    if (stage) { stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake'); } // shake da arena
+    if (startBtn) startBtn.style.display = 'none';           // recomeçar vive no painel #snakeOver
+    mostrarFimDeJogo(score);
+    salvarScoreCobrinha(score);                              // RANKING/SCORE INTOCADOS
+    (async () => { const pos = await _posicaoNoRanking(); _setRankFim(pos); })();
   };
-  const tick = () => {
+  const step = () => {                                       // = lógica antiga do tick (grid), INTOCADA
     dir = nextDir;
     const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
     if (head.x < 0 || head.y < 0 || head.x >= N || head.y >= N || snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
+    prevSnake = snake.map(s => ({ x: s.x, y: s.y }));        // snapshot p/ interpolação suave
     snake.unshift(head);
     if (food && head.x === food.x && head.y === food.y) {
-      score++; if (scoreEl) scoreEl.textContent = score;
+      score++;
+      if (scoreEl) { scoreEl.textContent = score; scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump'); }
+      burst(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2);
+      foodTipo = foodTipo === 'burger' ? 'pizza' : 'burger'; // alterna a cada item
       food = _novaComida(snake, N);
-      if (!food) return gameOver(); // tabuleiro cheio (venceu) — encerra
-      tickMs = Math.max(70, 160 - score * 4); // acelera conforme cresce
-      clearInterval(loop); loop = setInterval(tick, tickMs);
+      if (!food) return gameOver();                          // tabuleiro cheio (venceu)
+      tickMs = Math.max(70, 160 - score * 4);                // acelera conforme cresce (igual)
     } else { snake.pop(); }
-    desenhar();
+  };
+  const render = (now) => {
+    const t = Math.min(1, (now - lastStep) / tickMs);        // 0..1 entre passos → cobra desliza
+    desenharFundo(ctx, LOG, N, CELL);
+    if (food) { const pulse = 1 + Math.sin(now / 170) * 0.09; desenharComida(ctx, food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL * 0.42, foodTipo, pulse); }
+    for (const p of particles) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = '#ffb077'; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, 7); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    const r = CELL * 0.46;
+    for (let i = snake.length - 1; i >= 0; i--) {            // rabo → cabeça
+      const cur = snake[i], prev = prevSnake[i] || cur;      // segmento sem prev (cresceu) = estático
+      const cx = (prev.x + (cur.x - prev.x) * t) * CELL + CELL / 2;
+      const cy = (prev.y + (cur.y - prev.y) * t) * CELL + CELL / 2;
+      if (i === 0) desenharCabeca(ctx, cx, cy, r, dir);
+      else desenharSegmento(ctx, cx, cy, r, i % 2 === 0);
+    }
+  };
+  const frame = (now) => {
+    if (!rodando) return;
+    raf = requestAnimationFrame(frame);
+    if (!lastStep) lastStep = now;
+    if (now - lastStep >= tickMs) { lastStep = now; step(); if (!rodando) return; } // 1 passo de grid por vez
+    for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vx *= 0.9; p.vy *= 0.9; p.life -= 0.05; }
+    for (let i = particles.length - 1; i >= 0; i--) if (particles[i].life <= 0) particles.splice(i, 1);
+    render(now);
   };
   _snakeAtivo = { parar };
-  desenhar();
-  loop = setInterval(tick, tickMs);
+  raf = requestAnimationFrame(frame);
 }
 async function salvarScoreCobrinha(score) {
   // SALVAGUARDA: teto de score (anti-trapaça) + ignora zero/inválido + exige identidade do checkout
