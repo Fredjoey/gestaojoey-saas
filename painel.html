@@ -179,6 +179,8 @@ body{background:var(--bg);color:var(--text);display:flex;overflow:hidden}
   border-radius:10px;padding:12px;cursor:pointer;transition:all .2s;
 }
 .order-card:hover{background:rgba(0,0,0,.4);border-color:rgba(255,255,255,.12);transform:translateY(-1px)}
+/* Entregue pelo motoboy (finalizado + entregueEm): realce verde discreto, card permanece em "Entregues hoje" */
+.order-card.entregue-ok{border-color:rgba(52,211,153,.4);box-shadow:inset 3px 0 0 rgba(52,211,153,.55)}
 .oc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .oc-id{font-size:12px;font-weight:700;color:var(--orange)}
 .oc-time{font-size:11px;color:rgba(255,255,255,.3)}
@@ -2468,13 +2470,37 @@ function _prontoTs(p) {
   return p.ts || 0;
 }
 
+// Filtro de tipo (delivery/retirada/mesa) p/ a coluna "Entregues hoje" reaproveitar SEM tocar no
+// pedidosFiltrados global (que continua tirando finalizado de todas as colunas). Espelha o filtroAtivo.
+function _passaFiltroAtivo(p) {
+  if (filtroAtivo === 'delivery'       && p.entrega !== 'delivery') return false;
+  if (filtroAtivo === 'retirada_local' && p.entrega !== 'retirada' && p.entrega !== 'local') return false;
+  if (filtroAtivo === 'mesa'           && p.tipo !== 'mesa' && p.origem !== 'salao') return false;
+  return true;
+}
+// Minutos entre saiuParaEntregaEm e entregueEm (Timestamp ou ms). null se faltar algum.
+function _minutosEntrega(p) {
+  const toMs = (t) => (t && t.toMillis) ? t.toMillis() : (typeof t === 'number' ? t : null);
+  const s = toMs(p.saiuParaEntregaEm), e = toMs(p.entregueEm);
+  return (s == null || e == null) ? null : Math.max(0, Math.round((e - s) / 60000));
+}
 function renderKanban() {
   calcMetrics();
   const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   const lista = pedidosFiltrados();
   document.getElementById('kanbanBoard').innerHTML = KANBAN_COLS.map(col => {
-    let cp = lista.filter(p => p.status===col.key);
-    if (col.key==='entregue') cp = cp.filter(p => p.data===hoje);
+    // "Entregues hoje" (ADITIVO): inclui status 'entregue' (saiu) E os finalizados-pelo-motoboy de hoje
+    // ('finalizado' + entregueEm). Puxa de `pedidos` direto porque o pedidosFiltrados global tira
+    // finalizado; mantém filtroAtivo (_passaFiltroAtivo) e a data de hoje → some sozinho na virada do dia.
+    let cp;
+    if (col.key === 'entregue') {
+      cp = pedidos.filter(p => p.data === hoje
+        && (p.status === 'entregue' || (p.status === 'finalizado' && p.entregueEm))
+        && _passaFiltroAtivo(p));
+      cp.sort((a, b) => (b.ts || 0) - (a.ts || 0)); // recente primeiro
+    } else {
+      cp = lista.filter(p => p.status === col.key);
+    }
     // Ordenação por coluna (sobrescreve o ts DESC global):
     //  - Em análise / Em produção: chegada ASC (mais antigo no topo, FIFO)
     //  - Prontos p/ entrega: ordem do "Marcar pronto" (prontoEm ASC; fallback chegada)
@@ -2622,7 +2648,15 @@ function _mbOpts() { return _motoboysAtivos.map(m => `<option value="${m.id}">${
 // Linha discreta quando já há entregador: "🛵 João · saiu 19h32" + trocar/remover.
 function entregadorLinhaHtml(p) {
   if (p.entrega !== 'delivery' || !p.entregadorId) return '';
-  // 'entregue' = já saiu → "saiu HHhMM"; senão (em "Prontos") = "atribuído".
+  // ESTADO 2 — entregue de verdade pelo motoboy (finalizado + entregueEm): selo verde + tempos, sem trocar/remover.
+  if (p.status === 'finalizado' && p.entregueEm) {
+    const saiu = _fmtHoraSaida(p.saiuParaEntregaEm), ent = _fmtHoraSaida(p.entregueEm), min = _minutosEntrega(p);
+    const tempos = saiu ? `saiu ${saiu}${ent ? ` · entregou ${ent}` : ''}${min != null ? ` · ${min} min` : ''}` : (ent ? `entregou ${ent}` : '');
+    return `<div style="font-size:11px;color:#34d399;margin:2px 0 8px;font-weight:600;background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.28);border-radius:8px;padding:6px 9px;line-height:1.5" onclick="event.stopPropagation()">
+      ✅ Entregue · 🛵 ${_escMb(p.entregadorNome || '?')}${tempos ? `<br><span style="color:var(--text2);font-weight:500">${tempos}</span>` : ''}
+    </div>`;
+  }
+  // ESTADO 1 — saiu p/ entrega (status 'entregue', sem entregueEm) ou só atribuído: como hoje, com trocar/remover.
   const quando = (p.status === 'entregue' && p.saiuParaEntregaEm) ? `saiu ${_fmtHoraSaida(p.saiuParaEntregaEm)}` : 'atribuído';
   const selSt = 'background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:10px;padding:1px 4px;font-family:inherit;cursor:pointer';
   return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#a78bfa;margin:2px 0 8px;font-weight:600" onclick="event.stopPropagation()">
@@ -2714,6 +2748,9 @@ function orderCardHtml(p) {
     botoes = `${_selAtrib ? `<div style="flex:1 1 100%;margin-bottom:6px">${_selAtrib}</div>` : ''}
       <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;flex:1" onclick="finalizarPedido('${p.id}')">✓ Finalizar</button>
       <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2)" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>`;
+  } else if (p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') {
+    // Estado 2 (entregue pelo motoboy): card PERMANECE em "Entregues hoje"; sem "Finalizar" (já está). Mantém NFCe.
+    botoes = `<button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2)" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>`;
   }
 
   const _nPed = contarPedidosCliente(p.cliente?.tel);
@@ -2724,7 +2761,7 @@ function orderCardHtml(p) {
     : '';
 
   return `
-    <div class="order-card${_cardCls}" onclick="openOrderModal('${p.id}')">
+    <div class="order-card${_cardCls}${(p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') ? ' entregue-ok' : ''}" onclick="openOrderModal('${p.id}')">
       <div class="oc-top"><span style="display:flex;align-items:center;gap:6px"><span class="oc-id">${p.id}</span>${_badgeAuto}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${p.id}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${p.hora}</span></span></div>
       <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
       ${_agendadoBadgeHtml(p)}
