@@ -1148,6 +1148,17 @@ textarea.fi{resize:vertical;min-height:60px}
           </div>
         </div>
 
+        <div class="card-box" id="secaoMotoboys" style="display:none">
+          <div class="section-lbl" style="margin-top:0">🛵 Motoboys / Entregadores</div>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Cadastre seus entregadores. Cada um ganha um <strong>link pessoal</strong> (em breve será a página onde ele recebe os pedidos atribuídos).</p>
+          <div style="display:grid;grid-template-columns:1fr 150px auto;gap:8px;margin-bottom:12px">
+            <input class="fi" id="newMotoboyNome" placeholder="Nome do entregador">
+            <input class="fi" id="newMotoboyTel" type="tel" placeholder="Telefone (WhatsApp)">
+            <button class="btn btn-primary" onclick="adicionarMotoboy()">+ Adicionar</button>
+          </div>
+          <div id="motoboysList"></div>
+        </div>
+
         <div class="card-box">
           <div class="section-lbl" style="margin-top:0">💾 Backup dos Dados</div>
           <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Exporta todos os dados do Firestore para o Cloud Storage. Um backup automático é executado diariamente às 03:00.</p>
@@ -4416,6 +4427,7 @@ function carregarConfig() {
   renderDestaqueOpts();
   renderHorariosDias();
   renderBairros();
+  if (slug === 'joey') { const secMb = document.getElementById('secaoMotoboys'); if (secMb) secMb.style.display = ''; carregarMotoboys(); } // Motoboys: só joey (Fase 1 entrega)
   carregarHistoricoBackup();
 }
 
@@ -4491,6 +4503,114 @@ function toggleBairros() {
   const aberto = body.style.display !== 'none';
   body.style.display = aberto ? 'none' : '';
   icon.style.transform = aberto ? 'rotate(-90deg)' : '';
+}
+
+// ── MOTOBOYS / ENTREGADORES (Fase 1: cadastro) — SÓ joey, ISOLADO (não toca checkout/pedido/atendimento) ──
+// Subcoleção clientes/{slug}/motoboys/{id auto}: { nome, telefone, ativo, slug, criadoEm }.
+let _motoboyEditId = null;
+function _escMb(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+// slug do entregador = nome normalizado + sufixo aleatório curto (difícil de adivinhar). Ex.: "joao-a8f3k2".
+function _slugMotoboy(nome) {
+  const base = String(nome || 'entregador')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')                 // remove acentos
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'entregador';
+  const cs = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let suf = ''; for (let i = 0; i < 6; i++) suf += cs[Math.floor(Math.random() * cs.length)];  // 36^6 ≈ 2,2 bi de combinações
+  return `${base}-${suf}`;
+}
+function _linkEntregador(s) { return `${CARDAPIO_URL || ''}/entregador/${s}`; }  // página é da Fase 3 (ainda não existe)
+
+async function carregarMotoboys() {
+  const el = document.getElementById('motoboysList');
+  if (!el) return;
+  try {
+    const snap = await db.collection(`clientes/${slug}/motoboys`).orderBy('criadoEm', 'asc').get();
+    if (snap.empty) {
+      el.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:12px;border:1px dashed var(--border);border-radius:8px">Nenhum entregador cadastrado ainda.</div>`;
+      return;
+    }
+    el.innerHTML = snap.docs.map(doc => {
+      const m = doc.data(), id = doc.id, link = _linkEntregador(m.slug);
+      if (id === _motoboyEditId) {
+        return `<div style="padding:10px 12px;background:var(--bg4);border:1px solid var(--accent);border-radius:8px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 150px;gap:8px;margin-bottom:8px">
+            <input class="fi" id="editMotoboyNome" value="${_escMb(m.nome)}" style="padding:6px 8px;font-size:13px">
+            <input class="fi" id="editMotoboyTel" value="${_escMb(m.telefone)}" style="padding:6px 8px;font-size:13px">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="confirmarEditMotoboy('${id}')">✓ Salvar</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 14px" onclick="cancelarEditMotoboy()">Cancelar</button>
+          </div>
+        </div>`;
+      }
+      const badge = m.ativo
+        ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:#13332a;color:#7BC47F">ATIVO</span>`
+        : `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:#3a2a2a;color:#f0a0a0">INATIVO</span>`;
+      return `<div style="padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;opacity:${m.ativo ? 1 : .6}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-weight:700;color:var(--text);flex:1">${_escMb(m.nome)}</span>${badge}
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">📱 ${_escMb(m.telefone) || '—'}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <code style="flex:1;font-size:11px;color:var(--text3);background:var(--bg3);padding:5px 8px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escMb(link)}</code>
+          <button class="icon-btn" title="Copiar link" onclick="copiarLinkMotoboy('${_escMb(link)}')">📋</button>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="icon-btn" title="Editar" onclick="editarMotoboy('${id}')">✏️</button>
+          <button class="icon-btn" title="${m.ativo ? 'Inativar' : 'Ativar'}" onclick="toggleMotoboyAtivo('${id}', ${m.ativo ? 1 : 0})">${m.ativo ? '⏸️' : '▶️'}</button>
+          <button class="icon-btn" title="Remover" onclick="removerMotoboy('${id}', '${_escMb(m.nome).replace(/'/g, '&#39;')}')" style="color:#f87171;border-color:#f87171">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="font-size:12px;color:#f87171">Erro ao carregar entregadores: ${e.message}</div>`;
+  }
+}
+async function adicionarMotoboy() {
+  const nome = (document.getElementById('newMotoboyNome').value || '').trim();
+  const tel  = (document.getElementById('newMotoboyTel').value || '').trim();
+  if (!nome) { notify('Informe o nome do entregador.', 'warning'); return; }
+  if (!tel)  { notify('Informe o telefone do entregador.', 'warning'); return; }
+  try {
+    await db.collection(`clientes/${slug}/motoboys`).add({
+      nome, telefone: tel, ativo: true, slug: _slugMotoboy(nome),
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    document.getElementById('newMotoboyNome').value = '';
+    document.getElementById('newMotoboyTel').value = '';
+    notify(`Entregador "${nome}" adicionado!`);
+    carregarMotoboys();
+  } catch (e) { notify('Erro ao adicionar: ' + e.message, 'warning'); }
+}
+function editarMotoboy(id) { _motoboyEditId = id; carregarMotoboys(); }
+function cancelarEditMotoboy() { _motoboyEditId = null; carregarMotoboys(); }
+async function confirmarEditMotoboy(id) {
+  const nome = (document.getElementById('editMotoboyNome').value || '').trim();
+  const tel  = (document.getElementById('editMotoboyTel').value || '').trim();
+  if (!nome) { notify('Informe o nome.', 'warning'); return; }
+  try {
+    await db.collection(`clientes/${slug}/motoboys`).doc(id).update({ nome, telefone: tel });
+    _motoboyEditId = null;
+    notify('Entregador atualizado!');
+    carregarMotoboys();
+  } catch (e) { notify('Erro ao salvar: ' + e.message, 'warning'); }
+}
+async function toggleMotoboyAtivo(id, ativoAtual) {
+  try {
+    await db.collection(`clientes/${slug}/motoboys`).doc(id).update({ ativo: !Number(ativoAtual) });
+    carregarMotoboys();
+  } catch (e) { notify('Erro: ' + e.message, 'warning'); }
+}
+async function removerMotoboy(id, nome) {
+  if (!confirm(`Remover o entregador "${nome}"? O link pessoal dele deixará de funcionar.`)) return;
+  try {
+    await db.collection(`clientes/${slug}/motoboys`).doc(id).delete();
+    notify('Entregador removido.', 'warning');
+    carregarMotoboys();
+  } catch (e) { notify('Erro ao remover: ' + e.message, 'warning'); }
+}
+function copiarLinkMotoboy(link) {
+  navigator.clipboard.writeText(link).then(() => notify('Link copiado!')).catch(() => notify('Não consegui copiar o link.', 'warning'));
 }
 
 // ── BACKUP ──────────────────────────────────────────────────────────────────
