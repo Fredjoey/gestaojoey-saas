@@ -690,6 +690,7 @@ textarea.fi{resize:vertical;min-height:60px}
         <button class="filter-btn filter-icon" onclick="setFiltro('delivery',this)" title="Delivery">🛵</button>
         <button class="filter-btn filter-icon" onclick="setFiltro('retirada_local',this)" title="Retirada e No local">🏠</button>
         <button class="filter-btn filter-icon" onclick="setFiltro('mesa',this)" title="Pedidos de mesa">🍽️</button>
+        <button class="filter-btn" onclick="abrirMapaPedidos()" style="margin-left:auto" title="Ver pedidos de entrega no mapa">🗺️ Ver no mapa</button>
       </div>
       <div id="aniversariantesBar"></div>
       <div class="kanban-board" id="kanbanBoard"></div>
@@ -1636,6 +1637,22 @@ textarea.fi{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- MODAL MAPA DE PEDIDOS (entrega) — só visualização -->
+<div class="modal-overlay" id="mapaPedidosModal" style="z-index:750" onclick="if(event.target===this)fecharMapaPedidos()">
+  <div class="modal-box" style="max-width:920px;width:95vw;height:86vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div class="modal-title">🗺️ Pedidos de entrega no mapa</div>
+      <button class="modal-close" onclick="fecharMapaPedidos()">✕</button>
+    </div>
+    <div style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--text2);margin:2px 0 8px;flex-wrap:wrap">
+      <span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#f59e0b;border:2px solid #0f0f0f;vertical-align:middle"></span> Em produção</span>
+      <span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#34d399;border:2px solid #0f0f0f;vertical-align:middle"></span> Pronto p/ entrega</span>
+      <span id="mapaPedidosAviso" style="margin-left:auto;color:#fbbf24;font-weight:600"></span>
+    </div>
+    <div id="mapaPedidos" style="flex:1;border-radius:10px;border:1px solid var(--border);background:#0f0f0f;min-height:300px"></div>
+  </div>
+</div>
+
 <!-- MODAL HISTÓRICO DE CAIXA -->
 <!-- MODAL REGISTRAR PAGAMENTO (conta da mesa) -->
 <div class="modal-overlay" id="pagtoModal" style="z-index:700" onclick="if(event.target===this)fecharPagtoModal()">
@@ -2153,6 +2170,50 @@ async function notificarMotoboyEntrega(p) {
   } catch (e) {
     console.error('[entrega] aviso ao motoboy falhou (pedido avança normalmente):', e && e.message ? e.message : e);
   }
+}
+
+// ── Mapa de pedidos de entrega (Leaflet, reusa o CDN da Parte B) — SÓ visualização ──
+let _mapPedidos = null, _mapPedidosLayer = null;
+function abrirMapaPedidos() {
+  document.getElementById('mapaPedidosModal').classList.add('show');
+  setTimeout(_renderMapaPedidos, 100);   // espera o modal exibir → invalidateSize correto
+}
+function fecharMapaPedidos() { document.getElementById('mapaPedidosModal').classList.remove('show'); }
+function _renderMapaPedidos() {
+  const el = document.getElementById('mapaPedidos');
+  if (!el || typeof L === 'undefined') return;
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const cLat = (config.estabelecimentoLat != null) ? config.estabelecimentoLat : -22.460;
+  const cLng = (config.estabelecimentoLng != null) ? config.estabelecimentoLng : -42.652;
+  if (!_mapPedidos) {
+    _mapPedidos = L.map('mapaPedidos').setView([cLat, cLng], 14);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap, © CARTO' }).addTo(_mapPedidos);
+    _mapPedidosLayer = L.layerGroup().addTo(_mapPedidos);
+  }
+  _mapPedidos.invalidateSize();
+  _mapPedidosLayer.clearLayers();
+  // estabelecimento (laranja do painel) — circleMarker evita dependência de imagem de ícone do Leaflet
+  L.circleMarker([cLat, cLng], { radius: 11, color: '#fff', weight: 2, fillColor: '#ff6b35', fillOpacity: 1 })
+    .bindPopup('🏠 <b>Estabelecimento</b>').addTo(_mapPedidosLayer);
+  // pedidos de delivery de HOJE em produção/pronto
+  const lista = pedidos.filter(p => p.data === hoje && p.entrega === 'delivery' && (p.status === 'producao' || p.status === 'pronto'));
+  const comGeo = lista.filter(p => p.geoStatus === 'ok' && p.geoLat != null && p.geoLng != null);
+  const semGeo = lista.length - comGeo.length;
+  const pts = [[cLat, cLng]];
+  comGeo.forEach(p => {
+    const cor = p.status === 'producao' ? '#f59e0b' : '#34d399';
+    const c = p.cliente || {};
+    const end = [[c.rua, c.numero].filter(Boolean).join(', '), c.bairro].filter(Boolean).join(' · ') + (c.ref ? `<br><i>Ref: ${_esc(c.ref)}</i>` : '');
+    const itens = (p.itens || []).map(i => `${i.qty || i.qtd || 1}× ${_esc(i.nome || '')}`).join(', ');
+    const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
+    L.circleMarker([p.geoLat, p.geoLng], { radius: 9, color: '#0f0f0f', weight: 2, fillColor: cor, fillOpacity: .95 })
+      .bindPopup(`<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#999">${itens || '—'}</span><br><b>${total}</b>`)
+      .addTo(_mapPedidosLayer);
+    pts.push([p.geoLat, p.geoLng]);
+  });
+  document.getElementById('mapaPedidosAviso').textContent = semGeo > 0 ? `⚠️ ${semGeo} pedido(s) sem localização — não aparecem no mapa` : '';
+  if (pts.length > 1) _mapPedidos.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
+  else _mapPedidos.setView([cLat, cLng], 14);
 }
 function _agoraBRT() {
   const brtStr = new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' });
@@ -7235,6 +7296,8 @@ function iniciarListenersFirestore() {
     _pedidosAnt = [...pedidos];
     pedidos = snap.docs.map(d => d.data({ serverTimestamps: 'estimate' }));
     pedidos.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    // Mapa de pedidos: se o modal estiver aberto, re-renderiza os pinos em tempo real.
+    if (document.getElementById('mapaPedidosModal')?.classList.contains('show')) _renderMapaPedidos();
 
     const novosIds = new Set(snap.docs.map(d => d.id));
 
