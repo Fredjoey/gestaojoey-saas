@@ -2105,7 +2105,40 @@ function atualizarStatusFb(id, status) {
   if (status === 'pronto') upd.prontoEm = firebase.firestore.FieldValue.serverTimestamp();
   // 'entregue' = saiu p/ entrega (botão "Enviar para entrega") → carimba saiuParaEntregaEm (≠ atribuidoEm).
   if (status === 'entregue') upd.saiuParaEntregaEm = firebase.firestore.FieldValue.serverTimestamp();
-  return db.collection(`clientes/${slug}/pedidos`).doc(id).update(upd);
+  const prom = db.collection(`clientes/${slug}/pedidos`).doc(id).update(upd);
+  // Aviso WhatsApp ao motoboy quando o pedido SAI para entrega (só após a gravação dar certo).
+  // Failure-safe: NUNCA quebra o avanço do pedido (a notificação roda solta + tem try/catch próprio).
+  if (status === 'entregue') prom.then(() => { const p = pedidos.find(x => x.id === id); if (p) notificarMotoboyEntrega(p); }).catch(() => {});
+  return prom;
+}
+
+// Avisa o motoboy atribuído no WhatsApp que o pedido saiu p/ entrega (Gestão de Entrega — só joey, delivery).
+// Reusa enviarWhatsAppBot (joeyapi /send) — NÃO cria caminho novo. Sem telefone → pula. Falha só loga.
+async function notificarMotoboyEntrega(p) {
+  try {
+    if (slug !== 'joey' || !p || p.entrega !== 'delivery' || !p.entregadorId) return; // sem motoboy/não-delivery → pula
+    const snap = await db.collection(`clientes/${slug}/motoboys`).doc(p.entregadorId).get();
+    if (!snap.exists) return;
+    const m = snap.data() || {};
+    const tel = (m.telefone || '').replace(/\D/g, '');
+    if (!tel) return; // motoboy sem telefone cadastrado → pula sem erro
+    const c = p.cliente || {};
+    const end = [[c.rua, c.numero].filter(Boolean).join(', '), c.bairro].filter(Boolean).join(' · ') + (c.ref ? ` (ref: ${c.ref})` : '');
+    const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
+    const pag = p.pagamento === 'pix' ? '📱 Pix (pago)'
+      : p.pagamento === 'cartao' ? `💳 Cartão na entrega — receber ${total}`
+      : `💵 Dinheiro — receber ${total}`;
+    const link = `${CARDAPIO_URL || 'https://hamburgueriajoey.com.br'}/entregador/${m.slug}`;
+    const primeiro = (m.nome || '').split(' ')[0] || 'entregador';
+    const msg = `🛵 Nova entrega, ${primeiro}!\n`
+      + `Pedido #${p.id} — ${c.nome || 'cliente'}\n`
+      + `📍 ${end || '—'}\n`
+      + `${pag}\n`
+      + `Abra suas entregas: ${link}`;
+    enviarWhatsAppBot(tel, msg);  // helper já é failure-safe (try/catch interno; não lança)
+  } catch (e) {
+    console.error('[entrega] aviso ao motoboy falhou (pedido avança normalmente):', e && e.message ? e.message : e);
+  }
 }
 function _agoraBRT() {
   const brtStr = new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' });
