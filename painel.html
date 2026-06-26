@@ -11,6 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -1024,6 +1026,16 @@ textarea.fi{resize:vertical;min-height:60px}
               <div style="font-size:11px;color:var(--text3);margin-top:4px">PIN privado do app de mesas/balcão. Deixe em branco p/ não alterar · <a href="/garcom" target="_blank" style="color:var(--orange)">abrir /garcom</a></div>
             </div>
           </div>
+
+          <div class="section-lbl">📍 Posição no mapa (entregas)</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Usado pra calcular rotas de entrega (Gestão de Entrega). Confirme o endereço, clique em localizar e <b>arraste o pino</b> pra posição exata.</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input class="fi" id="cfgEstabEnd" placeholder="Rua, número, bairro, cidade" style="flex:1">
+            <button class="btn" type="button" onclick="geocodarEstab()" style="background:rgba(255,107,53,.12);color:var(--orange);border:1px solid rgba(255,107,53,.3);white-space:nowrap">🔍 Localizar</button>
+          </div>
+          <div id="mapaEstab" style="height:300px;border-radius:10px;border:1px solid var(--border);background:#0f0f0f"></div>
+          <div id="estabCoord" style="font-size:12px;color:var(--text2);margin-top:8px"></div>
+          <button class="btn btn-primary" type="button" id="btnSalvarPos" onclick="salvarPosicaoEstab()" style="margin-top:10px;display:none">📍 Salvar posição</button>
 
           <div class="section-lbl">🖼️ Foto do Banner do Cardápio</div>
           <div style="display:flex;align-items:center;gap:16px;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:1rem">
@@ -4599,6 +4611,69 @@ function carregarConfig() {
   renderBairros();
   if (slug === 'joey') { const secMb = document.getElementById('secaoMotoboys'); if (secMb) secMb.style.display = ''; carregarMotoboys(); } // Motoboys: só joey (Fase 1 entrega)
   carregarHistoricoBackup();
+  // Posição do estabelecimento (Gestão de Entrega): pré-preenche o endereço + inicia o mapa Leaflet.
+  { const _ee = document.getElementById('cfgEstabEnd'); if (_ee && !_ee.value) _ee.value = config.estabelecimentoEndereco || config.end || ''; }
+  setTimeout(_initMapaEstab, 120);
+}
+
+// ── Posição do estabelecimento no mapa (Leaflet) — base da Gestão de Entrega (geocodificação) ──
+// Geocodificação roda no SERVIDOR (function geocodificarEndereco); aqui só renderiza/arrasta o pino.
+let _mapEstab = null, _markEstab = null, _estabPos = null, _estabGeo = null;
+function _initMapaEstab() {
+  const el = document.getElementById('mapaEstab');
+  if (!el || typeof L === 'undefined') return;
+  if (_mapEstab) { _mapEstab.invalidateSize(); return; }   // idempotente (re-show da aba)
+  const temPos = config.estabelecimentoLat != null;
+  const lat = temPos ? config.estabelecimentoLat : -22.460; // fallback: Cachoeiras de Macacu/RJ
+  const lng = temPos ? config.estabelecimentoLng : -42.652;
+  _mapEstab = L.map('mapaEstab').setView([lat, lng], temPos ? 16 : 13);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap, © CARTO' }).addTo(_mapEstab);
+  if (temPos) _setPinoEstab(lat, lng);
+  setTimeout(() => { if (_mapEstab) _mapEstab.invalidateSize(); }, 200);
+}
+function _setPinoEstab(lat, lng) {
+  _estabPos = { lat, lng };
+  if (_markEstab) _markEstab.setLatLng([lat, lng]);
+  else {
+    _markEstab = L.marker([lat, lng], { draggable: true }).addTo(_mapEstab);
+    _markEstab.on('dragend', () => { const ll = _markEstab.getLatLng(); _estabPos = { lat: ll.lat, lng: ll.lng }; _mostrarCoordEstab(); });
+  }
+  _mapEstab.setView([lat, lng], 16);
+  const b = document.getElementById('btnSalvarPos'); if (b) b.style.display = '';
+  _mostrarCoordEstab();
+}
+function _mostrarCoordEstab() {
+  const el = document.getElementById('estabCoord');
+  if (el) el.textContent = _estabPos ? `📌 ${_estabPos.lat.toFixed(6)}, ${_estabPos.lng.toFixed(6)} — arraste o pino p/ ajustar` : '';
+}
+async function geocodarEstab() {
+  const end = (document.getElementById('cfgEstabEnd').value || '').trim();
+  if (!end) { notify('Digite o endereço do estabelecimento.', 'error'); return; }
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('geocodificarEndereco');
+    const { data } = await fn({ endereco: end });
+    _estabGeo = data;                 // guarda cidade/estado p/ salvar (usados na geocodificação dos pedidos)
+    _initMapaEstab();
+    _setPinoEstab(data.lat, data.lng);
+  } catch (e) {
+    console.error('[geocodarEstab]', e);
+    notify('Não encontrei esse endereço. Ajuste o texto e tente de novo.', 'error');
+  }
+}
+function salvarPosicaoEstab() {
+  if (!_estabPos) { notify('Localize o endereço no mapa primeiro.', 'error'); return; }
+  const dados = {
+    estabelecimentoLat: _estabPos.lat,
+    estabelecimentoLng: _estabPos.lng,
+    estabelecimentoEndereco: (document.getElementById('cfgEstabEnd').value || '').trim(),
+    estabelecimentoGeoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    ...(_estabGeo && _estabGeo.cidade ? { cidade: _estabGeo.cidade } : {}),
+    ...(_estabGeo && _estabGeo.estado ? { estado: _estabGeo.estado } : {}),
+  };
+  Object.assign(config, dados);       // espelha em memória → o salvarConfig (set total) preserva
+  db.doc(`clientes/${slug}/config/loja`).set(dados, { merge: true })
+    .then(() => notify('📍 Posição do estabelecimento salva!'))
+    .catch(e => { console.error('[salvarPosicaoEstab]', e); notify('Erro ao salvar a posição.', 'error'); });
 }
 
 function salvarConfig() {
@@ -4626,7 +4701,17 @@ function salvarConfig() {
     wppNotifs:      config.wppNotifs || {},
     // Preserva a playlist de música (salva pelo botão dedicado). undefined = nunca configurada
     // (slug não liberado/intocado) → mantém ausente p/ o cardápio usar a fixa.
-    ...(config.playlistMusica !== undefined ? { playlistMusica: config.playlistMusica } : {})
+    ...(config.playlistMusica !== undefined ? { playlistMusica: config.playlistMusica } : {}),
+    // Preserva a posição do estabelecimento + cidade/estado (salvos pelo botão "Salvar posição") —
+    // senão o .set(config) total apagaria. Base da Gestão de Entrega (geocodificação).
+    ...(config.estabelecimentoLat !== undefined ? {
+      estabelecimentoLat: config.estabelecimentoLat,
+      estabelecimentoLng: config.estabelecimentoLng,
+      estabelecimentoEndereco: config.estabelecimentoEndereco,
+      estabelecimentoGeoEm: config.estabelecimentoGeoEm,
+    } : {}),
+    ...(config.cidade !== undefined ? { cidade: config.cidade } : {}),
+    ...(config.estado !== undefined ? { estado: config.estado } : {}),
   };
   saveConfig();
   // PIN do App Garçom (se preenchido) -> salvo server-side em doc privado
