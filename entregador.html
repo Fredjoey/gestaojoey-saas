@@ -42,6 +42,14 @@
   .btn-ok{background:var(--orange);color:#fff}
   .btn-ok:active{filter:brightness(.9)}
   .btn[disabled]{opacity:.5}
+  /* Menu de escolha do app de rota (parte do GPS do motoboy) */
+  .rota-sheet{display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);align-items:flex-end;justify-content:center}
+  .rota-sheet.show{display:flex}
+  .rota-card{background:var(--card);border:1px solid var(--border);border-radius:18px 18px 0 0;width:100%;max-width:560px;padding:18px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
+  .rota-title{font-size:14px;color:var(--text2);text-align:center;margin-bottom:4px}
+  .rota-opt{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:14px;padding:16px;font-size:16px;font-weight:800;text-decoration:none}
+  .rota-opt:active{filter:brightness(1.25)}
+  .rota-cancel{background:none;border:none;color:var(--text2);font-size:15px;font-weight:700;padding:12px;font-family:inherit;cursor:pointer}
   .estado{text-align:center;padding:48px 20px;color:var(--text2)}
   .estado .big{font-size:42px;margin-bottom:10px}
   .estado.neutro .big{filter:grayscale(1)}
@@ -57,6 +65,17 @@
   <div class="wrap">
     <div class="live" id="live" style="display:none"><span class="dot"></span> Atualizando em tempo real</div>
     <div id="conteudo"><div class="skel"></div><div class="skel"></div></div>
+  </div>
+
+  <!-- Menu de escolha do app de rota (todas as URLs SEM origem → usam o GPS do motoboy) -->
+  <div id="rotaSheet" class="rota-sheet" onclick="if(event.target===this)fecharRota()">
+    <div class="rota-card">
+      <div class="rota-title">Abrir rota com…</div>
+      <a class="rota-opt" id="rotaGoogle" target="_blank" rel="noopener" onclick="fecharRota()">🗺️ Google Maps</a>
+      <a class="rota-opt" id="rotaWaze"   target="_blank" rel="noopener" onclick="fecharRota()">🚗 Waze</a>
+      <a class="rota-opt" id="rotaApple"  target="_blank" rel="noopener" onclick="fecharRota()">🍎 Apple Maps</a>
+      <button class="rota-cancel" onclick="fecharRota()">Cancelar</button>
+    </div>
   </div>
 
 <script>
@@ -78,6 +97,7 @@ const _segs = location.pathname.split('/').filter(Boolean);
 const SLUG = (_segs[0] === 'entregador' ? _segs[1] : _segs[_segs.length - 1]) || '';
 
 let entregadorId = null, _unsub = null;
+let _lojaGeo = { cidade: '', estado: '' };   // cidade/estado do tenant (config/loja) p/ compor o destino da rota
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -96,6 +116,8 @@ async function init() {
     if (!d.token || !d.entregadorId) return telaNeutra();
     await auth.signInWithCustomToken(d.token);
     entregadorId = d.entregadorId;
+    // cidade/estado do tenant p/ compor o destino da rota (config/loja tem leitura pública)
+    try { const lj = (await db.doc('clientes/joey/config/loja').get()).data() || {}; _lojaGeo = { cidade: lj.cidade || '', estado: lj.estado || '' }; } catch (_) {}
     $('who').innerHTML = `<b>${esc(d.nome || 'Entregador')}</b>suas entregas`;
     escutarPedidos();
   } catch (e) {
@@ -120,10 +142,20 @@ function enderecoTxt(c) {
   const l1 = [c.rua, c.numero].filter(Boolean).join(', ');
   return [l1, c.bairro].filter(Boolean).join(' · ');
 }
-function rotaUrl(c) {
-  const dest = [c && c.rua, c && c.numero, c && c.bairro].filter(Boolean).join(', ');
-  return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(dest);
+function destinoRota(c) {
+  if (!c) return '';
+  // endereço em TEXTO (mais preciso que a coord nível-de-rua do OSM): rua, número, bairro, cidade, estado
+  return [c.rua, c.numero, c.bairro, c.cidade || _lojaGeo.cidade, _lojaGeo.estado].filter(Boolean).join(', ');
 }
+// Menu de escolha do app — todas as URLs SEM origem → o app parte do GPS do motoboy.
+function abrirRotaMenu(encDest) {
+  if (!encDest) return;
+  document.getElementById('rotaGoogle').href = 'https://www.google.com/maps/dir/?api=1&destination=' + encDest;
+  document.getElementById('rotaWaze').href   = 'https://waze.com/ul?q=' + encDest + '&navigate=yes';
+  document.getElementById('rotaApple').href  = 'https://maps.apple.com/?daddr=' + encDest;
+  document.getElementById('rotaSheet').classList.add('show');
+}
+function fecharRota() { document.getElementById('rotaSheet').classList.remove('show'); }
 
 function render(lista) {
   if (!lista.length) {
@@ -150,7 +182,7 @@ function render(lista) {
       <div class="itens">${itens || '—'}</div>
       <div class="pag">${pagHtml}<span class="total">${total}</span></div>
       <div class="btns">
-        <a class="btn btn-rota" href="${rotaUrl(c)}" target="_blank" rel="noopener">🗺️ Abrir rota</a>
+        <button class="btn btn-rota" onclick="abrirRotaMenu('${encodeURIComponent(destinoRota(c))}')">🗺️ Abrir rota</button>
         <button class="btn btn-ok" onclick="entreguei('${esc(p.id)}', this)">✅ Entreguei</button>
       </div>
     </div>`;
