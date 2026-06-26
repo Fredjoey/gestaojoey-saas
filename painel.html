@@ -2496,6 +2496,7 @@ function renderKanban() {
     if (col.key === 'entregue') {
       cp = pedidos.filter(p => p.data === hoje
         && (p.status === 'entregue' || (p.status === 'finalizado' && p.entregueEm))
+        && !p.arquivado                                  // "Finalizar pedido" arquiva → sai do Kanban
         && _passaFiltroAtivo(p));
       cp.sort((a, b) => (b.ts || 0) - (a.ts || 0)); // recente primeiro
     } else {
@@ -2745,12 +2746,17 @@ function orderCardHtml(p) {
     }
   } else if (p.status === 'entregue') {
     const _selAtrib = entregadorSelectHtml(p); // delivery+joey sem entregador → atribuir retroativo
-    botoes = `${_selAtrib ? `<div style="flex:1 1 100%;margin-bottom:6px">${_selAtrib}</div>` : ''}
-      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;flex:1" onclick="finalizarPedido('${p.id}')">✓ Finalizar</button>
-      <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2)" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>`;
+    botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
+      ${_selAtrib || ''}
+      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${p.id}')">✓ Finalizar pedido</button>
+      <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>
+    </div>`;
   } else if (p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') {
-    // Estado 2 (entregue pelo motoboy): card PERMANECE em "Entregues hoje"; sem "Finalizar" (já está). Mantém NFCe.
-    botoes = `<button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2)" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>`;
+    // Estado 2 (entregue pelo motoboy): "Finalizar pedido" ARQUIVA (sai do Kanban) + mantém NFCe, empilhados.
+    botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
+      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${p.id}')">✓ Finalizar pedido</button>
+      <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>
+    </div>`;
   }
 
   const _nPed = contarPedidosCliente(p.cliente?.tel);
@@ -3835,6 +3841,27 @@ function finalizarPedido(id) {
   notify(`Pedido ${id} finalizado.`);
 }
 
+// Arquiva 1 pedido (sai do Kanban): status 'finalizado' + flag arquivado. SEM confirm (quem chama confirma).
+// NÃO apaga — segue no Firestore (Fiscal/busca/relatórios). Otimista → some já no renderKanban do chamador.
+function _arquivarPedido(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (p) { p.status = 'finalizado'; p.arquivado = true; }
+  return db.collection(`clientes/${slug}/pedidos`).doc(id).update({
+    status: 'finalizado',
+    arquivado: true,
+    arquivadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+  }).catch(e => console.error('[arquivar]', e && e.message));
+}
+
+// Botão "✓ Finalizar pedido" no card de "Entregues hoje" — vale nos DOIS estados: 'entregue' (saiu, motoboy
+// ainda não clicou "Entreguei") E 'finalizado'+entregueEm (entregue pelo motoboy). Confirma e tira do Kanban.
+function arquivarPedido(id) {
+  if (!confirm('Finalizar este pedido? Ele sairá do Kanban.')) return;
+  _arquivarPedido(id);
+  renderKanban();
+  notify(`Pedido ${id} finalizado.`);
+}
+
 function avancarTodosProntos() {
   const lista = pedidos.filter(p => p.status === 'pronto');
   if (lista.length === 0) { notify('Nenhum pedido pronto para avançar.'); return; }
@@ -3843,10 +3870,15 @@ function avancarTodosProntos() {
 }
 
 function finalizarTodosEntregues() {
-  const lista = pedidos.filter(p => p.status === 'entregue');
-  if (lista.length === 0) { notify('Nenhum pedido entregue para finalizar.'); return; }
-  if (!confirm(`Finalizar ${lista.length} pedido(s) de "Entregues hoje"?`)) return;
-  lista.forEach(p => finalizarPedido(p.id));
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  // Tudo que está visível em "Entregues hoje": saiu ('entregue') E entregue pelo motoboy ('finalizado'+entregueEm).
+  const lista = pedidos.filter(p => p.data === hoje && !p.arquivado
+    && (p.status === 'entregue' || (p.status === 'finalizado' && p.entregueEm)));
+  if (lista.length === 0) { notify('Nenhum pedido em "Entregues hoje" para finalizar.'); return; }
+  if (!confirm(`Finalizar ${lista.length} pedido(s) de "Entregues hoje"? Eles sairão do Kanban.`)) return;
+  lista.forEach(p => _arquivarPedido(p.id));
+  renderKanban();
+  notify(`${lista.length} pedido(s) finalizado(s).`);
 }
 
 function openOrderModal(id) {
