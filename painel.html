@@ -2668,10 +2668,13 @@ function orderCardHtml(p) {
       <button class="oc-btn oc-next" style="background:rgba(52,211,153,.15);color:#34d399;flex:1" onclick="avancarStatus('${p.id}')">✅ Entregue na mesa</button>`;
     } else {
       // Delivery: atribuir entregador (dropdown, SÓ atribui) é SEPARADO de enviar p/ entrega (botão).
-      // O pedido só sai de "Prontos" ao clicar "Enviar para entrega" (avancarStatus → Entregues hoje).
+      // EMPILHADOS (coluna, largura total) — dropdown em cima, botão "Enviar para entrega" largo embaixo
+      // (uma linha só). O pedido só sai de "Prontos" ao clicar "Enviar para entrega" (avancarStatus).
       const _atrib = entregadorSelectHtml(p); // só se joey+motoboys e ainda SEM entregador
-      botoes = `${_atrib ? `<div style="flex:1 1 100%;margin-bottom:6px">${_atrib}</div>` : ''}
-      <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;flex:1" onclick="avancarStatus('${p.id}')">🛵 Enviar para entrega</button>`;
+      botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
+        ${_atrib || ''}
+        <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;width:100%;white-space:nowrap" onclick="avancarStatus('${p.id}')">🛵 Enviar para entrega</button>
+      </div>`;
     }
   } else if (p.status === 'entregue') {
     const _selAtrib = entregadorSelectHtml(p); // delivery+joey sem entregador → atribuir retroativo
