@@ -2103,6 +2103,8 @@ function atualizarStatusFb(id, status) {
   const upd = { status };
   // Carimba o momento em que o pedido foi marcado "pronto" → ordena a coluna Prontos por essa ordem.
   if (status === 'pronto') upd.prontoEm = firebase.firestore.FieldValue.serverTimestamp();
+  // 'entregue' = saiu p/ entrega (botão "Enviar para entrega") → carimba saiuParaEntregaEm (≠ atribuidoEm).
+  if (status === 'entregue') upd.saiuParaEntregaEm = firebase.firestore.FieldValue.serverTimestamp();
   return db.collection(`clientes/${slug}/pedidos`).doc(id).update(upd);
 }
 function _agoraBRT() {
@@ -2573,6 +2575,63 @@ async function _aplicarTrocaPagamento(id, nova) {
   }
 }
 
+// ── ENTREGA — atribuição de motoboy ao pedido (Fase 2, SÓ joey, aditivo) ──
+// Reusa o cadastro de motoboys (clientes/joey/motoboys). Atribuir num pedido 'pronto' = enviá-lo
+// p/ entrega (integra com o status de saída existente). Grava só: entregadorId, entregadorNome,
+// saiuParaEntregaEm. Reatribuir atualiza; remover apaga os 3 campos.
+let _motoboysAtivos = []; // [{id, nome}] — entregadores ativos (listener; só joey)
+function _fmtHoraSaida(ts) {
+  const d = ts && ts.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+  if (!d || isNaN(d)) return '';
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace(':', 'h');
+}
+function _mbOpts() { return _motoboysAtivos.map(m => `<option value="${m.id}">${_escMb(m.nome)}</option>`).join(''); }
+// Linha discreta quando já há entregador: "🛵 João · saiu 19h32" + trocar/remover.
+function entregadorLinhaHtml(p) {
+  if (p.entrega !== 'delivery' || !p.entregadorId) return '';
+  // 'entregue' = já saiu → "saiu HHhMM"; senão (em "Prontos") = "atribuído".
+  const quando = (p.status === 'entregue' && p.saiuParaEntregaEm) ? `saiu ${_fmtHoraSaida(p.saiuParaEntregaEm)}` : 'atribuído';
+  const selSt = 'background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:10px;padding:1px 4px;font-family:inherit;cursor:pointer';
+  return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#a78bfa;margin:2px 0 8px;font-weight:600" onclick="event.stopPropagation()">
+    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🛵 ${_escMb(p.entregadorNome || '?')} · ${quando}</span>
+    ${slug === 'joey' && _motoboysAtivos.length ? `<select title="Trocar entregador" style="${selSt}" onchange="atribuirMotoboy('${p.id}', this.value); this.selectedIndex=0"><option value="">trocar…</option>${_mbOpts()}</select>` : ''}
+    <button title="Remover entregador" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px" onclick="desatribuirMotoboy('${p.id}')">✕</button>
+  </div>`;
+}
+// Dropdown de atribuição (só quando NÃO há entregador). comEnvio=true (card 'pronto') envia p/ entrega.
+// Dropdown que SÓ atribui (não move de coluna). Aparece só quando ainda não há entregador.
+function entregadorSelectHtml(p) {
+  if (p.entrega !== 'delivery' || slug !== 'joey' || !_motoboysAtivos.length || p.entregadorId) return '';
+  const st = 'width:100%;background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.3);border-radius:8px;font-size:12px;font-weight:600;padding:8px 10px;font-family:inherit;cursor:pointer';
+  return `<select style="${st}" onclick="event.stopPropagation()" onchange="atribuirMotoboy('${p.id}', this.value)"><option value="">🛵 Atribuir entregador…</option>${_mbOpts()}</select>`;
+}
+// SÓ atribui o motoboy — NÃO move o pedido de coluna. Grava entregadorId/entregadorNome/atribuidoEm.
+// Sair p/ entrega (→ "Entregues hoje") é ação SEPARADA: o botão "Enviar para entrega" (avancarStatus),
+// que carimba saiuParaEntregaEm. Reatribuir só atualiza os campos; o pedido fica em "Prontos".
+async function atribuirMotoboy(pedidoId, motoboyId) {
+  if (!motoboyId) return;
+  const m = _motoboysAtivos.find(x => x.id === motoboyId);
+  if (!m) { notify('Entregador não encontrado.', 'warning'); return; }
+  const p = pedidos.find(x => x.id === pedidoId);
+  const upd = { entregadorId: motoboyId, entregadorNome: m.nome, atribuidoEm: firebase.firestore.FieldValue.serverTimestamp() };
+  if (p) { p.entregadorId = motoboyId; p.entregadorNome = m.nome; p.atribuidoEm = Date.now(); } // otimista; NÃO muda status
+  renderKanban();
+  try {
+    await db.collection(`clientes/${slug}/pedidos`).doc(pedidoId).update(upd);
+    notify(`🛵 ${m.nome} atribuído — pedido ${pedidoId}`);
+  } catch (e) { notify('Erro ao atribuir: ' + e.message, 'warning'); }
+}
+async function desatribuirMotoboy(pedidoId) {
+  const p = pedidos.find(x => x.id === pedidoId);
+  if (p) { p.entregadorId = null; p.entregadorNome = null; p.atribuidoEm = null; }
+  renderKanban();
+  try {
+    const FV = firebase.firestore.FieldValue;
+    await db.collection(`clientes/${slug}/pedidos`).doc(pedidoId).update({ entregadorId: FV.delete(), entregadorNome: FV.delete(), atribuidoEm: FV.delete() });
+    notify('Entregador removido.', 'warning');
+  } catch (e) { notify('Erro ao remover: ' + e.message, 'warning'); }
+}
+
 function orderCardHtml(p) {
   const itensStr = (p.itens||[]).map(i => `${i.qty}× ${i.nome}`).join(', ');
 
@@ -2608,11 +2667,15 @@ function orderCardHtml(p) {
       botoes = `
       <button class="oc-btn oc-next" style="background:rgba(52,211,153,.15);color:#34d399;flex:1" onclick="avancarStatus('${p.id}')">✅ Entregue na mesa</button>`;
     } else {
-      botoes = `
+      // Delivery: atribuir entregador (dropdown, SÓ atribui) é SEPARADO de enviar p/ entrega (botão).
+      // O pedido só sai de "Prontos" ao clicar "Enviar para entrega" (avancarStatus → Entregues hoje).
+      const _atrib = entregadorSelectHtml(p); // só se joey+motoboys e ainda SEM entregador
+      botoes = `${_atrib ? `<div style="flex:1 1 100%;margin-bottom:6px">${_atrib}</div>` : ''}
       <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;flex:1" onclick="avancarStatus('${p.id}')">🛵 Enviar para entrega</button>`;
     }
   } else if (p.status === 'entregue') {
-    botoes = `
+    const _selAtrib = entregadorSelectHtml(p); // delivery+joey sem entregador → atribuir retroativo
+    botoes = `${_selAtrib ? `<div style="flex:1 1 100%;margin-bottom:6px">${_selAtrib}</div>` : ''}
       <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;flex:1" onclick="finalizarPedido('${p.id}')">✓ Finalizar</button>
       <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2)" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>`;
   }
@@ -2637,6 +2700,7 @@ function orderCardHtml(p) {
       ${pixTarjaHtml(p)}
       ${_badgePix}
       <div class="oc-itens">${itensStr}</div>
+      ${entregadorLinhaHtml(p)}
       ${p.desconto && p.desconto.valorAplicado > 0 ? `<div style="font-size:11px;color:#34d399;margin-top:4px">Desconto: − R$ ${p.desconto.valorAplicado.toFixed(2).replace('.',',')}</div>` : ''}
       <div class="oc-footer">
         <span class="oc-pag">${p.pagamento?.toUpperCase()||'—'}${(p.pagamento==='pix'&&p.pagamentoManual)?' (na entrega)':''}</span>
@@ -2999,6 +3063,7 @@ function avancarStatus(id) {
   const novoStatus = STATUS_NEXT[p.status].next;
   p.status = novoStatus;
   if (novoStatus === 'pronto') p.prontoEm = Date.now();   // ordem otimista até o snapshot trazer o serverTimestamp
+  if (novoStatus === 'entregue') p.saiuParaEntregaEm = Date.now(); // otimista (saída) até o snapshot
   renderKanban();
   atualizarStatusFb(id, novoStatus);
   notify(`Pedido ${id} → ${STATUS_LABELS[novoStatus].label}`);
@@ -7061,6 +7126,15 @@ function iniciarListenersFirestore() {
     if (document.getElementById('panel-salao') && document.getElementById('panel-salao').style.display !== 'none') renderSalao();
     if (_mesaModalId && document.getElementById('orderModal') && document.getElementById('orderModal').classList.contains('show')) refreshVerMesaModal();
   });
+
+  // Motoboys ATIVOS p/ o seletor de entregador no card (Fase 2 entrega — SÓ joey).
+  if (slug === 'joey') {
+    db.collection(`clientes/${slug}/motoboys`).where('ativo', '==', true).onSnapshot(snap => {
+      _motoboysAtivos = snap.docs.map(d => ({ id: d.id, nome: (d.data().nome || '').trim() }))
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+      renderKanban();
+    }, err => console.error('[motoboys] listener:', err.message));
+  }
 
   db.collection(`clientes/${slug}/mesas`).onSnapshot(snap => {
     mesasData = {};
