@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#0f0f0f">
+<title>Entregas · Joey</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
+<style>
+  :root{--bg:#0f0f0f;--card:#1a1a1a;--card2:#222;--border:#2e2e2e;--orange:#ff6b35;--orange2:#ff8c5a;--text:#f0ede8;--text2:#9a9a9a;--text3:#5a5a5a;--green:#34d399;--ok:#2ecc71}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+  header{position:sticky;top:0;z-index:10;background:#141414;border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:10px}
+  header .logo{font-weight:800;color:var(--orange);font-size:18px;letter-spacing:.3px}
+  header .who{margin-left:auto;font-size:13px;color:var(--text2);text-align:right;line-height:1.3}
+  header .who b{color:var(--text);display:block;font-size:14px}
+  .wrap{max-width:560px;margin:0 auto;padding:14px}
+  .live{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;margin:2px 2px 12px}
+  .live .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 8px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px}
+  .card-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .num{font-weight:800;font-size:17px;color:var(--text)}
+  .pill{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:999px;margin-left:auto}
+  .pill-rota{background:rgba(255,107,53,.15);color:var(--orange)}
+  .pill-fila{background:#2a2a2a;color:var(--text2)}
+  .cli{font-size:16px;font-weight:700;margin-bottom:2px}
+  .end{font-size:14px;color:var(--text);line-height:1.45;margin:6px 0}
+  .end .ref{color:var(--orange)}
+  .tel{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--orange2);text-decoration:none;font-weight:600;margin:2px 0 8px}
+  .itens{font-size:13px;color:var(--text2);line-height:1.5;border-top:1px solid var(--border);padding-top:8px;margin-top:6px}
+  .pag{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:14px}
+  .pag .total{font-weight:800;font-size:18px;color:var(--text)}
+  .pag .receber{color:#ffd27a;font-weight:700}
+  .pag .pago{color:var(--green);font-weight:700}
+  .btns{display:flex;gap:10px;margin-top:14px}
+  .btn{flex:1;border:none;border-radius:12px;padding:15px 10px;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:7px}
+  .btn-rota{background:#243447;color:#7cc4ff;border:1px solid #2f4763}
+  .btn-ok{background:var(--orange);color:#fff}
+  .btn-ok:active{filter:brightness(.9)}
+  .btn[disabled]{opacity:.5}
+  .estado{text-align:center;padding:48px 20px;color:var(--text2)}
+  .estado .big{font-size:42px;margin-bottom:10px}
+  .estado.neutro .big{filter:grayscale(1)}
+  .skel{height:120px;background:linear-gradient(90deg,#181818,#202020,#181818);background-size:200% 100%;animation:sh 1.3s infinite;border-radius:16px;margin-bottom:14px}
+  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+  <header>
+    <span class="logo">🛵 Joey Entregas</span>
+    <span class="who" id="who"></span>
+  </header>
+  <div class="wrap">
+    <div class="live" id="live" style="display:none"><span class="dot"></span> Atualizando em tempo real</div>
+    <div id="conteudo"><div class="skel"></div><div class="skel"></div></div>
+  </div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyA8yx0BXHDZee_RyLteJbSuQDzInj-GpFM",
+  authDomain: "gestaojoey.firebaseapp.com",
+  projectId: "gestaojoey",
+  storageBucket: "gestaojoey.firebasestorage.app",
+  messagingSenderId: "372331148907",
+  appId: "1:372331148907:web:aa5eb48d309a167ad1a32e"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const fns = firebase.app().functions('southamerica-east1');
+
+// /entregador/{slug} → pega o último segmento do caminho
+const _segs = location.pathname.split('/').filter(Boolean);
+const SLUG = (_segs[0] === 'entregador' ? _segs[1] : _segs[_segs.length - 1]) || '';
+
+let entregadorId = null, _unsub = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function telaNeutra() {
+  if (_unsub) { _unsub(); _unsub = null; }
+  $('live').style.display = 'none';
+  $('who').textContent = '';
+  $('conteudo').innerHTML = `<div class="estado neutro"><div class="big">🔒</div><div>Link inválido ou expirado.</div><div style="font-size:13px;color:var(--text3);margin-top:8px">Confira o endereço com a pizzaria.</div></div>`;
+}
+
+async function init() {
+  if (!SLUG || SLUG === 'entregador') return telaNeutra();
+  try {
+    const res = await fns.httpsCallable('entregadorAuth')({ slug: SLUG });
+    const d = res.data || {};
+    if (!d.token || !d.entregadorId) return telaNeutra();
+    await auth.signInWithCustomToken(d.token);
+    entregadorId = d.entregadorId;
+    $('who').innerHTML = `<b>${esc(d.nome || 'Entregador')}</b>suas entregas`;
+    escutarPedidos();
+  } catch (e) {
+    // slug inválido/inativo → erro neutro, sem vazar nada
+    telaNeutra();
+  }
+}
+
+function escutarPedidos() {
+  $('live').style.display = 'flex';
+  _unsub = db.collection('clientes/joey/pedidos').where('entregadorId', '==', entregadorId).onSnapshot(snap => {
+    const ativos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.status !== 'finalizado' && p.status !== 'cancelado')
+      .sort((a, b) => (_ms(a.atribuidoEm) - _ms(b.atribuidoEm)));   // mais antigo primeiro = entregar antes
+    render(ativos);
+  }, err => { console.warn('[entregador] listener:', err && err.message); telaNeutra(); });
+}
+function _ms(ts) { return ts && ts.toMillis ? ts.toMillis() : (typeof ts === 'number' ? ts : 0); }
+
+function enderecoTxt(c) {
+  if (!c) return '';
+  const l1 = [c.rua, c.numero].filter(Boolean).join(', ');
+  return [l1, c.bairro].filter(Boolean).join(' · ');
+}
+function rotaUrl(c) {
+  const dest = [c && c.rua, c && c.numero, c && c.bairro].filter(Boolean).join(', ');
+  return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(dest);
+}
+
+function render(lista) {
+  if (!lista.length) {
+    $('conteudo').innerHTML = `<div class="estado"><div class="big">🎉</div><div>Nenhuma entrega no momento.</div><div style="font-size:13px;color:var(--text3);margin-top:8px">Os pedidos atribuídos a você aparecem aqui na hora.</div></div>`;
+    return;
+  }
+  $('conteudo').innerHTML = lista.map(p => {
+    const c = p.cliente || {};
+    const emRota = p.status === 'entregue';                 // 'entregue' (Fase 2) = saiu p/ entrega
+    const pill = emRota ? `<span class="pill pill-rota">Em rota</span>` : `<span class="pill pill-fila">Na fila</span>`;
+    const itens = (p.itens || []).map(i => `${i.qty || i.qtd || 1}× ${esc(i.nome || '')}`).join('<br>');
+    const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
+    const pix = p.pagamento === 'pix';
+    const trocoTxt = (p.pagamento === 'dinheiro' && p.troco) ? ` · troco p/ R$ ${Number(p.troco).toFixed(2).replace('.', ',')}` : '';
+    const pagHtml = pix
+      ? `<span class="pago">📱 Pix · pago</span>`
+      : `<span class="receber">${p.pagamento === 'cartao' ? '💳 Cartão na entrega' : '💵 Dinheiro' + trocoTxt} · receber</span>`;
+    const tel = (c.tel || '').replace(/\D/g, '');
+    return `<div class="card">
+      <div class="card-top"><span class="num">#${esc(p.id)}</span>${pill}</div>
+      <div class="cli">${esc(c.nome || '—')}</div>
+      ${tel ? `<a class="tel" href="tel:${tel}">📞 ${esc(c.tel)}</a>` : ''}
+      <div class="end">📍 ${esc(enderecoTxt(c)) || '—'}${c.ref ? `<br><span class="ref">Ref: ${esc(c.ref)}</span>` : ''}${c.complemento ? `<br>${esc(c.complemento)}` : ''}</div>
+      <div class="itens">${itens || '—'}</div>
+      <div class="pag">${pagHtml}<span class="total">${total}</span></div>
+      <div class="btns">
+        <a class="btn btn-rota" href="${rotaUrl(c)}" target="_blank" rel="noopener">🗺️ Abrir rota</a>
+        <button class="btn btn-ok" onclick="entreguei('${esc(p.id)}', this)">✅ Entreguei</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function entreguei(id, btn) {
+  if (!confirm('Confirmar que o pedido #' + id + ' foi entregue?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvando…'; }
+  try {
+    await db.collection('clientes/joey/pedidos').doc(id).update({
+      status: 'finalizado',
+      entregueEm: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    // o onSnapshot remove o card automaticamente (status saiu de ativo)
+  } catch (e) {
+    alert('Não consegui marcar como entregue. Tente de novo.');
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Entreguei'; }
+  }
+}
+
+init();
+</script>
+</body>
+</html>

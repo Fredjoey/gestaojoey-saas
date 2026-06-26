@@ -90,6 +90,10 @@
           "destination": "/garcom.html"
         },
         {
+          "source": "/entregador/**",
+          "destination": "/entregador.html"
+        },
+        {
           "source": "/",
           "destination": "/cardapio.html"
         }
@@ -176,6 +180,10 @@
           "destination": "/garcom.html"
         },
         {
+          "source": "/entregador/**",
+          "destination": "/entregador.html"
+        },
+        {
           "source": "/",
           "destination": "/painel.html"
         }
@@ -240,6 +248,7 @@
         { "source": "/gestao",           "destination": "/gestao-joey.html" },
         { "source": "/gestao/**",        "destination": "/gestao-joey.html" },
         { "source": "/garcom",           "destination": "/garcom.html" },
+        { "source": "/entregador/**",    "destination": "/entregador.html" },
         { "source": "/l",                "function": "ogCardapio", "region": "southamerica-east1" },
         { "source": "/l/**",             "function": "ogCardapio", "region": "southamerica-east1" },
         { "source": "**",                "destination": "/cardapio.html" }
