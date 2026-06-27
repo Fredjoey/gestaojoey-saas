@@ -2024,6 +2024,7 @@
                     if (logoRight) logoRight.src = LOGO_JOEY_RIGHT_B64;
                 }
                 if (headerTitle) headerTitle.textContent = loja.nome || 'Gestão';
+                if (typeof window._jiaHydrate === 'function') window._jiaHydrate();
             } catch (e) {
                 console.warn('[branding tenant]', e);
             }
@@ -2394,6 +2395,7 @@
             if (btn) btn.style.display = _calFeatures.CALENDARIO ? '' : 'none';
             const fab = document.getElementById('jiaFab');
             if (fab) fab.style.display = _calFeatures.JOEY_IA ? 'flex' : 'none';
+            if (typeof window._jiaHydrate === 'function') window._jiaHydrate();
         }
         function _calRenderSePrecisar() {
             const tab = document.getElementById('calendario');
@@ -9787,7 +9789,7 @@
     <div id="jiaModal" onclick="if(event.target===this)jiaFechar()" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:flex-end; padding:0 22px 92px;">
       <div style="width:380px; max-width:calc(100vw - 44px); height:520px; max-height:82vh; display:flex; flex-direction:column; background:#161616; border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.5); overflow:hidden;">
         <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid #2a2a2a;">
-          <span style="font-size:15px; font-weight:700; color:var(--accent);">🐶 Joey IA</span>
+          <span style="display:flex; align-items:center; gap:7px; font-size:15px; font-weight:700; color:var(--accent);"><span id="jiaHeadAv" style="font-size:16px; line-height:1; display:inline-flex; align-items:center;">🐶</span>Joey IA</span>
           <button onclick="jiaFechar()" aria-label="Fechar" style="background:none; border:none; color:#999; font-size:20px; cursor:pointer; line-height:1;">✕</button>
         </div>
         <div id="jiaMensagens" style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:10px;"></div>
@@ -9808,6 +9810,37 @@
       })();
       let _jiaBusy = false;
       let _jiaHist = [];   // histórico da conversa nesta sessão do modal (some ao fechar — não persiste)
+      // Logo do tenant pra Joey IA = a mesma que o cabeçalho já mostra (#appHeader img). Sem logo → emoji 🐶.
+      function _jiaGetLogo(){ const el = document.querySelector('#appHeader img'); const s = el && el.getAttribute('src'); return (s && /^(https?:|data:)/.test(s)) ? s : ''; }
+      function _jiaAvatarEl(sizePx, emojiPx){
+        const url = _jiaGetLogo();
+        if (url){
+          const img = document.createElement('img');
+          img.src = url; img.alt = 'Joey IA';
+          img.style.cssText = 'width:'+sizePx+'px; height:'+sizePx+'px; object-fit:contain; border-radius:50%; flex:0 0 auto;';
+          img.onerror = function(){ const s=document.createElement('span'); s.textContent='🐶'; s.style.cssText='font-size:'+emojiPx+'px; line-height:1; flex:0 0 auto;'; if(img.parentNode) img.parentNode.replaceChild(s,img); };
+          return img;
+        }
+        const s = document.createElement('span'); s.textContent='🐶'; s.style.cssText='font-size:'+emojiPx+'px; line-height:1; flex:0 0 auto;';
+        return s;
+      }
+      // Pinta a logo no FAB (círculo laranja) e no avatar do cabeçalho. Idempotente; fallback 🐶 se falhar/sem logo.
+      window._jiaHydrate = function(){
+        const url = _jiaGetLogo();
+        const fab = document.getElementById('jiaFab');
+        if (fab){
+          fab.textContent = '';
+          if (url){
+            const img = document.createElement('img');
+            img.src = url; img.alt = 'Joey IA';
+            img.style.cssText = 'width:42px; height:42px; object-fit:contain; border-radius:50%;';
+            img.onerror = function(){ fab.textContent = '🐶'; };
+            fab.appendChild(img);
+          } else { fab.textContent = '🐶'; }
+        }
+        const ha = document.getElementById('jiaHeadAv');
+        if (ha){ ha.textContent=''; ha.appendChild(_jiaAvatarEl(20, 16)); }
+      };
       function _jiaScroll(){ const m = document.getElementById('jiaMensagens'); if (m) m.scrollTop = m.scrollHeight; }
       function _jiaAutoSize(t){ if (!t) return; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }
       function _jiaBolha(lado, texto, pensando){
@@ -9820,14 +9853,14 @@
           wrap.appendChild(bubble);
         } else {
           wrap.style.cssText = 'align-self:flex-start; max-width:90%; display:flex; gap:6px; align-items:flex-end;';
-          const av = document.createElement('span'); av.textContent = '🐶'; av.style.cssText = 'font-size:18px; line-height:1; flex:0 0 auto;';
+          const av = _jiaAvatarEl(22, 18);
           bubble.style.cssText = 'background:#222; color:' + (pensando ? '#aaa' : '#eaeaea') + '; border:1px solid #2f2f2f; border-radius:13px 13px 13px 4px; padding:8px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word;';
           wrap.appendChild(av); wrap.appendChild(bubble);
         }
         document.getElementById('jiaMensagens').appendChild(wrap); _jiaScroll();
         return bubble;
       }
-      window.jiaAbrir = function(){ const m = document.getElementById('jiaModal'); if (m){ m.style.display = 'flex'; const t = document.getElementById('jiaPergunta'); if (t) setTimeout(function(){ t.focus(); }, 50); _jiaScroll(); } };
+      window.jiaAbrir = function(){ if (window._jiaHydrate) window._jiaHydrate(); const m = document.getElementById('jiaModal'); if (m){ m.style.display = 'flex'; const t = document.getElementById('jiaPergunta'); if (t) setTimeout(function(){ t.focus(); }, 50); _jiaScroll(); } };
       window.jiaFechar = function(){ const m = document.getElementById('jiaModal'); if (m) m.style.display = 'none'; const msgs = document.getElementById('jiaMensagens'); if (msgs) msgs.innerHTML = ''; _jiaHist = []; };
       window.askJoeyIA = async function(){
         if (_jiaBusy) return;
