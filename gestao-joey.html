@@ -2392,6 +2392,8 @@
         function _calAplicarFeature() {
             const btn = document.getElementById('tabBtnCalendario');
             if (btn) btn.style.display = _calFeatures.CALENDARIO ? '' : 'none';
+            const fab = document.getElementById('jiaFab');
+            if (fab) fab.style.display = _calFeatures.JOEY_IA ? 'flex' : 'none';
         }
         function _calRenderSePrecisar() {
             const tab = document.getElementById('calendario');
@@ -9779,6 +9781,91 @@
             </div>
         </div>
     </div>
+
+    <!-- Joey IA — bolha flutuante (FAB) + modal de chat -->
+    <button id="jiaFab" onclick="jiaAbrir()" title="Joey IA" aria-label="Joey IA" style="display:none; position:fixed; right:22px; bottom:22px; z-index:9998; width:60px; height:60px; border-radius:50%; border:none; background:var(--accent); color:#fff; font-size:30px; line-height:1; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.45); align-items:center; justify-content:center;">🐶</button>
+    <div id="jiaModal" onclick="if(event.target===this)jiaFechar()" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:flex-end; padding:0 22px 92px;">
+      <div style="width:380px; max-width:calc(100vw - 44px); height:520px; max-height:82vh; display:flex; flex-direction:column; background:#161616; border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.5); overflow:hidden;">
+        <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid #2a2a2a;">
+          <span style="font-size:15px; font-weight:700; color:var(--accent);">🐶 Joey IA</span>
+          <button onclick="jiaFechar()" aria-label="Fechar" style="background:none; border:none; color:#999; font-size:20px; cursor:pointer; line-height:1;">✕</button>
+        </div>
+        <div id="jiaMensagens" style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:10px;"></div>
+        <div style="flex:0 0 auto; display:flex; gap:8px; align-items:flex-end; padding:12px 16px; border-top:1px solid #2a2a2a;">
+          <textarea id="jiaPergunta" rows="1" placeholder="Escreva sua pergunta e tecle Enter…" style="flex:1; box-sizing:border-box; background:#1a1a1a; border:1px solid #333; border-radius:10px; color:#eee; padding:9px 12px; font-size:13px; font-family:inherit; resize:none; max-height:96px; line-height:1.4;"></textarea>
+          <button id="jiaBtn" onclick="askJoeyIA()" style="flex:0 0 auto; background:var(--accent); color:#fff; border:none; border-radius:10px; padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer;">Perguntar</button>
+        </div>
+      </div>
+    </div>
+    <!-- Joey IA — consome a callable perguntarGestao (módulo isolado; SDK modular v10) -->
+    <script type="module">
+      import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+      import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
+      const _jiaCallable = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'perguntarGestao');
+      const _jiaSlug = (window._fb && window._fb.slug) || (function(){
+        const h = location.hostname;
+        return (h === 'gestao.hamburgueriajoey.com.br' || h === 'sistema-joey.web.app' || h === 'localhost' || h === '127.0.0.1') ? 'joey' : h.split('.')[0];
+      })();
+      let _jiaBusy = false;
+      let _jiaHist = [];   // histórico da conversa nesta sessão do modal (some ao fechar — não persiste)
+      function _jiaScroll(){ const m = document.getElementById('jiaMensagens'); if (m) m.scrollTop = m.scrollHeight; }
+      function _jiaAutoSize(t){ if (!t) return; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }
+      function _jiaBolha(lado, texto, pensando){
+        const wrap = document.createElement('div');
+        const bubble = document.createElement('div');
+        bubble.textContent = texto;
+        if (lado === 'user'){
+          wrap.style.cssText = 'align-self:flex-end; max-width:82%;';
+          bubble.style.cssText = 'background:var(--accent); color:#fff; border-radius:13px 13px 4px 13px; padding:8px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word;';
+          wrap.appendChild(bubble);
+        } else {
+          wrap.style.cssText = 'align-self:flex-start; max-width:90%; display:flex; gap:6px; align-items:flex-end;';
+          const av = document.createElement('span'); av.textContent = '🐶'; av.style.cssText = 'font-size:18px; line-height:1; flex:0 0 auto;';
+          bubble.style.cssText = 'background:#222; color:' + (pensando ? '#aaa' : '#eaeaea') + '; border:1px solid #2f2f2f; border-radius:13px 13px 13px 4px; padding:8px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word;';
+          wrap.appendChild(av); wrap.appendChild(bubble);
+        }
+        document.getElementById('jiaMensagens').appendChild(wrap); _jiaScroll();
+        return bubble;
+      }
+      window.jiaAbrir = function(){ const m = document.getElementById('jiaModal'); if (m){ m.style.display = 'flex'; const t = document.getElementById('jiaPergunta'); if (t) setTimeout(function(){ t.focus(); }, 50); _jiaScroll(); } };
+      window.jiaFechar = function(){ const m = document.getElementById('jiaModal'); if (m) m.style.display = 'none'; const msgs = document.getElementById('jiaMensagens'); if (msgs) msgs.innerHTML = ''; _jiaHist = []; };
+      window.askJoeyIA = async function(){
+        if (_jiaBusy) return;
+        const ta = document.getElementById('jiaPergunta');
+        const btn = document.getElementById('jiaBtn');
+        const pergunta = ((ta && ta.value) || '').trim();
+        if (!pergunta){ if (ta) ta.focus(); return; }
+        _jiaBusy = true;
+        _jiaBolha('user', pergunta);
+        _jiaHist.push({ role: 'user', content: pergunta });
+        if (ta){ ta.value = ''; _jiaAutoSize(ta); }
+        const bolha = _jiaBolha('joey', 'pensando', true);
+        let dots = 0; const tick = setInterval(function(){ dots = (dots + 1) % 4; bolha.textContent = 'pensando' + '.'.repeat(dots); }, 350);
+        if (btn){ btn.disabled = true; btn.style.opacity = '.6'; }
+        try {
+          const r = await _jiaCallable({ slug: _jiaSlug, contexto: 'gestao', mensagens: _jiaHist });
+          clearInterval(tick);
+          const resposta = (r && r.data && r.data.resposta) || 'Não consegui responder isso agora.';
+          bolha.style.color = '#eaeaea'; bolha.textContent = resposta;
+          _jiaHist.push({ role: 'assistant', content: resposta });
+        } catch (e) {
+          clearInterval(tick);
+          bolha.style.color = '#ff8a8a'; bolha.textContent = '⚠️ IA indisponível no momento. Tente de novo em instantes.';
+          _jiaHist.pop(); // remove a pergunta sem resposta — mantém o histórico alternado
+        } finally {
+          _jiaBusy = false; if (btn){ btn.disabled = false; btn.style.opacity = '1'; }
+          _jiaScroll(); if (ta) ta.focus();
+        }
+      };
+      (function(){ const t = document.getElementById('jiaPergunta'); if (t) t.addEventListener('input', function(){ _jiaAutoSize(t); }); })();
+      document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape'){ window.jiaFechar(); return; }
+        if (e.key === 'Enter' && !e.shiftKey){
+          const ta = document.getElementById('jiaPergunta');
+          if (ta && document.activeElement === ta){ e.preventDefault(); window.askJoeyIA(); }
+        }
+      });
+    </script>
 
 </body>
 </html>
