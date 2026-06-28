@@ -2248,7 +2248,6 @@ function atualizarSidebar() {
     if (config.logoUrl) { _logoImg.src = config.logoUrl; _logoImg.style.display = ''; }
     else { _logoImg.removeAttribute('src'); _logoImg.style.display = 'none'; }
   }
-  if (typeof _jiaHydrate === 'function') _jiaHydrate();
   // Status aberto/fechado na sidebar
   const aberto = estaAberto();
   const dot  = document.querySelector('.status-dot');
@@ -8604,38 +8603,23 @@ let _jiaHist = [];   // histórico da conversa nesta sessão do modal (some ao f
 function _aplicarGateJoeyIA() {
   const fab = document.getElementById('jiaFab');
   if (fab) fab.style.display = (typeof _iaFeatures !== 'undefined' && _iaFeatures && _iaFeatures.JOEY_IA) ? 'flex' : 'none';
-  _jiaHydrate();
 }
-// Logo do tenant pra Joey IA = mesmo campo que o resto da UI usa (config.logoUrl). Sem logo → emoji 🐶.
-function _jiaGetLogo() { return (typeof config !== 'undefined' && config && config.logoUrl) || ''; }
-function _jiaAvatarEl(sizePx, emojiPx) {
-  const url = _jiaGetLogo();
-  if (url) {
-    const img = document.createElement('img');
-    img.src = url; img.alt = 'Joey IA';
-    img.style.cssText = 'width:' + sizePx + 'px; height:' + sizePx + 'px; object-fit:contain; border-radius:50%; flex:0 0 auto;';
-    img.onerror = function () { const s = document.createElement('span'); s.textContent = '🐶'; s.style.cssText = 'font-size:' + emojiPx + 'px; line-height:1; flex:0 0 auto;'; if (img.parentNode) img.parentNode.replaceChild(s, img); };
-    return img;
-  }
-  const s = document.createElement('span'); s.textContent = '🐶'; s.style.cssText = 'font-size:' + emojiPx + 'px; line-height:1; flex:0 0 auto;';
-  return s;
+// Ícone da Joey IA = cérebro branco (Lucide "brain"). Mesmo ícone no FAB, no cabeçalho e nos avatares.
+function _JIA_BRAIN_SVG(px) {
+  return '<svg width="' + px + '" height="' + px + '" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>'
+    + '<path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>'
+    + '<path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>'
+    + '<path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/>'
+    + '<path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/>'
+    + '<path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg>';
 }
-// Pinta a logo no FAB (círculo laranja) e no avatar do cabeçalho. Idempotente; fallback 🐶 se falhar/sem logo.
-function _jiaHydrate() {
-  const url = _jiaGetLogo();
-  const fab = document.getElementById('jiaFab');
-  if (fab) {
-    fab.textContent = '';
-    if (url) {
-      const img = document.createElement('img');
-      img.src = url; img.alt = 'Joey IA';
-      img.style.cssText = 'width:42px; height:42px; object-fit:contain; border-radius:50%;';
-      img.onerror = function () { fab.textContent = '🐶'; };
-      fab.appendChild(img);
-    } else { fab.textContent = '🐶'; }
-  }
-  const ha = document.getElementById('jiaHeadAv');
-  if (ha) { ha.textContent = ''; ha.appendChild(_jiaAvatarEl(20, 16)); }
+// Avatar = balãozinho laranja com o cérebro (mini versão do FAB). Sem logo do tenant, sem fallback de emoji.
+function _jiaBrainBadge(badgePx, brainPx) {
+  const b = document.createElement('span');
+  b.style.cssText = 'flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:' + badgePx + 'px; height:' + badgePx + 'px; background:#E87722; border-radius:7px 7px 7px 2px;';
+  b.innerHTML = _JIA_BRAIN_SVG(brainPx);
+  return b;
 }
 function _jiaScroll() { const m = document.getElementById('jiaMensagens'); if (m) m.scrollTop = m.scrollHeight; }
 function _jiaAutoSize(t) { if (!t) return; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 96) + 'px'; }
@@ -8649,14 +8633,14 @@ function _jiaBolha(lado, texto, pensando) {
     wrap.appendChild(bubble);
   } else {
     wrap.style.cssText = 'align-self:flex-start; max-width:90%; display:flex; gap:6px; align-items:flex-end;';
-    const av = _jiaAvatarEl(22, 18);
+    const av = _jiaBrainBadge(24, 16);
     bubble.style.cssText = 'background:#222; color:' + (pensando ? '#aaa' : '#eaeaea') + '; border:1px solid #2f2f2f; border-radius:13px 13px 13px 4px; padding:8px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word;';
     wrap.appendChild(av); wrap.appendChild(bubble);
   }
   document.getElementById('jiaMensagens').appendChild(wrap); _jiaScroll();
   return bubble;
 }
-function jiaAbrir() { _jiaHydrate(); const m = document.getElementById('jiaModal'); if (m) { m.style.display = 'flex'; const t = document.getElementById('jiaPergunta'); if (t) setTimeout(function () { t.focus(); }, 50); _jiaScroll(); } }
+function jiaAbrir() { const m = document.getElementById('jiaModal'); if (m) { m.style.display = 'flex'; const t = document.getElementById('jiaPergunta'); if (t) setTimeout(function () { t.focus(); }, 50); _jiaScroll(); } }
 function jiaFechar() { const m = document.getElementById('jiaModal'); if (m) m.style.display = 'none'; const msgs = document.getElementById('jiaMensagens'); if (msgs) msgs.innerHTML = ''; _jiaHist = []; }
 async function askJoeyIA() {
   if (_jiaBusy) return;
@@ -11265,11 +11249,11 @@ document.addEventListener('click', function(e) {
 </script>
 
 <!-- Joey IA — bolha flutuante (FAB) + modal de chat (gate config/features.JOEY_IA) -->
-<button id="jiaFab" onclick="jiaAbrir()" title="Joey IA" aria-label="Joey IA" style="display:none; position:fixed; right:22px; bottom:22px; z-index:9998; width:60px; height:60px; border-radius:50%; border:none; background:var(--orange); color:#fff; font-size:30px; line-height:1; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.45); align-items:center; justify-content:center;">🐶</button>
+<button id="jiaFab" onclick="jiaAbrir()" title="Joey IA" aria-label="Joey IA" style="display:none; position:fixed; right:22px; bottom:22px; z-index:9998; width:58px; height:58px; border-radius:18px 18px 18px 4px; border:none; background:#E87722; color:#fff; line-height:1; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.45); align-items:center; justify-content:center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg></button>
 <div id="jiaModal" onclick="if(event.target===this)jiaFechar()" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:flex-end; padding:0 22px 92px;">
   <div style="width:380px; max-width:calc(100vw - 44px); height:520px; max-height:82vh; display:flex; flex-direction:column; background:#161616; border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.5); overflow:hidden;">
     <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid #2a2a2a;">
-      <span style="display:flex; align-items:center; gap:7px; font-size:15px; font-weight:700; color:var(--orange);"><span id="jiaHeadAv" style="font-size:16px; line-height:1; display:inline-flex; align-items:center;">🐶</span>Joey IA</span>
+      <span style="display:flex; align-items:center; gap:7px; font-size:15px; font-weight:700; color:var(--orange);"><span style="flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; background:#E87722; border-radius:7px 7px 7px 2px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg></span>Joey IA</span>
       <button onclick="jiaFechar()" aria-label="Fechar" style="background:none; border:none; color:#999; font-size:20px; cursor:pointer; line-height:1;">✕</button>
     </div>
     <div id="jiaMensagens" style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:10px;"></div>
