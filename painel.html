@@ -3558,6 +3558,11 @@ function gerarHtmlComandaMesa(p, mesaNome) {
 
   const total = (p.total || p.subtotal || 0).toFixed(2).replace('.', ',');
 
+  // Conferência da mesa inteira (resumo agregado) usa um rótulo no lugar do nº do pedido.
+  const pedidoBlocoHtml = p.id === 'CONFERÊNCIA'
+    ? `<div class="ped-num" style="font-size:18px;letter-spacing:1px">CONFERÊNCIA DE MESA</div>`
+    : `<div class="ped-label">Pedido</div>\n<div class="ped-num">${p.id}</div>`;
+
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;color:#000;background:#fff;font-weight:normal}
@@ -3590,8 +3595,7 @@ body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;paddi
 <div class="loja">${loja}</div>
 <div class="line">${dash}</div>
 
-<div class="ped-label">Pedido</div>
-<div class="ped-num">${p.id}</div>
+${pedidoBlocoHtml}
 <div class="line">${dash}</div>
 
 <div class="itens-label">Itens</div>
@@ -9107,6 +9111,7 @@ function renderSalao() {
         <div class="mesa-actions">
           <button class="mesa-btn mesa-btn-ver" onclick="abrirVerMesa('${m.id}','${nomeEsc}')">🧾 Conta</button>
           <button class="mesa-btn mesa-btn-add" onclick="abrirPedidoMesa('${m.id}','${nomeEsc}')">+ Pedido</button>
+          ${status !== 'livre' ? `<button class="mesa-btn mesa-btn-ver" onclick="imprimirConferenciaMesa('${m.id}','${nomeEsc}')">🧾 Conferência</button>` : ''}
         </div>
         ${status !== 'livre' ? `<button class="mesa-btn" style="width:100%;margin-top:6px;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3)" onclick="abrirVerMesa('${m.id}','${nomeEsc}')">💰 Fechar conta</button>` : ''}
       </div>`;
@@ -10173,6 +10178,23 @@ function imprimirComandaPorId(mesaId, comandaId, mesaNome) {
   const comanda = _getComandasFromMesa(m)[comandaId];
   if (!comanda) { notify('Comanda não encontrada', 'warning'); return; }
   imprimirComandaMesa(comanda, mesaNome);
+}
+
+// Conferência: imprime o RESUMO agregado da mesa INTEIRA (todas as comandas),
+// itens+qtd+preço+total, não-fiscal. Reusa gerarHtmlComandaMesa + _dispararHtml.
+// Clique manual → dispara DIRETO (sem o gate config.impressaoAtiva, igual ao
+// Teste Impressão), pra imprimir mesmo com auto-impressão desligada.
+function imprimirConferenciaMesa(mesaId, mesaNome) {
+  const comandas = _comandasDaMesa(mesaId);
+  // Itens CRUS de todas as comandas ({qty,nome,preco,adicionais,obs} — formato do
+  // template). NÃO usar _contaItens (já soma preço×qty → dobraria no template).
+  const itens = [];
+  Object.values(comandas).forEach(c => (c.itens || []).forEach(it => itens.push(it)));
+  if (itens.length === 0) { notify('Mesa sem itens para conferência', 'warning'); return; }
+  // Total da fonte unificada (mesma do card) → bate com o que aparece na tela.
+  const total = _contaTotais(mesaId).total;
+  try { _dispararHtml(gerarHtmlComandaMesa({ id: 'CONFERÊNCIA', itens, total }, mesaNome)); }
+  catch (e) { console.error('[CONFERÊNCIA]', e); notify('Erro ao imprimir conferência: ' + e.message, 'error'); }
 }
 
 function abrirEditarComanda(mesaId, mesaNome, comandaId) {
