@@ -8606,7 +8606,12 @@ let _jiaBusy = false;
 let _jiaHist = [];   // histórico da conversa nesta sessão do modal (some ao fechar — não persiste)
 function _aplicarGateJoeyIA() {
   const fab = document.getElementById('jiaFab');
-  if (fab) fab.style.display = (typeof _iaFeatures !== 'undefined' && _iaFeatures && _iaFeatures.JOEY_IA) ? 'flex' : 'none';
+  if (!fab) return;
+  const liberado = (typeof _iaFeatures !== 'undefined' && _iaFeatures && _iaFeatures.JOEY_IA);
+  // Esconde a bolha quando o atendimento WhatsApp está aberto — ela flutua por cima
+  // do campo "Mensagem..." e atrapalha a digitação. Volta ao fechar o wpp-panel.
+  const wppAberto = (typeof _wppOpen !== 'undefined' && _wppOpen);
+  fab.style.display = (liberado && !wppAberto) ? 'flex' : 'none';
 }
 // Ícone da Joey IA = cérebro branco (Lucide "brain"). Mesmo ícone no FAB, no cabeçalho e nos avatares.
 function _JIA_BRAIN_SVG(px) {
@@ -10896,6 +10901,10 @@ function abrirWppPanel() {
   _wppOpen = true;
   document.getElementById('wpp-panel').classList.add('open');
   document.getElementById('wpp-overlay').classList.add('open');
+  // Atendimento WhatsApp aberto: fecha o modal da Joey IA (se aberto) e esconde a bolha
+  // pra não sobrar nada por cima do chat. A bolha volta no fecharWppPanel (via gate).
+  if (typeof jiaFechar === 'function') jiaFechar();
+  if (typeof _aplicarGateJoeyIA === 'function') _aplicarGateJoeyIA();
 }
 
 function fecharWppPanel() {
@@ -10904,6 +10913,8 @@ function fecharWppPanel() {
   document.getElementById('wpp-overlay').classList.remove('open');
   _wppConvAtiva = null;
   document.getElementById('wppChat').style.display = 'none';
+  // Saiu do atendimento WhatsApp: a bolha da Joey IA volta (respeitando o gate JOEY_IA).
+  if (typeof _aplicarGateJoeyIA === 'function') _aplicarGateJoeyIA();
 }
 
 function wppFiltrar(v) {
