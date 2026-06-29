@@ -4761,6 +4761,7 @@ function salvarConfig() {
     destaque:       document.getElementById('cfgDestaque').value || null,
     premioJogo:     (document.getElementById('cfgPremioJogo')?.value || '').trim().slice(0, 120),
     bannerUrl:      config.bannerUrl || null,
+    logoUrl:        config.logoUrl || null,   // preserva a logo no set-total (igual ao bannerUrl) — senão salvarConfig apaga
     // Preserva notificações (saveConfig faz set total). O PIN do garçom NÃO fica mais aqui
     // (era público) — vai pro doc privado garcomSecrets via Cloud Function garcomSetPin.
     wppNotifs:      config.wppNotifs || {},
