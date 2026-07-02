@@ -4838,8 +4838,12 @@ function _slugMotoboy(nome) {
   const base = String(nome || 'entregador')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')                 // remove acentos
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'entregador';
-  const cs = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let suf = ''; for (let i = 0; i < 6; i++) suf += cs[Math.floor(Math.random() * cs.length)];  // 36^6 ≈ 2,2 bi de combinações
+  // (Bloco 5) Sufixo CRIPTOGRÁFICO de 22 chars base62 ≈ 131 bits (antes: 6 chars Math.random ≈ 31 bits,
+  // adivinhável por brute-force + PRNG previsível). O slug é a credencial de acesso do /entregador/{slug}.
+  const cs = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = new Uint8Array(22);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+  let suf = ''; for (let i = 0; i < bytes.length; i++) suf += cs[bytes[i] % cs.length];
   return `${base}-${suf}`;
 }
 function _linkEntregador(s) { return `${CARDAPIO_URL || ''}/entregador/${s}`; }  // página é da Fase 3 (ainda não existe)
