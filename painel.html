@@ -2291,6 +2291,17 @@ function showPanel(panel, navEl) {
 // URLs derivadas do slug. Como o slug pode só ser conhecido após o login (host universal),
 // são definidas por definirUrlsDoSlug(): no load (subdomínio) ou após resolver o usuário (universal).
 let WA_API, BOT_URL, GESTAO_URL, CARDAPIO_URL, CARDAPIO_URL_DISPLAY;
+// (Bloco 3) POST /send do bot SEMPRE autenticado: manda o Firebase ID token do dono logado.
+// O joeyapi valida o token e confere o dono do tenant (senão qualquer um faria o bot mandar WhatsApp).
+async function _botSend(body) {
+  const u = firebase.auth().currentUser;
+  const idToken = u ? await u.getIdToken() : '';
+  return fetch(`${BOT_URL}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(idToken ? { 'Authorization': 'Bearer ' + idToken } : {}) },
+    body: JSON.stringify(body),
+  });
+}
 function definirUrlsDoSlug() {
   WA_API     = slug === 'joey' ? 'https://joeyapi-production.up.railway.app' : `https://joeyapi-${slug}-production.up.railway.app`;
   BOT_URL    = WA_API;
@@ -2321,11 +2332,7 @@ async function enviarWhatsAppBot(numero, mensagem) {
   if (!tel.startsWith('55')) tel = '55' + tel;
   console.log('[BOT] Enviando para:', tel, '| Mensagem:', mensagem);
   try {
-    const resp = await fetch(`${BOT_URL}/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ numero: tel, mensagem })
-    });
+    const resp = await _botSend({ numero: tel, mensagem });
     const data = await resp.json();
     console.log('[BOT] Resposta:', data);
     if (!data.ok) throw new Error(data.erro);
@@ -3112,11 +3119,7 @@ async function _enviarWppConfirmadoAuto(p) {
   let tel = p.cliente.tel.replace(/\D/g, '');
   if (!tel.startsWith('55')) tel = '55' + tel;
   const msg = _buildNotifMsg(cfg.template, p, 'confirmado');
-  const resp = await fetch(`${BOT_URL}/send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ numero: tel, mensagem: msg })
-  });
+  const resp = await _botSend({ numero: tel, mensagem: msg });
   const data = await resp.json().catch(() => ({ ok: false, erro: 'resposta inválida da API' }));
   if (!data.ok) throw new Error(data.erro || 'Falha no envio');
 }
@@ -8290,10 +8293,7 @@ async function enviarParabens(tel, nome) {
     `A equipe ${config.nome||'Joey Pizza'} deseja a você um dia incrível cheio de alegria e delícias! 🍕\n\n` +
     `Temos uma surpresa especial para você hoje — venha nos visitar! 😍`;
   try {
-    const r = await fetch(`${BOT_URL}/send`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ numero: full, mensagem: msg }),
-    });
+    const r = await _botSend({ numero: full, mensagem: msg });
     const data = await r.json();
     if (data.ok) { notify(`🎉 Parabéns enviado para ${nome}!`); }
     else throw new Error(data.erro || 'erro na API');
@@ -11158,11 +11158,7 @@ async function wppEnviar() {
 
   // 2. Envia via Railway (melhor esforço)
   try {
-    const res  = await fetch(BOT_URL + '/send', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ jid: jidEnvio, mensagem: texto }),
-    });
+    const res  = await _botSend({ jid: jidEnvio, mensagem: texto });
     const data = await res.json().catch(() => ({}));
     console.log('[WPP] Railway /send resposta:', res.status, data);
     if (!res.ok && !erroEnvio) erroEnvio = data.erro || `Bot retornou ${res.status}`;
