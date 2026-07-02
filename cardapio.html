@@ -2290,11 +2290,13 @@ function finalizarPedido() {
 
   const pedidosRef = db.collection(`clientes/${slug}/pedidos`);
   const contadorRef = db.doc(`clientes/${slug}/config/contador`);
+  let _anonUid = null; // uid da sessão anônima — carimbado no pedido (authUid) p/ as regras (LGPD): só o dono lê
 
   // 0) garante sessão anônima válida (token renovado) ANTES de qualquer leitura/escrita
   _garantirAuthValida()
-    // 1) idempotência: se uma tentativa anterior (mesmo reqId) já gravou, NÃO duplica — trata como sucesso
-    .then(() => pedidosRef.where('reqId', '==', reqId).limit(1).get())
+    // 1) idempotência: se uma tentativa anterior (mesmo reqId) já gravou, NÃO duplica — trata como sucesso.
+    //    Filtra por authUid (a própria sessão) pra casar com as regras (pedido só é legível pelo dono).
+    .then(user => { _anonUid = user.uid; return pedidosRef.where('authUid', '==', _anonUid).where('reqId', '==', reqId).limit(1).get(); })
     .then(snap => {
       if (!snap.empty) {
         const doc = snap.docs[0];
@@ -2313,6 +2315,7 @@ function finalizarPedido() {
         const pedido = {
           id: String(novoId),
           reqId: reqId,
+          authUid: _anonUid, // dono do pedido (sessão anônima do cardápio) → regras liberam leitura só pra ele
           ts: Date.now(),
           hora: new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
           data: new Date().toLocaleDateString('pt-BR'),
@@ -2867,8 +2870,13 @@ function iniciarHistListener(tel) {
 
   if (histListener) { histListener(); histListener = null; }
 
+  // LGPD: as regras só liberam o pedido pro DONO (authUid == uid). Então o histórico é da
+  // SESSÃO deste navegador (não mais um where por telefone — que era enumerável e vazava PII).
+  // Pedidos antigos (sem authUid) e pedidos feitos em outro aparelho não aparecem aqui.
+  const _uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
+  if (!_uid) { renderHistLista([], tel); return; }
   histListener = db.collection(`clientes/${slug}/pedidos`)
-    .where('cliente.tel', '==', tel)
+    .where('authUid', '==', _uid)
     .onSnapshot(snap => {
       const lista = snap.docs.map(d => d.data()).sort((a, b) => (b.ts||0) - (a.ts||0));
       renderHistLista(lista, tel);
