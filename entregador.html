@@ -97,6 +97,7 @@ const _segs = location.pathname.split('/').filter(Boolean);
 const SLUG = (_segs[0] === 'entregador' ? _segs[1] : _segs[_segs.length - 1]) || '';
 
 let entregadorId = null, _unsub = null;
+let tenant = null;   // (Bloco 2) slug do TENANT (resolvido pelo entregadorAuth) — antes era hardcoded 'joey'
 let _lojaGeo = { cidade: '', estado: '' };   // cidade/estado do tenant (config/loja) p/ compor o destino da rota
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -116,8 +117,9 @@ async function init() {
     if (!d.token || !d.entregadorId) return telaNeutra();
     await auth.signInWithCustomToken(d.token);
     entregadorId = d.entregadorId;
+    tenant = d.tenant || 'joey';   // (Bloco 2) tenant resolvido pelo entregadorAuth (fallback joey p/ compat)
     // cidade/estado do tenant p/ compor o destino da rota (config/loja tem leitura pública)
-    try { const lj = (await db.doc('clientes/joey/config/loja').get()).data() || {}; _lojaGeo = { cidade: lj.cidade || '', estado: lj.estado || '' }; } catch (_) {}
+    try { const lj = (await db.doc('clientes/' + tenant + '/config/loja').get()).data() || {}; _lojaGeo = { cidade: lj.cidade || '', estado: lj.estado || '' }; } catch (_) {}
     $('who').innerHTML = `<b>${esc(d.nome || 'Entregador')}</b>suas entregas`;
     escutarPedidos();
   } catch (e) {
@@ -128,7 +130,7 @@ async function init() {
 
 function escutarPedidos() {
   $('live').style.display = 'flex';
-  _unsub = db.collection('clientes/joey/pedidos').where('entregadorId', '==', entregadorId).onSnapshot(snap => {
+  _unsub = db.collection('clientes/' + tenant + '/pedidos').where('entregadorId', '==', entregadorId).onSnapshot(snap => {
     const ativos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(p => p.status !== 'finalizado' && p.status !== 'cancelado')
       .sort((a, b) => (_ms(a.atribuidoEm) - _ms(b.atribuidoEm)));   // mais antigo primeiro = entregar antes
@@ -193,7 +195,7 @@ async function entreguei(id, btn) {
   if (!confirm('Confirmar que o pedido #' + id + ' foi entregue?')) return;
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvando…'; }
   try {
-    await db.collection('clientes/joey/pedidos').doc(id).update({
+    await db.collection('clientes/' + tenant + '/pedidos').doc(id).update({
       status: 'finalizado',
       entregueEm: firebase.firestore.FieldValue.serverTimestamp(),
     });
