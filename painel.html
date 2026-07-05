@@ -5804,6 +5804,7 @@ function renderRelatorioNotas() {
     acoes += ` <button onclick="openOrderModal('${p.id}')" title="Detalhe do pedido" style="margin-left:3px;padding:2px 6px;font-size:11px;background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer">&#x1F441;</button>`;
     if (statusNota === 'emitida') {
       if (nota && nota.danfeUrl) acoes += ` <a href="${nota.danfeUrl}" target="_blank" rel="noopener" title="DANFE" style="padding:2px 7px;font-size:11px;background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.25);border-radius:5px;text-decoration:none">&#x1F4C4;</a>`;
+      acoes += ` <button onclick="imprimirNfce('${p.id}')" title="Imprimir NFC-e" style="padding:2px 7px;font-size:11px;background:rgba(255,107,53,.1);color:var(--orange);border:1px solid rgba(255,107,53,.25);border-radius:5px;cursor:pointer">&#x1F5A8;</button>`;
       acoes += ` <button onclick="nfBaixarXml('${p.id}')" title="Baixar XML" style="padding:2px 7px;font-size:11px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:5px;cursor:pointer">XML</button>`;
       if (refEsc) acoes += ` <button onclick="openCancelNfceModal('${p.id}','${refEsc}','${nfEsc}',${(nota&&nota.total)||p.total||0})" title="Cancelar nota" style="padding:2px 7px;font-size:11px;background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);border-radius:5px;cursor:pointer">&#x1F6AB;</button>`;
     } else if (statusNota === 'cancelada') {
