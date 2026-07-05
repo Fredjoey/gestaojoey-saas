@@ -2091,6 +2091,7 @@ const NFCE_EMITIR_URL    = 'https://emitirnfce-eb6kvzsxgq-uc.a.run.app';
 const NFCE_CANCELAR_URL  = 'https://cancelarnfce-eb6kvzsxgq-uc.a.run.app';
 const NFCE_XML_URL       = 'https://us-central1-pedidos-joey.cloudfunctions.net/nfceXml';
 const NFCE_XMLZIP_URL    = 'https://us-central1-pedidos-joey.cloudfunctions.net/nfceXmlZip';
+const NFCE_DANFE_URL     = 'https://us-central1-pedidos-joey.cloudfunctions.net/nfceDanfe';
 
 // =================== CONSTANTES ===================
 const STATUS_LABELS = {
@@ -5855,6 +5856,35 @@ async function nfBaixarXml(pedidoId){
   const ok = await _nfDownload(NFCE_XML_URL, { slug, pedidoId: String(pedidoId) }, `NFCe-${pedidoId}.xml`);
   if (ok) notify('XML baixado!');
 }
+// Imprime o DANFE reusando a cadeia de impressão (Electron > QZ Tray > iframe 80mm).
+// Busca o HTML do cupom pela function nfceDanfe (proxy server-side; contorna CORS da Focus).
+async function imprimirNfce(pedidoId){
+  const user = firebase.auth().currentUser;
+  if (!user) { notify('Sessão expirada. Recarregue o painel.', 'error'); return; }
+  const btns = Array.from(document.querySelectorAll('[data-print-nfce]'));
+  btns.forEach(b => { b.dataset.orig = b.innerHTML; b.disabled = true; b.innerHTML = '⏳ Imprimindo...'; });
+  try {
+    const idToken = await user.getIdToken();
+    const resp = await fetch(NFCE_DANFE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ slug, pedidoId: String(pedidoId) }),
+    });
+    if (!resp.ok) {
+      let msg = 'Erro ' + resp.status;
+      try { const j = await resp.json(); msg = j.erro || msg; } catch(_){}
+      notify('Não foi possível imprimir a NFC-e: ' + msg, 'error');
+      return;
+    }
+    const html = await resp.text();
+    await _dispararHtml(html);
+    notify('NFC-e enviada para impressão! 🖨️');
+  } catch (e) {
+    notify('Falha ao imprimir a NFC-e. Tente de novo.', 'error');
+  } finally {
+    btns.forEach(b => { b.disabled = false; if (b.dataset.orig != null) b.innerHTML = b.dataset.orig; });
+  }
+}
 function abrirBaixarXmlsModal(){
   const now = new Date();
   document.getElementById('nfXmlMes').value = now.getMonth()+1;
@@ -5890,6 +5920,7 @@ function openNfceModal(pedidoId) {
   const jaEmitida = notaExist?.status === 'emitida';
   const footerHtml = jaEmitida
     ? `<span class="nf-emitida" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 12px;border-radius:8px">✅ Emitida${notaExist.nf ? ' — Nº ' + notaExist.nf : ''}</span>
+       <button class="btn" data-print-nfce onclick="imprimirNfce('${p.id}')" style="background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3);white-space:nowrap">🖨️ Imprimir NFC-e</button>
        ${notaExist.danfeUrl ? `<a href="${notaExist.danfeUrl}" target="_blank" rel="noopener" class="btn" style="background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);text-decoration:none;white-space:nowrap">📄 Ver DANFE</a>` : ''}
        <button class="btn btn-ghost" onclick="closeNfceModal()">Fechar</button>`
     : `<button class="btn btn-primary" style="flex:1" onclick="emitirNfce('${p.id}')">🧾 Emitir NFCe</button>
@@ -6012,6 +6043,7 @@ async function emitirNfce(pedidoId) {
       if (footer) {
         footer.innerHTML =
           `<span class="nf-emitida" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 12px;border-radius:8px">✅ Emitida${data.nf ? ' — Nº ' + data.nf : ''}</span>`
+          + `<button class="btn" data-print-nfce onclick="imprimirNfce('${pedidoId}')" style="background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3);white-space:nowrap">🖨️ Imprimir NFC-e</button>`
           + (data.danfe ? `<a href="${data.danfe}" target="_blank" rel="noopener" class="btn" style="background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);text-decoration:none;white-space:nowrap">📄 Ver DANFE</a>` : '')
           + `<button class="btn btn-ghost" onclick="closeNfceModal()">Fechar</button>`;
       } else {

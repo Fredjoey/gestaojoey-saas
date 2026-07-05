@@ -629,6 +629,21 @@ async function _fnBaixarXml(baseUrl, token, ref) {
   return typeof x.data === 'string' ? x.data : String(x.data);
 }
 
+// Consulta a Focus por ref, pega caminho_danfe e baixa o DANFE (HTML do cupom). Lança em falha.
+async function _fnBaixarDanfe(baseUrl, token, ref) {
+  const meta = await axios.get(`${baseUrl}/v2/nfce/${encodeURIComponent(ref)}`, {
+    auth: { username: token, password: '' }, timeout: 25000, validateStatus: () => true,
+  });
+  if (meta.status >= 400) throw new Error(`consulta ref HTTP ${meta.status}`);
+  const path = meta.data && meta.data.caminho_danfe;
+  if (!path) throw new Error(`sem caminho_danfe (status ${meta.data && meta.data.status})`);
+  const d = await axios.get(`${baseUrl}${path}`, {
+    auth: { username: token, password: '' }, timeout: 25000, responseType: 'text', validateStatus: () => true,
+  });
+  if (d.status >= 400) throw new Error(`download danfe HTTP ${d.status}`);
+  return typeof d.data === 'string' ? d.data : String(d.data);
+}
+
 // Storage do gestaojoey: salva/le o XML em clientes/{slug}/xmls/{ref}.xml
 async function _fnSalvarXmlStorage(slug, ref, xml) {
   const path = `clientes/${slug}/xmls/${ref}.xml`;
@@ -691,6 +706,37 @@ exports.nfceXml = onRequest({ invoker: 'public', region: 'us-central1' }, async 
   } catch (err) {
     console.error('[nfceXml]', err.message);
     return res.status(500).json({ ok: false, erro: 'Erro ao baixar XML: ' + err.message });
+  }
+});
+
+// DANFE (HTML do cupom, pra imprimir) — POST { slug, pedidoId } ou { slug, ref }.
+// Proxy server-side: busca o DANFE na Focus com o token do tenant (contorna o CORS
+// da Focus e mantém o token no servidor) e devolve o HTML com CORS liberado.
+exports.nfceDanfe = onRequest({ invoker: 'public', region: 'us-central1' }, async (req, res) => {
+  _fnNfceCors(res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, erro: 'Método não permitido' });
+  try {
+    const { slug, pedidoId, ref } = req.body || {};
+    if (!slug || (!pedidoId && !ref)) return res.status(400).json({ ok: false, erro: 'slug e (pedidoId ou ref) são obrigatórios' });
+    const dono = await _fnVerificarDono(req, slug);
+    if (!dono.ok) return res.status(dono.code).json({ ok: false, erro: dono.erro });
+    const { token, baseUrl } = await _fnFocusCtx(slug);
+    if (!token) return res.status(400).json({ ok: false, erro: 'Token da Focus NFe não configurado.' });
+    let focusRef = ref;
+    if (!focusRef && pedidoId) {
+      const nd = await dbGestao.doc(`clientes/${slug}/notasFiscais/${pedidoId}`).get();
+      if (!nd.exists) return res.status(404).json({ ok: false, erro: 'Nota não encontrada.' });
+      const nota = nd.data();
+      focusRef = nota.focusRef || nota.ref;
+      if (!focusRef) return res.status(404).json({ ok: false, erro: 'Nota sem referência Focus.' });
+    }
+    const html = await _fnBaixarDanfe(baseUrl, token, focusRef);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error('[nfceDanfe]', err.message);
+    return res.status(500).json({ ok: false, erro: 'Erro ao obter DANFE: ' + err.message });
   }
 });
 
