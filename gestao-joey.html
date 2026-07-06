@@ -1588,6 +1588,8 @@
                         <div class="metric-value" id="vendasTicketMedio">—</div>
                     </div>
                 </div>
+            <!-- DRE Parcial do período buscado (motor canônico — mesmo layout do Resumo do Mês) -->
+            <div id="vendasDreParcialBox" style="display:none; margin-top:1.5rem;"></div>
             <!-- RETIRADAS DE CAIXA (calendário) do período -->
             <div id="vendasRetiradasBox" style="margin-top:1.5rem;"></div>
 
@@ -7872,6 +7874,62 @@
             if (adicSection) adicSection.style.display = adicLista.length > 0 ? 'block' : 'none';
         }
 
+        // Layout compartilhado da "DRE Parcial" (mesmo do Resumo do Mês) — recebe um objeto
+        // dre do motor canônico (_dreDoPeriodo) e devolve o HTML do box.
+        function _dreParcialBoxHtml(dre, titulo) {
+            const rat = dre.fixosRateio;
+            const simplesPct = (((dre.cfg && dre.cfg.simples) || 0) * 100).toFixed(2).replace('.', ',');
+            const fixosTxt = `(-) Custos Fixos${rat ? ` (${rat.dias}/${rat.diasNoMes} dias)` : ''}`;
+            const lucroCor = dre.lucroLiquido >= 0 ? '#4ade80' : '#e74c3c';
+            const margCor  = dre.margemLiquida >= 10 ? '#4ade80' : dre.margemLiquida >= 0 ? '#f39c12' : '#e74c3c';
+            const desp = (lbl, val, extra) => `
+                        <div style="display:flex; justify-content:space-between; padding:3px 0 3px 12px;${extra || ''}">
+                            <span style="color:#aaa;">${lbl}</span>
+                            <span style="color:#e74c3c;">- ${formatarMoeda(val)}</span>
+                        </div>`;
+            return `
+                <div style="background:#1a1a2e; border:1px solid #2a2a4a; border-radius:10px; padding:1.25rem;">
+                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px;">📋 ${titulo}</div>
+                    <div style="font-family:monospace; font-size:13px; display:flex; flex-direction:column; gap:5px;">
+                        <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #2a2a4a;">
+                            <span style="color:#e8e8e8;">Faturamento Bruto</span>
+                            <span style="color:#60a5fa; font-weight:700;">${formatarMoeda(dre.faturamento)}</span>
+                        </div>
+                        ${desp(`(-) Simples Nacional ${simplesPct}%`, dre.simples)}
+                        ${desp('(-) Taxa Cartão (por método)', dre.taxasCartao)}
+                        ${desp('(-) Custo Insumos', dre.cmv)}
+                        ${desp(fixosTxt, dre.custosFixos, ' border-bottom:1px solid #2a2a4a; padding-bottom:10px;')}
+                        <div style="display:flex; justify-content:space-between; padding:10px 0 3px;">
+                            <span style="color:#e8e8e8; font-weight:700; font-size:14px;">= Lucro Líquido Real</span>
+                            <span style="font-weight:700; font-size:14px; color:${lucroCor};">${formatarMoeda(dre.lucroLiquido)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:3px 0 3px 12px;">
+                            <span style="color:#aaa;">Margem Líquida</span>
+                            <span style="font-weight:700; color:${margCor};">${dre.margemLiquida.toFixed(1).replace('.', ',')}%</span>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // DRE Parcial do PERÍODO buscado (De/Até) — mesmo motor canônico e layout do Resumo do Mês.
+        async function renderVendasDreParcial(dataInicio, dataFim) {
+            const box = document.getElementById('vendasDreParcialBox');
+            if (!box) return;
+            try {
+                const [iy, im, idd] = String(dataInicio).split('-').map(Number);
+                const [fy, fm, fdd] = String(dataFim).split('-').map(Number);
+                const start = new Date(iy, im - 1, idd);
+                const end   = new Date(fy, fm - 1, fdd);
+                const dre = await _dreDoPeriodo(start, end, 'custom');
+                if (!dre || !dre.faturamento) { box.innerHTML = ''; box.style.display = 'none'; return; }
+                box.innerHTML = _dreParcialBoxHtml(dre, 'DRE Parcial do Período');
+                box.style.display = 'block';
+            } catch (e) {
+                console.warn('[DRE período]', e);
+                box.innerHTML = ''; box.style.display = 'none';
+            }
+        }
+
         async function _processarPedidosFirestore(rowsCombinadas, dataInicio, dataFim, numPedidos, faturamentoReal, ticketMedio, pagamentos, adicionaisVendidos) {
             const normalizar = str => str.toLowerCase()
                 .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -7886,9 +7944,11 @@
                     const qtd       = row.qtd;
                     const nomeNorm  = normalizar(nomeItem);
 
-                    const receitaMatch = recipes.find(r => {
+                    // Match EXATO primeiro (evita o bug de casar pela 1ª receita por substring:
+                    // "Coca Zero"→"Coca", "Duplo"→"1 carne"); depois fuzzy — igual ao motor canônico.
+                    let receitaMatch = recipes.find(r => normalizar(r.name) === nomeNorm);
+                    if (!receitaMatch) receitaMatch = recipes.find(r => {
                         const recNorm = normalizar(r.name);
-                        if (recNorm === nomeNorm) return true;
                         if (nomeNorm.includes(recNorm) || recNorm.includes(nomeNorm)) return true;
                         const pN = nomeNorm.split(' ').filter(p => p.length > 3);
                         const pR = recNorm.split(' ').filter(p => p.length > 3);
@@ -8012,6 +8072,7 @@
             _dreDias        = _calcDreDias(dataInicio, dataFim);
             _dreDataInicio  = dataInicio; _dreDataFim = dataFim;
             calcularDRE();
+            renderVendasDreParcial(dataInicio, dataFim);   // DRE canônica do período buscado
 
             // RAIZ DO BUG DE FATURAMENTO: NÃO salvar buscas por período na coleção 'vendas'.
             // Esses relatórios sintéticos ('Pedidos Firestore') eram somados pelo híbrido em cima
@@ -8103,9 +8164,10 @@
                 const qtd = row.qtd;
                 const nomeNorm = normalizar(nomeItem);
 
-                const receitaMatch = recipes.find(r => {
+                // Match EXATO primeiro (evita casar pela 1ª receita por substring), depois fuzzy.
+                let receitaMatch = recipes.find(r => normalizar(r.name) === nomeNorm);
+                if (!receitaMatch) receitaMatch = recipes.find(r => {
                     const recNorm = normalizar(r.name);
-                    if (recNorm === nomeNorm) return true;
                     if (nomeNorm.includes(recNorm) || recNorm.includes(nomeNorm)) return true;
                     const palavrasNome = nomeNorm.split(' ').filter(p => p.length > 3);
                     const palavrasRec  = recNorm.split(' ').filter(p => p.length > 3);
@@ -8533,6 +8595,9 @@
         // foi removido — a DRE correta é a "Parcial do Mês" (motor único _dreDoPeriodo).
         function calcularDRE() {
             if (!_dreFaturamento) return;
+            // Reset da DRE do período; só a busca por Firestore a re-exibe (renderVendasDreParcial).
+            const _dreBox = document.getElementById('vendasDreParcialBox');
+            if (_dreBox) { _dreBox.style.display = 'none'; _dreBox.innerHTML = ''; }
             // Retiradas de caixa (calendário) no período — lista + total. SEM "Resultado Líquido"
             // (dependia do lucro do DRE Simplificado removido); por isso não passa lucro.
             const _retBox = document.getElementById('vendasRetiradasBox');
@@ -8571,63 +8636,30 @@
                     faturamento += Number(p.total) || (Number(p.subtotal||0) + Number(p.taxaEntrega||0));
                 }
 
-                // Calcular custo via receitas
-                const mapaItens = new Map();
-                let totalUnidades = 0;
-                for (const p of pedidos) {
-                    for (const item of (p.itens || [])) {
-                        const key = (item.nome || '').toLowerCase().trim();
-                        if (!key) continue;
-                        const qty = Number(item.qty || item.quantidade || 1);
-                        totalUnidades += qty;
-                        if (mapaItens.has(key)) mapaItens.get(key).qtd += qty;
-                        else mapaItens.set(key, { name: item.nome, qtd: qty });
-                    }
-                }
-
-                const normalizar = str => str.toLowerCase()
-                    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-                    .replace(/[^a-z0-9\s]/g, '').trim();
-
-                let custo = 0;
-                for (const [, row] of mapaItens) {
-                    const nomeNorm = normalizar(row.name);
-                    const rec = recipes.find(r => {
-                        const rn = normalizar(r.name);
-                        if (rn === nomeNorm) return true;
-                        if (nomeNorm.includes(rn) || rn.includes(nomeNorm)) return true;
-                        const pN = nomeNorm.split(' ').filter(w => w.length > 3);
-                        const pR = rn.split(' ').filter(w => w.length > 3);
-                        return pN.filter(w => pR.includes(w)).length >= 2;
-                    });
-                    if (rec) custo += row.qtd * (rec.cost || 0);
-                }
-
                 const numPedidos  = pedidos.length;
-                const lucro       = faturamento - custo;
                 const ticketMedio = numPedidos > 0 ? faturamento / numPedidos : 0;
                 const projecao    = diaAtual > 0 ? (faturamento / diaAtual) * diasNoMes : 0;
 
                 const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
                 set('rmFaturamento',      faturamento > 0 ? formatarMoeda(faturamento) : 'R$ 0,00');
-                set('rmCusto',            custo > 0       ? formatarMoeda(custo)       : 'R$ 0,00');
                 set('rmNumPedidos',       numPedidos);
                 set('rmTicketMedio',      ticketMedio > 0 ? formatarMoeda(ticketMedio) : '—');
                 set('rmProjecao',         projecao > 0    ? formatarMoeda(projecao)    : '—');
                 set('rmFaturamentoDias',  `${diaAtual} de ${diasNoMes} dias`);
                 set('rmProjecaoBase',     `base: ${diaAtual} dia${diaAtual !== 1 ? 's' : ''}`);
 
-                const lucroEl = document.getElementById('rmLucro');
-                if (lucroEl) {
-                    lucroEl.textContent = formatarMoeda(lucro);
-                    lucroEl.style.color = lucro >= 0 ? '#27ae60' : '#e74c3c';
-                }
-
-                // DRE parcial — fonte ÚNICA (_dreDoPeriodo): taxa por método + fixos rateados, igual ao Financeiro/Análise
+                // DRE parcial + cards Custo Insumos / Lucro Bruto — fonte ÚNICA (_dreDoPeriodo):
+                // CMV pelo motor canônico (casa a receita EXATA), igual ao Financeiro/Análise.
+                // Nada do CMV legado (recipes.find) que casava "Coca Zero"→"Coca" / "Duplo"→"1 carne".
                 if (faturamento > 0) {
                     const _r   = _anaPeriodRange('mes');
                     const _dre = await _dreDoPeriodo(_r.start, _r.end, 'mes');
                     const _rat = _dre.fixosRateio;
+
+                    set('rmCusto', formatarMoeda(_dre.cmv));
+                    const lucroBruto = _dre.faturamento - _dre.cmv;
+                    const lucroEl = document.getElementById('rmLucro');
+                    if (lucroEl) { lucroEl.textContent = formatarMoeda(lucroBruto); lucroEl.style.color = lucroBruto >= 0 ? '#27ae60' : '#e74c3c'; }
 
                     set('rmDreFat',       formatarMoeda(_dre.faturamento));
                     set('rmDreSimplesTxt',`(-) Simples Nacional ${(_dre.cfg.simples * 100).toFixed(2).replace('.', ',')}%`);
@@ -8645,6 +8677,10 @@
 
                     const dreEl = document.getElementById('rmDRE');
                     if (dreEl) dreEl.style.display = 'block';
+                } else {
+                    set('rmCusto', 'R$ 0,00');
+                    const lucroEl = document.getElementById('rmLucro');
+                    if (lucroEl) { lucroEl.textContent = 'R$ 0,00'; lucroEl.style.color = '#27ae60'; }
                 }
 
                 // Refresca a Precificação (semáforo de CMV real + blend) agora que o mês foi recalculado.
