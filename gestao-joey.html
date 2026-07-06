@@ -1571,11 +1571,6 @@
                         <div class="metric-value" style="color:#27ae60;" id="vendasLucroMes">—</div>
                         <div style="font-size:10px; color:#555; margin-top:3px;">(sem impostos e taxas)</div>
                     </div>
-                    <div class="metric-card" id="cardLucroLiquido" style="display:none;">
-                        <div class="metric-label">Lucro Líquido</div>
-                        <div class="metric-value" id="vendasLucroLiquido">—</div>
-                        <div style="font-size:10px; color:#555; margin-top:3px;">(após impostos e taxas)</div>
-                    </div>
                     <div class="metric-card">
                         <div class="metric-label">Unidades Vendidas</div>
                         <div class="metric-value" id="vendasUnidadesMes">0</div>
@@ -1593,69 +1588,8 @@
                         <div class="metric-value" id="vendasTicketMedio">—</div>
                     </div>
                 </div>
-            <!-- DRE SIMPLIFICADO -->
-            <div id="vendasDRE" style="display:none; margin-bottom:1.5rem;">
-                <div style="background:#1a1a2e; border:1px solid #2a2a4a; border-radius:10px; padding:1.5rem;">
-                    <div style="font-size:11px; font-weight:700; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:16px;">📋 DRE Simplificado</div>
-
-                    <!-- Alíquotas editáveis -->
-                    <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <label style="font-size:11px; color:#777; white-space:nowrap;">Simples Nacional (%)</label>
-                            <input type="number" id="dreSimples" value="6" min="0" max="100" step="0.01"
-                                oninput="calcularDRE()"
-                                style="width:70px; padding:5px 8px; border:1px solid #444; border-radius:6px; font-size:13px; font-weight:700; background:#2c2c2c; color:#e8e8e8; text-align:center;">
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <label style="font-size:11px; color:#777; white-space:nowrap; position:relative;">Taxa Cartão (%)
-                                <span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'"
-                                    style="display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; background:#444; color:#aaa; border-radius:50%; font-size:10px; font-weight:700; cursor:pointer; margin-left:4px; user-select:none;">?</span>
-                                <div style="display:none; position:absolute; z-index:100; background:#1e1e1e; border:1px solid #555; border-radius:8px; padding:12px 14px; font-size:12px; color:#ccc; line-height:1.6; max-width:280px; margin-top:6px; box-shadow:0 4px 16px rgba(0,0,0,0.5);">
-                                    Esta taxa representa a <strong style="color:#f97316;">média ponderada</strong> das taxas cobradas pelas formas de pagamento.<br><br>
-                                    <strong style="color:#aaa;">Exemplo:</strong> se 35% das vendas são no cartão (taxa 3%) e 65% no Pix (taxa 0%), a taxa média é <strong style="color:#f97316;">1,05%</strong>.<br><br>
-                                    Ajuste conforme o mix de pagamento do seu período.
-                                </div>
-                            </label>
-                            <input type="number" id="dreTaxaCartao" value="1.05" min="0" max="100" step="0.01"
-                                oninput="calcularDRE()"
-                                style="width:70px; padding:5px 8px; border:1px solid #444; border-radius:6px; font-size:13px; font-weight:700; background:#2c2c2c; color:#e8e8e8; text-align:center;">
-                        </div>
-                    </div>
-
-                    <!-- Linhas do DRE -->
-                    <div style="font-family:monospace; font-size:14px; display:flex; flex-direction:column; gap:6px;">
-                        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #2a2a4a;">
-                            <span style="color:#e8e8e8;">Faturamento Bruto</span>
-                            <span style="color:#60a5fa; font-weight:700;" id="dreFatBruto">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;" id="dreSimplesTxt">(-) Simples Nacional 6%</span>
-                            <span style="color:#e74c3c;" id="dreSimlesVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;" id="dreCartaoTxt">(-) Taxa Cartão 1,05%</span>
-                            <span style="color:#e74c3c;" id="dreCartaoVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;">(-) Custo Insumos</span>
-                            <span style="color:#e74c3c;" id="dreInsumosVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px; border-bottom:1px solid #2a2a4a; padding-bottom:10px;">
-                            <span style="color:#aaa;" id="dreFixosTxt">(-) Custos Fixos</span>
-                            <span style="color:#e74c3c;" id="dreFixosVal">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:10px 0 4px;">
-                            <span style="color:#e8e8e8; font-weight:700; font-size:15px;">= Lucro Líquido Real</span>
-                            <span style="font-weight:700; font-size:15px;" id="dreLucroLiq">—</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; padding:4px 0; padding-left:12px;">
-                            <span style="color:#aaa;">Margem Líquida</span>
-                            <span style="font-weight:700;" id="dreMargemLiq">—</span>
-                        </div>
-                    </div>
-                </div>
-                <div id="vendasRetiradasBox" style="margin-top:1rem;"></div>
-            </div>
+            <!-- RETIRADAS DE CAIXA (calendário) do período -->
+            <div id="vendasRetiradasBox" style="margin-top:1.5rem;"></div>
 
             </div>
 
@@ -8532,8 +8466,8 @@
         // Bloco visual (dark/orange #E87722): lista das retiradas + total + "Resultado Líquido".
         function _retiradasBoxHtml(lista, total, lucroAntes) {
             total = Number(total) || 0;
-            lucroAntes = Number(lucroAntes) || 0;
-            const resultado = lucroAntes - total;
+            const temResultado = (lucroAntes !== null && lucroAntes !== undefined);
+            const resultado = (Number(lucroAntes) || 0) - total;
             const fmtD = s => { const p = String(s).split('-'); return `${p[2]}/${p[1]}`; };
             const itens = (lista && lista.length)
                 ? lista.map(r => `<div style="display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #2a2a2a; font-size:12px;"><span style="color:#bbb;">${fmtD(r.data)} · ${_calEsc(r.titulo)}</span><span style="color:#e74c3c; font-weight:600; white-space:nowrap;">- ${formatarMoeda(r.valor)}</span></div>`).join('')
@@ -8546,10 +8480,10 @@
                         <span style="color:#aaa;">(−) Total de retiradas</span>
                         <span style="color:#e74c3c; font-weight:700;">- ${formatarMoeda(total)}</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; padding:6px 0;">
+                    ${temResultado ? `<div style="display:flex; justify-content:space-between; padding:6px 0;">
                         <span style="color:#e8e8e8; font-weight:700; font-size:14px;">= Resultado Líquido</span>
                         <span style="font-weight:700; font-size:14px; color:${resultado >= 0 ? '#4ade80' : '#e74c3c'};">${formatarMoeda(resultado)}</span>
-                    </div>
+                    </div>` : ''}
                 </div>`;
         }
 
@@ -8594,63 +8528,17 @@
                 </div>`;
         }
 
+        // Renderiza os blocos extras da busca por período: retiradas de caixa + faturamento
+        // histórico (Anota). O "DRE Simplificado" legado (casava produtos com a receita errada)
+        // foi removido — a DRE correta é a "Parcial do Mês" (motor único _dreDoPeriodo).
         function calcularDRE() {
             if (!_dreFaturamento) return;
-            const fat      = _dreFaturamento;
-            const simples  = (parseFloat(document.getElementById('dreSimples')?.value) || 0) / 100;
-            const cartao   = (parseFloat(document.getElementById('dreTaxaCartao')?.value) || 0) / 100;
-            const custo    = _dreCusto;
-            const diasNoMes = 30; // base comercial fixa, para período que pode cruzar meses
-            const fixosMes = fixedCosts.reduce((s, c) => s + (c.value || 0), 0);
-            const dias     = (_dreDias && _dreDias > 0) ? _dreDias : 30;
-            const fixos    = fixosMes * (dias / diasNoMes);
-
-            const vlSimples = fat * simples;
-            const vlCartao  = fat * cartao;
-            const lucro     = fat - vlSimples - vlCartao - custo - fixos;
-            const margem    = fat > 0 ? (lucro / fat * 100) : 0;
-
-            const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-            const pSimples = (simples * 100).toFixed(2).replace('.', ',');
-            const pCartao  = (cartao  * 100).toFixed(2).replace('.', ',');
-
-            set('dreFatBruto',   formatarMoeda(fat));
-            set('dreSimplesTxt', `(-) Simples Nacional ${pSimples}%`);
-            set('dreSimlesVal',  `- ${formatarMoeda(vlSimples)}`);
-            set('dreCartaoTxt',  `(-) Taxa Cartão ${pCartao}%`);
-            set('dreCartaoVal',  `- ${formatarMoeda(vlCartao)}`);
-            set('dreInsumosVal', `- ${formatarMoeda(custo)}`);
-            set('dreFixosTxt',   `(-) Custos Fixos (${dias} dias)`);
-            set('dreFixosVal',   `- ${formatarMoeda(fixos)}`);
-
-            const lucroEl = document.getElementById('dreLucroLiq');
-            if (lucroEl) {
-                lucroEl.textContent = formatarMoeda(lucro);
-                lucroEl.style.color = lucro >= 0 ? '#4ade80' : '#e74c3c';
-            }
-            const margemEl = document.getElementById('dreMargemLiq');
-            if (margemEl) {
-                margemEl.textContent = `${margem.toFixed(1).replace('.', ',')}%`;
-                margemEl.style.color = margem >= 10 ? '#4ade80' : margem >= 0 ? '#f39c12' : '#e74c3c';
-            }
-
-            // Atualizar card Lucro Líquido no dashboard
-            const cardLL = document.getElementById('cardLucroLiquido');
-            const valLL  = document.getElementById('vendasLucroLiquido');
-            if (cardLL) cardLL.style.display = 'block';
-            if (valLL) {
-                valLL.textContent = formatarMoeda(lucro);
-                valLL.style.color = lucro >= 0 ? '#4ade80' : '#e74c3c';
-            }
-
-            const dre = document.getElementById('vendasDRE');
-            if (dre) dre.style.display = 'block';
-
-            // Retiradas de caixa (calendário) — NÃO altera o faturamento; exibe "Resultado Líquido"
+            // Retiradas de caixa (calendário) no período — lista + total. SEM "Resultado Líquido"
+            // (dependia do lucro do DRE Simplificado removido); por isso não passa lucro.
             const _retBox = document.getElementById('vendasRetiradasBox');
             if (_retBox) {
                 const _ret = _retiradasNoPeriodo(_dreDataInicio, _dreDataFim);
-                _retBox.innerHTML = _retiradasBoxHtml(_ret.lista, _ret.total, lucro);
+                _retBox.innerHTML = _retiradasBoxHtml(_ret.lista, _ret.total);
             }
             // Faturamento histórico (Anota) no período — "Faturamento Bruto Total"
             const _hfBox = document.getElementById('vendasHistFatBox');
