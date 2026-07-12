@@ -1647,9 +1647,34 @@ textarea.fi{resize:vertical;min-height:60px}
     <div style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--text2);margin:2px 0 8px;flex-wrap:wrap">
       <span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#f59e0b;border:2px solid #0f0f0f;vertical-align:middle"></span> Em produção</span>
       <span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#34d399;border:2px solid #0f0f0f;vertical-align:middle"></span> Pronto p/ entrega</span>
+      <span style="color:var(--text3)">|</span>
+      <span title="A casa exata"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#888;border:2px solid #0f0f0f;vertical-align:middle"></span> exato</span>
+      <span title="Só a rua/região — a casa está por perto"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:transparent;border:2px dashed #888;vertical-align:middle"></span> aproximado</span>
+      <span title="Ponto marcado do condomínio (portão)"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgba(136,136,136,.35);border:2px solid #a78bfa;vertical-align:middle"></span> condomínio</span>
       <span id="mapaPedidosAviso" style="margin-left:auto;color:#fbbf24;font-weight:600"></span>
     </div>
     <div id="mapaPedidos" style="flex:1;border-radius:10px;border:1px solid var(--border);background:#0f0f0f;min-height:300px"></div>
+  </div>
+</div>
+
+<!-- MODAL: COORDENADA FIXA DO BAIRRO (condomínios que o Google não acha) -->
+<div class="modal-overlay" id="mapaBairroModal" style="z-index:760" onclick="if(event.target===this)fecharMapaBairro()">
+  <div class="modal-box" style="max-width:760px;width:95vw;height:80vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div class="modal-title" id="mapaBairroTitulo">📍 Marcar bairro no mapa</div>
+      <button class="modal-close" onclick="fecharMapaBairro()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:8px">
+      Clique (ou arraste o pino verde) para marcar <b>a entrada do condomínio</b>. Use isso nos bairros que o Google não conhece
+      — Village 1, Village 2, Garden Park. Os pedidos desses bairros passam a cair nesse ponto quando o Google erra,
+      em vez de irem parar a quilômetros de distância.
+    </div>
+    <div id="mapaBairroMap" style="flex:1;border-radius:10px;border:1px solid var(--border);background:#0f0f0f;min-height:280px"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <span id="mapaBairroCoord" style="font-size:12px;color:var(--text2);flex:1;min-width:200px"></span>
+      <button class="btn btn-ghost" id="mapaBairroRemover" onclick="removerCoordBairro()" style="color:#ff6b6b;border-color:rgba(255,107,107,.3)">Remover coordenada</button>
+      <button class="btn btn-primary" onclick="salvarMapaBairro()">✓ Salvar coordenada</button>
+    </div>
   </div>
 </div>
 
@@ -2222,12 +2247,35 @@ function _renderMapaPedidos() {
     const end = [[c.rua, c.numero].filter(Boolean).join(', '), c.bairro].filter(Boolean).join(' · ') + (c.ref ? `<br><i>Ref: ${_esc(c.ref)}</i>` : '');
     const itens = (p.itens || []).map(i => `${i.qty || i.qtd || 1}× ${_esc(i.nome || '')}`).join(', ');
     const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
-    L.circleMarker([p.geoLat, p.geoLng], { radius: 9, color: '#0f0f0f', weight: 2, fillColor: cor, fillOpacity: .95 })
-      .bindPopup(`<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#999">${itens || '—'}</span><br><b>${total}</b>`)
+
+    // A PRECISÃO É VISÍVEL. Um pino cravado num ponto que é só "a rua" (ou o portão do
+    // condomínio) faz o motoboy confiar em algo que o sistema não sabe — pior que não ter pino.
+    //   exato      → bola cravada (é a casa)
+    //   aproximado → círculo tracejado, oco (é a rua/região; a casa está por perto)
+    //   bairro     → pino no ponto marcado do condomínio (é o portão, não a casa)
+    const prec = p.geoPrecisao || 'exato';   // pedidos antigos (Nominatim) não têm o campo
+    let estilo, aviso;
+    if (prec === 'bairro') {
+      estilo = { radius: 11, color: '#a78bfa', weight: 3, fillColor: cor, fillOpacity: .35, dashArray: null };
+      aviso  = '<br><span style="color:#a78bfa">🏘️ Ponto do condomínio (portão) — não é a casa exata</span>';
+    } else if (prec === 'aproximado') {
+      estilo = { radius: 10, color: cor, weight: 2, fillColor: cor, fillOpacity: .12, dashArray: '4 3' };
+      aviso  = '<br><span style="color:#fbbf24">📍 Localização aproximada — confira o endereço</span>';
+    } else {
+      estilo = { radius: 9, color: '#0f0f0f', weight: 2, fillColor: cor, fillOpacity: .95, dashArray: null };
+      aviso  = '';
+    }
+
+    L.circleMarker([p.geoLat, p.geoLng], estilo)
+      .bindPopup(`<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#999">${itens || '—'}</span><br><b>${total}</b>${aviso}`)
       .addTo(_mapPedidosLayer);
     pts.push([p.geoLat, p.geoLng]);
   });
-  document.getElementById('mapaPedidosAviso').textContent = semGeo > 0 ? `⚠️ ${semGeo} pedido(s) sem localização — não aparecem no mapa` : '';
+  const nAprox = comGeo.filter(p => p.geoPrecisao === 'aproximado' || p.geoPrecisao === 'bairro').length;
+  const avisos = [];
+  if (semGeo > 0)  avisos.push(`⚠️ ${semGeo} sem localização`);
+  if (nAprox > 0)  avisos.push(`${nAprox} aproximado(s)`);
+  document.getElementById('mapaPedidosAviso').textContent = avisos.join(' · ');
   if (pts.length > 1) _mapPedidos.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
   else _mapPedidos.setView([cLat, cLng], 14);
 }
@@ -5102,14 +5150,105 @@ function renderBairros() {
           <button class="icon-btn" onclick="cancelarEditBairro()" title="Cancelar">✕</button>
         </div>`;
     }
+    // Coordenada fixa: existe pros condomínios cujas ruas internas o Google não conhece.
+    // Com ela, o pedido cai no portão em vez de num match errado a 12 km.
+    const temCoord = b.lat != null && b.lng != null;
+    const pinSt = temCoord
+      ? 'font-size:15px;color:#34d399;border-color:rgba(52,211,153,.5)'
+      : 'font-size:15px;color:var(--text3)';
     return `
-      <div style="display:grid;grid-template-columns:1fr 130px auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
-        <span style="font-size:13px;font-weight:500;color:var(--text)">🏘️ ${b.nome}</span>
+      <div style="display:grid;grid-template-columns:1fr 130px auto auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:500;color:var(--text)">🏘️ ${b.nome}${temCoord ? '<span style="font-size:10px;color:#34d399;margin-left:6px;font-weight:600">📍 no mapa</span>' : ''}</span>
         <span style="font-size:13px;color:var(--orange);font-weight:600;text-align:right">R$ ${Number(b.taxa).toFixed(2).replace('.',',')}</span>
+        <button class="icon-btn" onclick="abrirMapaBairro(${i})" style="${pinSt}" title="${temCoord ? 'Coordenada marcada — clique para ajustar' : 'Marcar no mapa (condomínio que o Google não acha)'}">📍</button>
         <button class="icon-btn" onclick="editarBairro(${i})" title="Editar" style="font-size:15px">✏️</button>
         <button class="icon-btn" onclick="removerBairro(${i})" title="Remover">🗑️</button>
       </div>`;
   }).join('');
+}
+
+// ── COORDENADA FIXA DO BAIRRO (mini-mapa) ────────────────────────────────────
+let _mbIdx = -1, _mbMap = null, _mbMarker = null;
+
+function abrirMapaBairro(i) {
+  const b = (config.bairros || [])[i];
+  if (!b) return;
+  _mbIdx = i;
+  document.getElementById('mapaBairroTitulo').textContent = '📍 ' + b.nome;
+  const temCoord = b.lat != null && b.lng != null;
+  const lat = temCoord ? Number(b.lat) : (config.estabelecimentoLat != null ? config.estabelecimentoLat : -22.4655);
+  const lng = temCoord ? Number(b.lng) : (config.estabelecimentoLng != null ? config.estabelecimentoLng : -42.6534);
+  document.getElementById('mapaBairroRemover').style.display = temCoord ? '' : 'none';
+  document.getElementById('mapaBairroModal').classList.add('show');
+
+  setTimeout(() => {
+    if (!_mbMap) {
+      _mbMap = L.map('mapaBairroMap').setView([lat, lng], temCoord ? 17 : 14);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap, © CARTO' }).addTo(_mbMap);
+      _mbMap.on('click', e => _mbSetPino(e.latlng.lat, e.latlng.lng));
+    } else {
+      _mbMap.setView([lat, lng], temCoord ? 17 : 14);
+    }
+    _mbMap.invalidateSize();
+    // Loja como referência (não arrastável)
+    if (config.estabelecimentoLat != null) {
+      L.circleMarker([config.estabelecimentoLat, config.estabelecimentoLng], { radius: 7, color: '#fff', weight: 2, fillColor: '#ff6b35', fillOpacity: 1 })
+        .bindPopup('🏠 Estabelecimento').addTo(_mbMap);
+    }
+    _mbSetPino(lat, lng);
+    _mbAtualizarLabel(temCoord ? lat : null, temCoord ? lng : null);
+  }, 120);
+}
+
+function _mbSetPino(lat, lng) {
+  if (_mbMarker) _mbMap.removeLayer(_mbMarker);
+  _mbMarker = L.circleMarker([lat, lng], { radius: 10, color: '#0f0f0f', weight: 2, fillColor: '#34d399', fillOpacity: .95, draggable: true }).addTo(_mbMap);
+  _mbMarker._latlng = L.latLng(lat, lng);
+  // arrastar: circleMarker não tem drag nativo — usa mousedown + move do mapa
+  _mbMarker.on('mousedown', () => {
+    _mbMap.dragging.disable();
+    const mover = e => _mbSetPino(e.latlng.lat, e.latlng.lng);
+    const soltar = () => { _mbMap.off('mousemove', mover); _mbMap.off('mouseup', soltar); _mbMap.dragging.enable(); };
+    _mbMap.on('mousemove', mover);
+    _mbMap.on('mouseup', soltar);
+  });
+  _mbAtualizarLabel(lat, lng);
+}
+
+function _mbAtualizarLabel(lat, lng) {
+  const el = document.getElementById('mapaBairroCoord');
+  if (!el) return;
+  el.textContent = (lat == null)
+    ? 'Clique no mapa para marcar o portão do condomínio.'
+    : `Coordenada: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+}
+
+function salvarMapaBairro() {
+  const b = (config.bairros || [])[_mbIdx];
+  if (!b || !_mbMarker) return;
+  const ll = _mbMarker.getLatLng();
+  config.bairros[_mbIdx] = { ...b, lat: ll.lat, lng: ll.lng };
+  saveConfig();
+  renderBairros();
+  fecharMapaBairro();
+  notify(`📍 Coordenada de "${b.nome}" salva!`);
+}
+
+function removerCoordBairro() {
+  const b = (config.bairros || [])[_mbIdx];
+  if (!b) return;
+  const novo = { ...b };
+  delete novo.lat; delete novo.lng;
+  config.bairros[_mbIdx] = novo;
+  saveConfig();
+  renderBairros();
+  fecharMapaBairro();
+  notify(`Coordenada de "${b.nome}" removida.`, 'warning');
+}
+
+function fecharMapaBairro() {
+  document.getElementById('mapaBairroModal').classList.remove('show');
+  _mbIdx = -1;
 }
 
 function editarBairro(i) {
@@ -5131,7 +5270,8 @@ function confirmarEditBairro(i) {
   if (isNaN(taxa)) { notify('Informe a taxa de entrega.', 'warning'); return; }
   const duplicado = config.bairros.findIndex(b => b.nome.toLowerCase() === nome.toLowerCase());
   if (duplicado !== -1 && duplicado !== i) { notify('Já existe um bairro com esse nome.', 'warning'); return; }
-  config.bairros[i] = { nome, taxa };
+  // preserva a coordenada fixa (lat/lng) — reescrever o objeto inteiro a apagaria
+  config.bairros[i] = { ...config.bairros[i], nome, taxa };
   _bairroEditIdx = -1;
   saveConfig();
   renderBairros();
