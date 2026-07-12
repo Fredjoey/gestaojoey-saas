@@ -1680,11 +1680,21 @@ function updateCartBtn() {
   if (total > 0) document.getElementById('bnavCarrinho')?.classList.add('has-items');
 }
 
+// ── PREÇO CANÔNICO DO ITEM (mesma fórmula do painel/garçom/NFC-e) ────────────
+// Unitário = preço base + adicionais (preço × qty do adicional). Único lugar que
+// define quanto vale um item — todo total sai daqui.
+function precoUnitario(item) {
+  if (!item) return 0;
+  const base = Number(item.preco != null ? item.preco : item.price) || 0;
+  const adics = (item.adicionais || []).reduce(
+    (s, a) => s + (Number(a && a.preco) || 0) * (Number(a && a.qty != null ? a.qty : 1) || 0), 0);
+  return base + adics;
+}
+function totalItem(item)   { return precoUnitario(item) * (Number(item && item.qty) || 1); }
+function subtotalItens(is) { return (is || []).reduce((s, i) => s + totalItem(i), 0); }
+
 function cartTotal() {
-  return cart.reduce((s, i) => {
-    const adicionaisUnit = (i.adicionais || []).reduce((a, x) => a + x.preco * x.qty, 0);
-    return s + (i.preco + adicionaisUnit) * i.qty;
-  }, 0);
+  return subtotalItens(cart);
 }
 
 function openCart() {
@@ -1725,7 +1735,6 @@ function renderStepCart(el) {
     return;
   }
   const itens = cart.map((i, idx) => {
-    const adicionaisUnit = (i.adicionais || []).reduce((a, x) => a + x.preco * x.qty, 0);
     const adicionaisHtml = (i.adicionais || []).filter(a => a.qty > 0).map(a =>
       `<div style="font-size:11px;color:var(--text2)">+ ${a.qty}x ${a.nome}</div>`
     ).join('');
@@ -1744,7 +1753,7 @@ function renderStepCart(el) {
         <span class="qty-num">${i.qty}</span>
         <button class="qty-btn" onclick="changeCartQty('${i.id}',1)">+</button>
       </div>
-      <div class="cart-item-price">R$ ${((i.preco + adicionaisUnit) * i.qty).toFixed(2).replace('.',',')}</div>
+      <div class="cart-item-price">R$ ${totalItem(i).toFixed(2).replace('.',',')}</div>
     </div>
   `;
   }).join('');
@@ -2144,13 +2153,14 @@ async function salvarCarrinhoAbandonado(clienteData) {
     const itens = cart.map(item => ({
       nome: item.nome,
       preco: item.preco,
-      qty: item.qty
+      qty: item.qty,
+      adicionais: (item.adicionais || []).map(a => ({ ...a })),
     }));
     await db.collection(`clientes/${slug}/carrinhos`).doc('tel_' + clienteData.tel.replace(/\D/g, '')).set({
       tel: clienteData.tel,
       nome: clienteData.nome,
       itens: itens,
-      total: cart.reduce((s, i) => s + i.preco * i.qty, 0),
+      total: cartTotal(),
       tipoEntrega: tipoEntrega,
       criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
       status: 'pendente',
@@ -2394,8 +2404,7 @@ function enviarWhatsApp(pedido) {
   const numeroEstabelecimento = CONFIG.wpp || '5500000000000';
 
   const itensTexto = pedido.itens.map(i => {
-    const adicionaisUnit = (i.adicionais || []).reduce((a, x) => a + x.preco * x.qty, 0);
-    let linha = `• ${i.qty}x ${i.nome}${i.obs ? ` (${i.obs})` : ''} — R$ ${((i.preco + adicionaisUnit) * i.qty).toFixed(2).replace('.', ',')}`;
+    let linha = `• ${i.qty}x ${i.nome}${i.obs ? ` (${i.obs})` : ''} — R$ ${totalItem(i).toFixed(2).replace('.', ',')}`;
     if (i.adicionais && i.adicionais.length > 0) {
       linha += '\n' + i.adicionais.map(a => `  + ${a.grupo ? a.grupo + ': ' + a.nome : a.qty + 'x ' + a.nome}`).join('\n');
     }

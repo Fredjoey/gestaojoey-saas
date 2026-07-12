@@ -2114,6 +2114,21 @@ const KANBAN_COLS = [
   {key:'entregue', cls:'col-entregue', title:'Entregues hoje'},
 ];
 
+// ── PREÇO CANÔNICO DO ITEM ───────────────────────────────────────────────────
+// Fonte única de verdade. O preço unitário de um item É o preço base + os
+// adicionais dele. NÃO depender de `precoTotal`: esse campo só era gravado pelo
+// Novo Pedido do painel — pedido vindo do cardápio, garçom, mesa ou WhatsApp não
+// tem, e o fallback pro preço base fazia os adicionais sumirem do total.
+function precoUnitario(item) {
+  if (!item) return 0;
+  const base = Number(item.preco != null ? item.preco : item.price) || 0;
+  const adics = (item.adicionais || []).reduce(
+    (s, a) => s + (Number(a && a.preco) || 0) * (Number(a && a.qty != null ? a.qty : 1) || 0), 0);
+  return base + adics;
+}
+function totalItem(item)   { return precoUnitario(item) * (Number(item && item.qty) || 1); }
+function subtotalItens(is) { return (is || []).reduce((s, i) => s + totalItem(i), 0); }
+
 let pedidos=[], cardapio=[], config={}, recipes=[], catalogoStatusMap={}, adicionaisBiblioteca=[];
 let catOrdem = [];   // ['Cat1', 'Cat2', ...] — salvo em config/catOrdem
 let catsOcultas = []; // categorias ocultas no cardápio do cliente — salvo em config/catOrdem.ocultas
@@ -3549,7 +3564,7 @@ function gerarHtmlComandaMesa(p, mesaNome) {
   const dash = '- '.repeat(Math.floor(W/2));
 
   const itensHtml = (p.itens || []).map(i => {
-    const unitPrice = i.precoTotal != null ? i.precoTotal : i.preco;
+    const unitPrice = precoUnitario(i);
     const val = 'R$ ' + ((unitPrice || 0) * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
       const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
@@ -3634,7 +3649,7 @@ function gerarHtmlPedidoProducao(p) {
   else if (p.entrega === 'retirada') tipo = 'PARA LEVAR';
 
   const itensHtml = (p.itens || []).map(i => {
-    const unitPrice = i.precoTotal != null ? i.precoTotal : i.preco;
+    const unitPrice = precoUnitario(i);
     const val = 'R$ ' + (unitPrice * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
       const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
@@ -3967,8 +3982,7 @@ function openOrderModal(id) {
   document.getElementById('modalTitle').textContent=`Pedido ${p.id}`;
   const st=STATUS_LABELS[p.status], next=STATUS_NEXT[p.status];
   const itensHtml=(p.itens||[]).map(i=>{
-    const adicionaisUnit=(i.adicionais||[]).reduce((s,a)=>s+(a.preco||0)*(a.qty||0),0);
-    const itemTotal=(i.preco+adicionaisUnit)*i.qty;
+    const itemTotal=totalItem(i);
     const adicionaisHtml=(i.adicionais||[]).filter(a=>a.qty>0).map(a=>{
       const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${a.qty}× ${a.nome}`;
       const val = (a.preco||0) > 0 ? ` — R$ ${((a.preco||0)*(a.qty||0)).toFixed(2).replace('.',',')}` : ' — incluso';
@@ -4036,8 +4050,7 @@ function pedirNovamente(id) {
     qty:        i.qty       || 1,
     obs:        i.obs       || '',
     emoji:      i.emoji     || '🍽️',
-    adicionais: i.adicionais ? [...i.adicionais] : [],
-    ...(i.precoTotal != null ? { precoTotal: i.precoTotal } : {}),
+    adicionais: (i.adicionais || []).map(a => ({ ...a })),
   }));
   const tipoMap = { delivery: 'npTipoDelivery', local: 'npTipoLocal', retirada: 'npTipoParaLevar' };
   const btnEl = document.getElementById(tipoMap[p.entrega] || 'npTipoParaLevar');
@@ -6200,7 +6213,7 @@ function npDescTipoChange() {
 }
 
 function npAtualizarTotalGlobal() {
-  const subtotal = _npCart.reduce((s, i) => s + (i.precoTotal != null ? i.precoTotal : i.preco) * i.qty, 0);
+  const subtotal = subtotalItens(_npCart);
   const d = _npCalcDesconto(subtotal);
   const total = Math.max(0, subtotal - d.valorAplicado) + _npTaxa;  // total nunca negativo
   const bd = document.getElementById('npBreakdown');
@@ -6405,8 +6418,6 @@ function npConfirmarDetalhe() {
     })
     .filter(Boolean);
   const obs      = (document.getElementById('npDObs')?.value || '').trim();
-  const adicsSum = selectedAdics.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
-  const precoTotal = preco + adicsSum;
 
   const existente = _npCart.find(i =>
     i.id === prod.id &&
@@ -6416,7 +6427,7 @@ function npConfirmarDetalhe() {
   if (existente) {
     existente.qty += _npDetailQty;
   } else {
-    _npCart.push({ id: prod.id, nome, preco, precoTotal, qty: _npDetailQty, adicionais: selectedAdics, obs, emoji });
+    _npCart.push({ id: prod.id, nome, preco, qty: _npDetailQty, adicionais: selectedAdics, obs, emoji });
   }
   npFecharDetalhe();
   npRenderCart();
@@ -6448,7 +6459,7 @@ function npRenderCart() {
   }
   wrap.style.display = '';
   cartEl.innerHTML = _npCart.map((item, idx) => {
-    const unitPrice = item.precoTotal != null ? item.precoTotal : item.preco;
+    const unitPrice = precoUnitario(item);
     const sub = unitPrice * item.qty;
     const adicsHtml = (item.adicionais || []).length
       ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${item.adicionais.map(a=>(a.qty&&a.qty>1?a.qty+'x ':'')+a.nome).join(', ')}</div>`
@@ -6593,7 +6604,7 @@ async function npConfirmar() {
   const rua    = _npTipo === 'delivery' ? (document.getElementById('npRua').value    || '').trim() : '';
   const bairro = _npTipo === 'delivery' ? (document.getElementById('npBairro').value || '').trim() : '';
   if (_npTipo === 'delivery' && !bairro) { notify('Selecione o bairro para delivery.', 'warning'); return; }
-  const subtotal = _npCart.reduce((s, i) => s + (i.precoTotal != null ? i.precoTotal : i.preco) * i.qty, 0);
+  const subtotal = subtotalItens(_npCart);
   const _desc    = _npCalcDesconto(subtotal);
   const total    = Math.max(0, subtotal - _desc.valorAplicado) + _npTaxa;  // total já com desconto
   const contadorRef = db.doc(`clientes/${slug}/config/contador`);
@@ -6982,7 +6993,7 @@ function epAdicionarItem(id) {
   if (!p) return;
   const existente = _epCart.find(i => String(i.id) === String(id) && !i.adicionais?.length && !i.obs);
   if (existente) { existente.qty++; }
-  else _epCart.push({ id: p.id, nome: p.name||p.nome||'—', preco: p.price||p.preco||0, precoTotal: p.price||p.preco||0, qty: 1, obs: '', adicionais: [], emoji: EMOJI_CAT_PAINEL[p.categoria||'Outros']||'🍽️' });
+  else _epCart.push({ id: p.id, nome: p.name||p.nome||'—', preco: p.price||p.preco||0, qty: 1, obs: '', adicionais: [], emoji: EMOJI_CAT_PAINEL[p.categoria||'Outros']||'🍽️' });
   epRenderCart();
 }
 
@@ -6999,7 +7010,7 @@ function epRenderCart() {
   wrap.style.display = '';
   _epAdicsDispCache = {};
   cartEl.innerHTML = _epCart.map((item, idx) => {
-    const unit = item.precoTotal != null ? item.precoTotal : item.preco;
+    const unit = precoUnitario(item);
     const sub  = unit * item.qty;
 
     // Adicionais disponíveis para este produto
@@ -7083,8 +7094,6 @@ function epToggleAdic(itemIdx, adicKey, checked) {
   } else {
     item.adicionais = item.adicionais.filter(a => _epAdicKey(a) !== adicKey);
   }
-  const adicsSum  = item.adicionais.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
-  item.precoTotal = item.preco + adicsSum;
   epRenderCart();
   epAtualizarTotal();
 }
@@ -7098,16 +7107,27 @@ function epAjustarAdic(itemIdx, adicKey, delta) {
   if (adic.qty <= 0) {
     item.adicionais = item.adicionais.filter(a => _epAdicKey(a) !== adicKey);
   }
-  const adicsSum  = item.adicionais.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
-  item.precoTotal = item.preco + adicsSum;
   epRenderCart();
   epAtualizarTotal();
 }
 
+// Desconto do pedido em edição: percentual reaplica sobre o novo subtotal; valor
+// fixo é mantido (nunca passa do subtotal). Sem desconto → 0.
+function _epDescontoAplicado(subtotal) {
+  const p = pedidos.find(x => x.id === _epPedidoId);
+  const d = p && p.desconto;
+  if (!d) return 0;
+  const bruto = d.tipo === 'percent'
+    ? subtotal * ((Number(d.valor) || 0) / 100)
+    : (Number(d.valorAplicado != null ? d.valorAplicado : d.valor) || 0);
+  return Math.min(Math.max(bruto, 0), subtotal);
+}
+
 function epAtualizarTotal() {
-  const sub = _epCart.reduce((s, i) => s + (i.precoTotal != null ? i.precoTotal : i.preco) * i.qty, 0);
-  const el  = document.getElementById('epTotal');
-  if (el) el.textContent = 'R$ ' + (sub + _epTaxa).toFixed(2).replace('.', ',');
+  const sub   = subtotalItens(_epCart);
+  const total = Math.max(0, sub - _epDescontoAplicado(sub)) + _epTaxa;
+  const el    = document.getElementById('epTotal');
+  if (el) el.textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
 }
 
 async function epConfirmar() {
@@ -7115,9 +7135,14 @@ async function epConfirmar() {
   const p = pedidos.find(x => x.id === _epPedidoId);
   if (!p) return;
   if (_epTipo === 'delivery' && !document.getElementById('epBairro').value) { notify('Selecione o bairro para delivery.', 'warning'); return; }
-  const subtotal = _epCart.reduce((s, i) => s + (i.precoTotal != null ? i.precoTotal : i.preco) * i.qty, 0);
-  const total    = subtotal + _epTaxa;
-  const updates  = { itens: _epCart.map(i => ({ ...i })), subtotal, taxaEntrega: _epTaxa, total, entrega: _epTipo };
+  const subtotal = subtotalItens(_epCart);
+  const descAplic = _epDescontoAplicado(subtotal);
+  const total    = Math.max(0, subtotal - descAplic) + _epTaxa;
+  const updates  = {
+    itens: _epCart.map(i => ({ ...i, adicionais: (i.adicionais || []).map(a => ({ ...a })) })),
+    subtotal, taxaEntrega: _epTaxa, total, entrega: _epTipo,
+  };
+  if (p.desconto) updates.desconto = { ...p.desconto, valorAplicado: descAplic };
   if (_epPagamento) updates.pagamento = _epPagamento;
   if (_epTipo === 'delivery') {
     updates.cliente = { ...(p.cliente || {}), rua: (document.getElementById('epRua').value||'').trim(), bairro: document.getElementById('epBairro').value };
@@ -8558,12 +8583,7 @@ function montarResumoPedido(p) {
   });
 
   let subtotal = p.subtotal;
-  if (subtotal == null) {
-    subtotal = itens.reduce((s, it) => {
-      const adic = (it.adicionais || []).reduce((x, a) => x + (a.preco || 0) * (a.qty || 0), 0);
-      return s + ((it.preco || 0) + adic) * (it.qty || 1);
-    }, 0);
-  }
+  if (subtotal == null) subtotal = subtotalItens(itens);
   const taxa  = Number(p.taxaEntrega || 0);
   const total = p.total != null ? p.total : subtotal + taxa;
 
@@ -9411,8 +9431,7 @@ function _contaItens(mesaId) {
   const out = [];
   Object.entries(comandas).sort(([a], [b]) => a.localeCompare(b)).forEach(([cId, c]) => {
     (c.itens || []).forEach((it, idx) => {
-      const adicSum = (it.adicionais || []).reduce((s, a) => s + (Number(a.preco) || 0) * (Number(a.qty) || 1), 0);
-      const linha = ((Number(it.preco) || 0) + adicSum) * (Number(it.qty) || 1);
+      const linha = totalItem(it);
       const key = cId + '#' + idx;
       out.push({ key, nome: it.nome, qty: it.qty || 1, adicionais: it.adicionais || [], obs: it.obs || '', linha, pago: pagos.has(key) });
     });
@@ -9831,7 +9850,7 @@ function pedirConfirmacaoPagamentoPessoa() {
   Object.entries(remover).forEach(([cId, idxSet]) => {
     if (!newComandas[cId]) return;
     newComandas[cId] = { ...newComandas[cId], itens: newComandas[cId].itens.filter((_, i) => !idxSet.has(i)) };
-    newComandas[cId].total = newComandas[cId].itens.reduce((s, it) => s + (it.preco||0)*(it.qty||1), 0);
+    newComandas[cId].total = subtotalItens(newComandas[cId].itens);
     if (newComandas[cId].itens.length === 0) delete newComandas[cId];
   });
 
@@ -10125,11 +10144,10 @@ function adicionarAoCarrinhoMesa() {
     })
     .filter(Boolean);
 
-  const obs      = (document.getElementById('pdObsInput')?.value || '').trim();
-  const adicsSum = selectedAdics.reduce((s, a) => s + (a.preco || 0) * (a.qty || 1), 0);
-  const total    = (preco + adicsSum) * _pdQty;
+  const obs  = (document.getElementById('pdObsInput')?.value || '').trim();
+  const item = { id: prod.id, nome, preco, qty: _pdQty, adicionais: selectedAdics, obs };
 
-  _pedidoMesaCart.push({ id: prod.id, nome, preco, qty: _pdQty, adicionais: selectedAdics, obs, total });
+  _pedidoMesaCart.push({ ...item, total: totalItem(item) });
   fecharProdDetalhe();
   renderPedidoMesaModal();
 }
@@ -10149,7 +10167,7 @@ async function confirmarPedidoMesa() {
 
   const m         = mesasData[_pedidoMesaId] || {};
   const hora      = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
-  const subtotal  = _pedidoMesaCart.reduce((s, i) => s + i.total, 0);
+  const subtotal  = subtotalItens(_pedidoMesaCart);
   const itens     = _pedidoMesaCart.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, adicionais: i.adicionais, obs: i.obs }));
   const isEditing = !!_editandoComandaId;
   const comandaId = isEditing ? _editandoComandaId : String(Date.now());
@@ -10248,15 +10266,17 @@ function abrirEditarComanda(mesaId, mesaNome, comandaId) {
   _pedidoMesaId      = mesaId;
   _pedidoMesaNome    = mesaNome;
   _editandoComandaId = comandaId;
-  _pedidoMesaCart    = (comanda.itens || []).map(it => ({
-    id:        it.id,
-    nome:      it.nome,
-    preco:     it.preco  || 0,
-    qty:       it.qty    || 1,
-    adicionais:it.adicionais || [],
-    obs:       it.obs    || '',
-    total:     ((it.preco || 0) + (it.adicionais || []).reduce((s, a) => s + (a.preco || 0), 0)) * (it.qty || 1)
-  }));
+  _pedidoMesaCart    = (comanda.itens || []).map(it => {
+    const item = {
+      id:        it.id,
+      nome:      it.nome,
+      preco:     it.preco  || 0,
+      qty:       it.qty    || 1,
+      adicionais:(it.adicionais || []).map(a => ({ ...a })),
+      obs:       it.obs    || '',
+    };
+    return { ...item, total: totalItem(item) };
+  });
 
   _pmBusca = '';
   renderPedidoMesaModal();

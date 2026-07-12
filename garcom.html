@@ -342,6 +342,17 @@ function _sub(makeRef, onData, label){
     );
   })();
 }
+// ── PREÇO CANÔNICO DO ITEM (mesma fórmula do painel/cardápio/NFC-e) ──────────
+// Unitário = preço base + adicionais (preço × qty do adicional).
+function precoUnitario(item){
+  if(!item) return 0;
+  const base=Number(item.preco!=null?item.preco:item.price)||0;
+  const adics=(item.adicionais||[]).reduce((s,a)=>s+(Number(a&&a.preco)||0)*(Number(a&&a.qty!=null?a.qty:1)||0),0);
+  return base+adics;
+}
+function totalItem(item){ return precoUnitario(item)*(Number(item&&item.qty)||1); }
+function subtotalItens(is){ return (is||[]).reduce((s,i)=>s+totalItem(i),0); }
+
 function _iniciarDados(){
   if (_started) return; _started = true;
   _sub(() => db.doc(`clientes/${slug}/config/loja`), s=>{
@@ -492,7 +503,7 @@ function _renderMesaAberta(){
     ? `<div class="empty" style="padding:2rem 0">Mesa livre — nenhum item lançado.</div>`
     : linhas.map(it=>{
         const adic=(it.adicionais||[]).filter(a=>(a.qty||1)>0).map(a=>a.grupo?`${_esc(a.grupo)}: ${_esc(a.nome)}`:`+ ${_esc(a.nome)}`).join(' · ');
-        const linhaVal=((Number(it.preco)||0)+(it.adicionais||[]).reduce((s,a)=>s+(Number(a.preco)||0)*(Number(a.qty)||1),0))*(Number(it.qty)||1);
+        const linhaVal=totalItem(it);
         return `<div class="citm"><div style="flex:1"><div class="citm-nome">${it.qty}× ${_esc(it.nome)}</div>${adic?`<div class="citm-add">${adic}</div>`:''}${it.obs?`<div class="citm-add">📝 ${_esc(it.obs)}</div>`:''}</div><div class="citm-val">${fmt(linhaVal)}</div></div>`;
       }).join('') + `<div style="display:flex;justify-content:space-between;padding:12px 4px 0;font-weight:800"><span>Total</span><span style="color:var(--orange);font-size:18px">${fmt(total)}</span></div>`;
   const f = document.getElementById('mesaSheetF');
@@ -532,7 +543,7 @@ function renderProdList(){
       }).join('');
   let cartHtml='';
   if(_cart.length){
-    const tot=_cart.reduce((s,i)=>s+i.total,0);
+    const tot=subtotalItens(_cart);
     cartHtml=`<div class="cart"><div class="fl" style="margin-bottom:8px">🛒 Pedido (${_cart.length})</div>
       ${_cart.map((it,idx)=>`<div class="citem"><div style="flex:1"><div class="citem-nome">${it.qty}× ${_esc(it.nome)}</div>${(it.adicionais||[]).map(a=>`<div class="citem-sub">${a.grupo?_esc(a.grupo)+': '+_esc(a.nome):'+ '+_esc(a.nome)}${a.preco>0?' (+'+fmt(a.preco)+')':''}</div>`).join('')}${it.obs?`<div class="citem-sub">📝 ${_esc(it.obs)}</div>`:''}</div><div style="text-align:right"><div class="citem-tot">${fmt(it.total)}</div><button class="crm" onclick="event.stopPropagation();_rmCart(${idx})">✕ remover</button></div></div>`).join('')}
       <div style="display:flex;justify-content:space-between;padding:10px 4px;font-weight:800"><span>Total</span><span style="color:var(--orange);font-size:17px">${fmt(tot)}</span></div>
@@ -597,8 +608,8 @@ function addCart(){
   const grupoDoItem={}; (p.adicionaisGrupos||[]).forEach(g=>(g.itens||[]).forEach(id=>grupoDoItem[String(id)]=g.nome));
   const adic=Object.entries(_pdSel).filter(([,q])=>q>0).map(([id,q])=>{ const a=adicCatalogo[id]; if(!a)return null; const it={id,nome:a.nome,preco:a.preco||0,qty:q}; if(grupoDoItem[String(id)])it.grupo=grupoDoItem[String(id)]; return it; }).filter(Boolean);
   const obs=(document.getElementById('pdObs')?.value||'').trim();
-  const adicSum=adic.reduce((s,a)=>s+(a.preco||0)*(a.qty||1),0);
-  _cart.push({ id:p.id, nome, preco, qty:_pdQty, adicionais:adic, obs, total:(preco+adicSum)*_pdQty });
+  const item={ id:p.id, nome, preco, qty:_pdQty, adicionais:adic, obs };
+  _cart.push({ ...item, total:totalItem(item) });
   fechar('prodSheet'); renderProdList();
 }
 
@@ -611,7 +622,7 @@ async function confirmarPedido(){
   if(!_cart.length){ toast('Adicione ao menos um item'); return; }
   const hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
   const data=new Date().toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
-  const subtotal=_cart.reduce((s,i)=>s+i.total,0);
+  const subtotal=subtotalItens(_cart);
   const itens=_cart.map(i=>({id:i.id,nome:i.nome,preco:i.preco,qty:i.qty,adicionais:i.adicionais,obs:i.obs}));
   try{
     if(_modo==='mesa' && _mesaId){
@@ -649,8 +660,7 @@ function _contaItens(mesaId){
   const out=[];
   Object.entries(comandas).sort(([a],[b])=>a.localeCompare(b)).forEach(([cId,c])=>{
     (c.itens||[]).forEach((it,idx)=>{
-      const adicSum=(it.adicionais||[]).reduce((s,a)=>s+(Number(a.preco)||0)*(Number(a.qty)||1),0);
-      const linha=((Number(it.preco)||0)+adicSum)*(Number(it.qty)||1);
+      const linha=totalItem(it);
       const key=cId+'#'+idx;
       out.push({key,nome:it.nome,qty:it.qty||1,adicionais:it.adicionais||[],obs:it.obs||'',linha,pago:pagos.has(key)});
     });
