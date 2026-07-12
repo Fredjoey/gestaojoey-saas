@@ -2220,6 +2220,13 @@ function abrirMapaPedidos() {
   setTimeout(_renderMapaPedidos, 100);   // espera o modal exibir → invalidateSize correto
 }
 function fecharMapaPedidos() { document.getElementById('mapaPedidosModal').classList.remove('show'); }
+
+// Street View no ponto do pedido — abre o Google numa aba (o mapa segue Leaflet/OSM, sem custo).
+// Formato oficial da Maps URLs API; o Google casa com o panorama mais próximo do viewpoint.
+function streetViewUrl(lat, lng) {
+  if (lat == null || lng == null) return '';
+  return 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + lat + ',' + lng;
+}
 function _renderMapaPedidos() {
   const el = document.getElementById('mapaPedidos');
   if (!el || typeof L === 'undefined') return;
@@ -2266,8 +2273,15 @@ function _renderMapaPedidos() {
       aviso  = '';
     }
 
+    // "Ver a rua": só existe quando há coordenada (todo pino plotado tem — a checagem
+    // é defensiva). Ajuda o motoboy/atendente a reconhecer a fachada antes de sair.
+    const sv = streetViewUrl(p.geoLat, p.geoLng);
+    const svBtn = sv
+      ? `<br><a href="${sv}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;padding:5px 10px;background:#243447;color:#7cc4ff;border:1px solid #2f4763;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none">👁 Ver a rua</a>`
+      : '';
+
     L.circleMarker([p.geoLat, p.geoLng], estilo)
-      .bindPopup(`<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#999">${itens || '—'}</span><br><b>${total}</b>${aviso}`)
+      .bindPopup(`<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#999">${itens || '—'}</span><br><b>${total}</b>${aviso}${svBtn}`)
       .addTo(_mapPedidosLayer);
     pts.push([p.geoLat, p.geoLng]);
   });
