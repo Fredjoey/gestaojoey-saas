@@ -1,5 +1,5 @@
-// ── PREÇO CANÔNICO DO ITEM (referência p/ scripts: auditoria e teste) ────────
-// Espelha a mesma fórmula usada no painel.html / cardapio.html / garcom.html:
+// ── PREÇO CANÔNICO DO ITEM ───────────────────────────────────────────────────
+// Mesma fórmula usada no painel.html / cardapio.html / garcom.html:
 //
 //   unitário = preço base + Σ (adicional.preco × adicional.qty)
 //   total do item = unitário × item.qty
@@ -8,9 +8,12 @@
 // Pedido vindo do cardápio, garçom, mesa ou WhatsApp não tem o campo — confiar
 // nele fazia os adicionais sumirem do total.
 //
-// ⚠️ A NFC-e (functions/index.js) NÃO usa esta fórmula: ela continua emitindo a
-// nota só com o preço base do item (adicionais, taxa de entrega e desconto ficam
-// de fora). Isso é PROPOSITAL — decisão fiscal pendente com o contador.
+// Usada também na NFC-e (functions/index.js) para o valor unitário do item, de
+// modo que a nota declare o valor real da venda.
+//
+// ⚠️ ESCOPO FISCAL: a NFC-e inclui os ADICIONAIS, mas continua SEM a taxa de
+// entrega (valor_frete: 0) e SEM o desconto do pedido — isso é PROPOSITAL,
+// decisão pendente com o contador. Não mexer sem ele pedir.
 
 function precoUnitario(item) {
   if (!item) return 0;

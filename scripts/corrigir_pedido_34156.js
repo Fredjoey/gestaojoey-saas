@@ -12,7 +12,7 @@
  *      (sem --aplicar faz dry-run e não escreve nada)
  */
 const admin = require('firebase-admin');
-const { subtotalItens } = require('./preco');
+const { subtotalItens } = require('../functions/preco');
 
 admin.initializeApp({ credential: admin.credential.cert('./serviceAccount-gestaojoey.json') });
 const db = admin.firestore();

@@ -14,7 +14,7 @@
  *   node scripts/auditar_totais_pedidos.js joey         # só um slug
  */
 const admin = require('firebase-admin');
-const { subtotalItens } = require('./preco');
+const { subtotalItens } = require('../functions/preco');
 
 admin.initializeApp({ credential: admin.credential.cert('./serviceAccount-gestaojoey.json') });
 const db = admin.firestore();
