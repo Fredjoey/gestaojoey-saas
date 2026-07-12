@@ -47,6 +47,7 @@
   .rota-sheet.show{display:flex}
   .rota-card{background:var(--card);border:1px solid var(--border);border-radius:18px 18px 0 0;width:100%;max-width:560px;padding:18px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px}
   .rota-title{font-size:14px;color:var(--text2);text-align:center;margin-bottom:4px}
+  .rota-status{font-size:12px;font-weight:700;text-align:center;margin-bottom:6px;min-height:16px}
   .rota-opt{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:14px;padding:16px;font-size:16px;font-weight:800;text-decoration:none}
   .rota-opt:active{filter:brightness(1.25)}
   .rota-cancel{background:none;border:none;color:var(--text2);font-size:15px;font-weight:700;padding:12px;font-family:inherit;cursor:pointer}
@@ -67,10 +68,11 @@
     <div id="conteudo"><div class="skel"></div><div class="skel"></div></div>
   </div>
 
-  <!-- Menu de escolha do app de rota (todas as URLs SEM origem → usam o GPS do motoboy) -->
+  <!-- Menu de escolha do app de rota. origin = GPS real do motoboy (fallback: sem origem) -->
   <div id="rotaSheet" class="rota-sheet" onclick="if(event.target===this)fecharRota()">
     <div class="rota-card">
       <div class="rota-title">Abrir rota com…</div>
+      <div class="rota-status" id="rotaStatus"></div>
       <a class="rota-opt" id="rotaGoogle" target="_blank" rel="noopener" onclick="fecharRota()">🗺️ Google Maps</a>
       <a class="rota-opt" id="rotaWaze"   target="_blank" rel="noopener" onclick="fecharRota()">🚗 Waze</a>
       <a class="rota-opt" id="rotaApple"  target="_blank" rel="noopener" onclick="fecharRota()">🍎 Apple Maps</a>
@@ -144,18 +146,75 @@ function enderecoTxt(c) {
   const l1 = [c.rua, c.numero].filter(Boolean).join(', ');
   return [l1, c.bairro].filter(Boolean).join(' · ');
 }
-function destinoRota(c) {
-  if (!c) return '';
-  // endereço em TEXTO (mais preciso que a coord nível-de-rua do OSM): rua, número, bairro, cidade, estado
-  return [c.rua, c.numero, c.bairro, c.cidade || _lojaGeo.cidade, _lojaGeo.estado].filter(Boolean).join(', ');
+// DESTINO — coordenada quando o Google achou a CASA (geoPrecisao 'exato'); senão, texto.
+// O texto é frágil: tem pedido com "Jonas burguers, S/N" no lugar da rua. Quando a
+// coordenada é confiável, ela ganha. Nos demais casos (aproximado/bairro/sem geo) o
+// texto é melhor, porque a coord seria só a rua ou o portão do condomínio.
+function destinoRota(p) {
+  const c = (p && p.cliente) || {};
+  if (p && p.geoPrecisao === 'exato' && p.geoLat != null && p.geoLng != null) {
+    return { txt: p.geoLat + ',' + p.geoLng, coord: true };
+  }
+  const txt = [c.rua, c.numero, c.bairro, c.cidade || _lojaGeo.cidade, _lojaGeo.estado].filter(Boolean).join(', ');
+  return { txt, coord: false };
 }
-// Menu de escolha do app — todas as URLs SEM origem → o app parte do GPS do motoboy.
-function abrirRotaMenu(encDest) {
+
+// ORIGEM — GPS REAL do celular do motoboy.
+// Sem `origin=`, o Google Maps *web* (o que abre no navegador do WhatsApp, onde não há
+// permissão de GPS) chuta a origem pelo IP da operadora — daí a rota "começar" em outra
+// cidade. Passando a coordenada dele, a rota parte de onde ele está: na loja ou na rua.
+let _rotaDest = '', _rotaDestCoord = false;
+
+function _pegarGps(timeoutMs) {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    let feito = false;
+    const encerra = (v) => { if (feito) return; feito = true; resolve(v); };
+    setTimeout(() => encerra(null), timeoutMs);                    // GPS lento não pode segurar a rota
+    navigator.geolocation.getCurrentPosition(
+      pos => encerra({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6) }),
+      ()  => encerra(null),                                        // negou permissão ou falhou → fallback
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60000 }
+    );
+  });
+}
+
+function _rotaSetHrefs(origem) {
+  const d = _rotaDest;
+  const o = origem ? encodeURIComponent(origem.lat + ',' + origem.lng) : '';
+  document.getElementById('rotaGoogle').href =
+    'https://www.google.com/maps/dir/?api=1&destination=' + d + (o ? '&origin=' + o : '') + '&travelmode=driving';
+  // Waze só navega a partir do GPS do próprio app (não aceita origem) — some com o `q=`
+  // quando o destino é coordenada, que é o formato que ele entende de verdade.
+  document.getElementById('rotaWaze').href =
+    'https://waze.com/ul?' + (_rotaDestCoord ? 'll=' + d : 'q=' + d) + '&navigate=yes';
+  document.getElementById('rotaApple').href =
+    'https://maps.apple.com/?daddr=' + d + (o ? '&saddr=' + o : '') + '&dirflg=d';
+}
+
+function _rotaStatus(estado) {
+  const el = document.getElementById('rotaStatus');
+  if (!el) return;
+  if (estado === 'buscando') { el.textContent = '📍 Pegando sua localização…'; el.style.color = 'var(--text2)'; }
+  else if (estado === 'ok')  { el.textContent = '📍 A rota parte de onde você está'; el.style.color = 'var(--green)'; }
+  else                       { el.textContent = '⚠️ Sem GPS — o app escolhe o ponto de partida'; el.style.color = '#fbbf24'; }
+}
+
+async function abrirRotaMenu(encDest, ehCoord) {
   if (!encDest) return;
-  document.getElementById('rotaGoogle').href = 'https://www.google.com/maps/dir/?api=1&destination=' + encDest;
-  document.getElementById('rotaWaze').href   = 'https://waze.com/ul?q=' + encDest + '&navigate=yes';
-  document.getElementById('rotaApple').href  = 'https://maps.apple.com/?daddr=' + encDest;
+  _rotaDest = encDest;
+  _rotaDestCoord = !!ehCoord;
+
+  // Abre JÁ com os links no fallback (sem origem). Se o motoboy tocar antes do GPS
+  // responder, a rota abre igual — só sem a origem. Nunca trava.
+  _rotaSetHrefs(null);
+  _rotaStatus('buscando');
   document.getElementById('rotaSheet').classList.add('show');
+
+  const gps = await _pegarGps(8000);
+  if (!document.getElementById('rotaSheet').classList.contains('show')) return;   // fechou/abriu antes
+  if (gps) { _rotaSetHrefs(gps); _rotaStatus('ok'); }
+  else     { _rotaStatus('sem'); }
 }
 function fecharRota() { document.getElementById('rotaSheet').classList.remove('show'); }
 
@@ -176,6 +235,7 @@ function render(lista) {
       ? `<span class="pago">📱 Pix · pago</span>`
       : `<span class="receber">${p.pagamento === 'cartao' ? '💳 Cartão na entrega' : '💵 Dinheiro' + trocoTxt} · receber</span>`;
     const tel = (c.tel || '').replace(/\D/g, '');
+    const _dr = destinoRota(p);        // coord (se o Google achou a casa) ou texto do endereço
     return `<div class="card">
       <div class="card-top"><span class="num">#${esc(p.id)}</span>${pill}</div>
       <div class="cli">${esc(c.nome || '—')}</div>
@@ -184,7 +244,7 @@ function render(lista) {
       <div class="itens">${itens || '—'}</div>
       <div class="pag">${pagHtml}<span class="total">${total}</span></div>
       <div class="btns">
-        <button class="btn btn-rota" onclick="abrirRotaMenu('${encodeURIComponent(destinoRota(c))}')">🗺️ Abrir rota</button>
+        <button class="btn btn-rota" onclick="abrirRotaMenu('${encodeURIComponent(_dr.txt)}', ${_dr.coord})">🗺️ Abrir rota</button>
         <button class="btn btn-ok" onclick="entreguei('${esc(p.id)}', this)">✅ Entreguei</button>
       </div>
     </div>`;
