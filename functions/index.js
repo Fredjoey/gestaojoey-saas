@@ -3,7 +3,6 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 const axios = require('axios');
 const JSZip = require('jszip');
-const { precoUnitario } = require('./preco');   // preço canônico do item (base + adicionais)
 admin.initializeApp();
 const db = admin.firestore();
 const gestaoApp = admin.initializeApp(
@@ -93,10 +92,7 @@ exports.emitirNFCe = onRequest(
       // Monta itens para o JSON da Focus NFe
       const items = itens.map((item, idx) => {
         const qty    = parseFloat(item.qty || item.quantidade || 1);
-        // Unitário CANÔNICO: preço base + adicionais. Os adicionais entram embutidos
-        // no valor unitário do produto-pai (mantêm o NCM/CFOP dele) — antes eram
-        // simplesmente ignorados e a nota saía subfaturada.
-        const preco  = precoUnitario(item);
+        const preco  = parseFloat(item.preco || item.price || 0);
         const trib   = getTrib(item.categoria || item.category, catTrib);
         // NCM individual do produto tem prioridade sobre o NCM da categoria
         const ncmInd = ncmProdutos[String(item.id)] || '';

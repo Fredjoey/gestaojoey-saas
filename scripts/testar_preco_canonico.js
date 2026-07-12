@@ -36,7 +36,7 @@ const impls = {
   'painel.html':      carregarDoHtml('painel.html'),
   'cardapio.html':    carregarDoHtml('cardapio.html'),
   'garcom.html':      carregarDoHtml('garcom.html'),
-  'functions/preco.js': require('../functions/preco'),
+  'scripts/preco.js': require('./preco'),
 };
 
 // ── Pedido 34156 (reconstruído): 3 itens, adicionais só no 2º ────────────────
@@ -105,22 +105,15 @@ const isolado = (copiado[1].adicionais !== PEDIDO_34156[1].adicionais)
 if (!isolado) { falhas++; console.log('   ❌ adicionais copiados por referência (mutação vazaria pro pedido original)'); }
 else console.log('   ✅ adicionais copiados em profundidade (não mutam o pedido original)');
 
-console.log('\n══ 5. NFC-e (functions/index.js monta os itens com preco.js) ══\n');
-const { precoUnitario } = require('../functions/preco');
-// Espelha exatamente o map de emitirNFCe: unitário canônico × quantidade
-const nfceItems = comGuarana.map((item, idx) => {
-  const qty   = parseFloat(item.qty || item.quantidade || 1);
-  const preco = precoUnitario(item);
-  return { numero_item: idx + 1, descricao: item.nome,
-           quantidade_comercial: qty, valor_unitario_comercial: preco,
-           valor_bruto: parseFloat((preco * qty).toFixed(2)) };
-});
-nfceItems.forEach(i => console.log(`   item ${i.numero_item}: ${i.descricao.padEnd(14)} unit ${i.valor_unitario_comercial.toFixed(2).padStart(6)} × ${i.quantidade_comercial} = ${i.valor_bruto.toFixed(2)}`));
-const totalNfce = parseFloat(nfceItems.reduce((s, i) => s + i.valor_bruto, 0).toFixed(2));
-const totalNfceAntigo = comGuarana.reduce((s, i) => s + (parseFloat(i.preco) || 0) * (i.qty || 1), 0);
-console.log(`   ↳ nota ANTIGA (só item.preco) sairia com: R$ ${totalNfceAntigo.toFixed(2)}  ← subfaturada em R$ 13`);
-check('valor da NFC-e (com adicionais)', totalNfce, 116);
-check('Bacon Duplo na nota (unitário 45+13)', nfceItems[1].valor_unitario_comercial, 58);
+console.log('\n══ 5. NFC-e — NÃO alterada (decisão fiscal pendente com o contador) ══\n');
+const fnSrc = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+testes++;
+if (/precoUnitario|require\(['"]\.\/preco['"]\)/.test(fnSrc)) {
+  falhas++;
+  console.log('   ❌ functions/index.js está usando o preço canônico — a NFC-e NÃO deve ter sido tocada');
+} else {
+  console.log('   ✅ functions/index.js intacto: nota segue com o preço base do item (sem adicionais)');
+}
 
 console.log('\n══ 6. Mesa/comanda — adicional com qty > 1 (bug do a.qty ignorado) ══\n');
 const itemMesa = { preco: 45, qty: 1, adicionais: [{ nome: 'Catupiry', preco: 5, qty: 2 }] };
