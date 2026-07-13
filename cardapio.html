@@ -2338,6 +2338,12 @@ function finalizarPedido() {
           pagamento: formaPag,
           troco: troco,
           status: 'novo',
+          // CANAL onde o pedido nasceu. O cardápio era o único canal que não carimbava
+          // (painel/garcom/salao/whatsapp já carimbavam) — e é o que mais gera pedido:
+          // 307 dos 340 de julho/2026 ficaram sem origem, e a Joey IA reportava esse
+          // buraco como se fosse outra coisa. NÃO confundir com `entrega` (delivery/
+          // retirada/local), que é o TIPO DE VENDA e sempre esteve correto.
+          origem: 'cardapio',
           ...(sessionStorage.getItem('mesaAtiva') ? { mesa: sessionStorage.getItem('mesaAtiva') } : {}),
           ...(formaPag === 'pix' ? { pixStatus: 'aguardando_geracao', cardapioOrigin: location.origin } : {})
         };
