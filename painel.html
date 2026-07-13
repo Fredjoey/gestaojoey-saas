@@ -8861,7 +8861,57 @@ function _jiaBolha(lado, texto, pensando) {
   document.getElementById('jiaMensagens').appendChild(wrap); _jiaScroll();
   return bubble;
 }
-function jiaAbrir() { const m = document.getElementById('jiaModal'); if (m) { m.style.display = 'flex'; const t = document.getElementById('jiaPergunta'); if (t) setTimeout(function () { t.focus(); }, 50); _jiaScroll(); } }
+// ── REDIMENSIONAR A JANELA DA JOEY IA ────────────────────────────────────────
+// A janela é ancorada no canto inferior-direito → a alça fica no canto superior-
+// esquerdo, e arrastar p/ cima e p/ esquerda faz crescer. O tamanho é lembrado
+// durante a sessão (não persiste entre recargas) e reaplicado ao reabrir — não
+// reseta a cada mensagem, porque nada em askJoeyIA toca no tamanho da caixa.
+const JIA_MIN_W = 320, JIA_MIN_H = 340;
+let _jiaSize = null;                       // {w,h} — null = tamanho padrão do CSS
+
+// Teto: nunca passa da tela (respeita o padding do modal e o max-height de 82vh)
+function _jiaMaxW() { return Math.floor(Math.min(window.innerWidth  - 44,  900)); }
+function _jiaMaxH() { return Math.floor(Math.min(window.innerHeight * 0.82, window.innerHeight - 112)); }
+
+function _jiaAplicarTamanho() {
+  const box = document.getElementById('jiaBox');
+  if (!box || !_jiaSize) return;
+  // min primeiro, max por último: em tela pequena o teto vence o piso (nunca estoura)
+  const w = Math.min(Math.max(_jiaSize.w, JIA_MIN_W), _jiaMaxW());
+  const h = Math.min(Math.max(_jiaSize.h, JIA_MIN_H), _jiaMaxH());
+  _jiaSize = { w, h };
+  box.style.width  = w + 'px';
+  box.style.height = h + 'px';
+}
+
+function _jiaInitResize() {
+  const alca = document.getElementById('jiaResize');
+  const box  = document.getElementById('jiaBox');
+  if (!alca || !box || alca._wired) return;
+  alca._wired = true;
+  // pointer events = mouse e toque no mesmo caminho
+  alca.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    const r = box.getBoundingClientRect();
+    const x0 = e.clientX, y0 = e.clientY, w0 = r.width, h0 = r.height;
+    try { alca.setPointerCapture(e.pointerId); } catch (_) {}
+    const mover = function (ev) {
+      _jiaSize = { w: w0 + (x0 - ev.clientX), h: h0 + (y0 - ev.clientY) };
+      _jiaAplicarTamanho();
+    };
+    const soltar = function () {
+      alca.removeEventListener('pointermove', mover);
+      alca.removeEventListener('pointerup', soltar);
+      alca.removeEventListener('pointercancel', soltar);
+    };
+    alca.addEventListener('pointermove', mover);
+    alca.addEventListener('pointerup', soltar);
+    alca.addEventListener('pointercancel', soltar);
+  });
+}
+window.addEventListener('resize', function () { if (_jiaSize) _jiaAplicarTamanho(); });
+
+function jiaAbrir() { const m = document.getElementById('jiaModal'); if (m) { m.style.display = 'flex'; _jiaInitResize(); _jiaAplicarTamanho(); const t = document.getElementById('jiaPergunta'); if (t) setTimeout(function () { t.focus(); }, 50); _jiaScroll(); } }
 function jiaFechar() { const m = document.getElementById('jiaModal'); if (m) m.style.display = 'none'; const msgs = document.getElementById('jiaMensagens'); if (msgs) msgs.innerHTML = ''; _jiaHist = []; }
 async function askJoeyIA() {
   if (_jiaBusy) return;
@@ -11492,8 +11542,15 @@ document.addEventListener('click', function(e) {
 <!-- Joey IA — bolha flutuante (FAB) + modal de chat (gate config/features.JOEY_IA) -->
 <button id="jiaFab" onclick="jiaAbrir()" title="Joey IA" aria-label="Joey IA" style="display:none; position:fixed; right:22px; bottom:22px; z-index:9998; width:58px; height:58px; border-radius:18px 18px 18px 4px; border:none; background:#E87722; color:#fff; line-height:1; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.45); align-items:center; justify-content:center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg></button>
 <div id="jiaModal" onclick="if(event.target===this)jiaFechar()" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); align-items:flex-end; justify-content:flex-end; padding:0 22px 92px;">
-  <div style="width:380px; max-width:calc(100vw - 44px); height:520px; max-height:82vh; display:flex; flex-direction:column; background:#161616; border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.5); overflow:hidden;">
-    <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid #2a2a2a;">
+  <div id="jiaBox" style="position:relative; box-sizing:border-box; width:380px; max-width:calc(100vw - 44px); height:520px; max-height:82vh; display:flex; flex-direction:column; background:#161616; border:1px solid #2a2a2a; border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.5); overflow:hidden;">
+    <!-- Alça de redimensionar: canto SUPERIOR-ESQUERDO (a janela é ancorada embaixo/direita,
+         então é o único canto livre — puxar p/ cima e p/ esquerda faz crescer) -->
+    <div id="jiaResize" title="Arraste para redimensionar"
+         onpointerenter="this.firstElementChild.style.opacity='1'" onpointerleave="this.firstElementChild.style.opacity='.45'"
+         style="position:absolute; top:0; left:0; width:26px; height:26px; padding:6px; box-sizing:border-box; cursor:nwse-resize; z-index:3; touch-action:none;">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#E87722" stroke-width="1.7" stroke-linecap="round" style="opacity:.45; transition:opacity .15s" aria-hidden="true"><path d="M1.5 6.5 L6.5 1.5"/><path d="M1.5 11.5 L11.5 1.5"/></svg>
+    </div>
+    <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:14px 16px 14px 30px; border-bottom:1px solid #2a2a2a;">
       <span style="display:flex; align-items:center; gap:7px; font-size:15px; font-weight:700; color:var(--orange);"><span style="flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; background:#E87722; border-radius:7px 7px 7px 2px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg></span>Joey IA</span>
       <button onclick="jiaFechar()" aria-label="Fechar" style="background:none; border:none; color:#999; font-size:20px; cursor:pointer; line-height:1;">✕</button>
     </div>
