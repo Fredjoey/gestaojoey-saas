@@ -8534,21 +8534,40 @@ async function _executarRegerarPix(id, ov) {
   notify('✅ Pix novo gerado' + (res.reaberto ? ' — pedido reaberto em "Em análise"' : ''));
 
   // ETAPA 2 — WhatsApp. O Pix JÁ está gerado; daqui pra frente nada reverte.
+  //
+  // DUAS mensagens, nesta ordem: explicação e, separado, SÓ o código. No WhatsApp o
+  // cliente copia segurando a mensagem — o clipboard leva a mensagem INTEIRA. Se o
+  // código vier junto do texto, o app do banco recusa o que foi colado. Por isso a 2ª
+  // mensagem não pode ter nada em volta: sem emoji, sem asterisco, sem pontuação,
+  // sem quebra de linha extra.
   const tel = (res.telefone || '').replace(/\D/g, '');
   if (!tel) { _mostrarPixManual(id, codigo, 'Pedido sem telefone cadastrado.'); return; }
-  const msg = `📱 *Pix atualizado — Pedido ${id}*\n\n`
-    + `O código anterior expirou. Use o novo Pix abaixo, válido por *10 minutos*:\n\n`
-    + `${codigo}\n\n`
-    + `Assim que o pagamento cair, seu pedido entra na produção! 🍕`;
-  try {
-    const full = tel.startsWith('55') ? tel : '55' + tel;
-    const r    = await _botSend({ numero: full, mensagem: msg });
+  const full = tel.startsWith('55') ? tel : '55' + tel;
+  const msgTexto = `Pix atualizado — Pedido ${id}. O código anterior expirou. `
+    + `Use o novo Pix abaixo, válido por 10 minutos. `
+    + `Assim que o pagamento cair, seu pedido entra na produção.`;
+
+  const enviar = async (mensagem) => {
+    const r    = await _botSend({ numero: full, mensagem });
     const data = await r.json().catch(() => ({}));
     if (!data.ok) throw new Error(data.erro || `bot retornou ${r.status}`);
-    notify('💬 Pix novo enviado no WhatsApp do cliente');
+  };
+
+  // Sequencial de propósito: só manda o código depois que a explicação foi aceita,
+  // garantindo a ordem de chegada.
+  let textoEnviado = false;
+  try {
+    await enviar(msgTexto);
+    textoEnviado = true;
+    await enviar(codigo);           // 2ª mensagem: APENAS o copia-e-cola, cru
+    notify('💬 Pix novo enviado no WhatsApp (explicação + código separados)');
   } catch (e) {
-    // Falha SÓ no envio — o Pix continua válido. Mostra o código pro operador mandar na mão.
-    _mostrarPixManual(id, codigo, 'O Pix foi gerado, mas o envio no WhatsApp falhou: ' + (e.message || 'bot offline'));
+    // Falha SÓ no envio — o Pix continua válido, nada é revertido.
+    // Se a explicação já foi e o CÓDIGO não, o operador precisa mandar só o código
+    // (mandar tudo de novo duplicaria a mensagem que o cliente já recebeu).
+    _mostrarPixManual(id, codigo, textoEnviado
+      ? 'A explicação foi enviada, mas o código não. Mande só o código abaixo:'
+      : 'O Pix foi gerado, mas o envio no WhatsApp falhou: ' + (e.message || 'bot offline'));
   }
 }
 
