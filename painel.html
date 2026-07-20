@@ -2875,10 +2875,23 @@ function orderCardHtml(p) {
   let botoes = '';
   if (p.status === 'novo') {
     if (_pix.locked) {
+      if (_podeRegerarPix(p)) {
+        // Pix expirado/com erro: a ação principal passa a ser gerar outro (destaque, largura
+        // total, no topo). Aqui o "🔒 Aguardando pagamento" sai — o Pix não está pendente,
+        // está vencido, e o badge acima já diz isso. Secundárias descem em 2 colunas.
+        botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
+        <button class="oc-btn" style="width:100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700;font-size:13px;padding:11px" onclick="event.stopPropagation();regerarPix('${p.id}')">🔄 Gerar novo PIX</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="oc-btn" style="background:#232323;color:var(--text2);border:1px solid #3a3a3a;font-size:12px;padding:8px" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma</button>
+          <button class="oc-btn" style="background:#2a1414;color:#e88;border:1px solid #5a2222;font-size:12px;padding:8px" onclick="cancelarPedido('${p.id}')">Cancelar</button>
+        </div>
+      </div>`;
+      } else {
       botoes = `
       <button class="oc-btn" style="background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;flex:1;border:1px solid rgba(100,100,100,.2)" disabled>🔒 Aguardando pagamento Pix</button>
       <button class="oc-btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma</button>
       <button class="oc-btn oc-cancel" onclick="cancelarPedido('${p.id}')">Cancelar</button>`;
+      }
     } else {
       botoes = `
       <button class="oc-btn oc-next" onclick="avancarStatus('${p.id}')">✅ Confirmar → Produção</button>
@@ -4092,6 +4105,7 @@ function openOrderModal(id) {
             : `<button class="btn btn-primary" style="flex:1;background:rgba(167,139,250,.2);color:#a78bfa;border:1px solid rgba(167,139,250,.3)" onclick="avancarStatus('${p.id}');closeOrderModal()">🛵 Enviar para entrega + avisar cliente</button>`)
         : ''}
       ${!['entregue','cancelado'].includes(p.status)?`<button class="btn btn-danger" onclick="cancelarPedido('${p.id}');closeOrderModal()">Cancelar</button>`:''}
+      ${_podeRegerarPix(p)?`<button class="btn" style="flex:1 1 100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();regerarPix('${p.id}')">🔄 Gerar novo PIX</button>`:''}
       ${['entregue','cancelado','finalizado'].includes(p.status)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${p.id}')">🔁 Pedir novamente</button>`:''}
     </div>`;
   document.getElementById('orderModal').classList.add('show');
@@ -8438,6 +8452,126 @@ async function cancelarPedidoPix(id) {
   if (!p || !['pendente','aguardando_geracao','gerando'].includes(p.pixStatus)) return;
   await db.collection(`clientes/${slug}/pedidos`).doc(id).update({ status: 'cancelado', pixStatus: 'expirado' });
   notify('Pedido ' + id + ' cancelado — PIX expirou', 'warning');
+}
+
+// ── REGERAR PIX ──────────────────────────────────────────────────────────────
+// Pix expirou (10min) e o timer auto-cancelou o pedido, mas o cliente ainda quer
+// pagar. Em vez de refazer o pedido: cancela o pagamento antigo no MP, gera outro
+// e reabre o pedido em "Em análise".
+//
+// Divisão de trabalho — a callable faz SÓ o Pix e DEVOLVE o copia-e-cola +
+// telefone; o envio do WhatsApp é daqui, porque o /send do joeyapi exige o ID
+// token do dono (que a Cloud Function não tem para repassar server-to-server).
+// Reusa _botSend — o MESMO caminho autenticado que o painel já usa.
+function _podeRegerarPix(p) {
+  if (!p || p.pagamento !== 'pix' || p.pagamentoManual === true) return false;
+  if (p.pixStatus === 'pago') return false;                       // nunca em cima de um Pix pago
+  if (!['novo','cancelado'].includes(p.status)) return false;      // já em produção/entregue → não faz sentido
+  const s = p.pixStatus || '';
+  return s === 'expirado' || s.indexOf('erro') === 0;              // só quando falhou/expirou
+}
+
+function regerarPix(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p) return;
+  if (!_podeRegerarPix(p)) { notify('Este pedido não está em um estado que permita regerar o Pix.', 'error'); return; }
+  const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
+  const tel   = (p.cliente?.tel || '').replace(/\D/g, '');
+  const jaFeitas = Number(p.pixTentativa || 0);
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px';
+  ov.innerHTML = `
+    <div style="background:#141414;border:1px solid #333;border-radius:12px;max-width:380px;width:100%;padding:24px 22px 20px;box-shadow:0 16px 48px rgba(0,0,0,.6);text-align:center">
+      <div style="width:52px;height:52px;border-radius:50%;background:rgba(232,119,34,.14);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E87722" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline>
+        </svg>
+      </div>
+      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px">Gerar um novo PIX?</div>
+      <div style="font-size:13px;color:#a0a0a0;line-height:1.55;margin-bottom:20px">
+        O código atual será cancelado e um novo PIX de <b style="color:#E87722">${total}</b> será enviado ao cliente no WhatsApp.
+        ${!tel ? '<br><span style="color:#fbbf24;font-size:12px">⚠️ Este pedido não tem telefone — o código aparecerá na tela para você enviar na mão.</span>' : ''}
+        ${jaFeitas ? `<br><span style="color:#fbbf24;font-size:12px">⚠️ ${jaFeitas}ª tentativa já feita neste pedido.</span>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button data-cancel="1" style="padding:12px;background:#232323;border:1px solid #3a3a3a;color:#c9c9c9;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer">Cancelar</button>
+        <button data-ok="1" style="padding:12px;background:#E87722;border:none;color:#1a1a1a;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">Confirmar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const fechar = () => ov.remove();
+  ov.addEventListener('click', e => { if (e.target === ov) fechar(); });
+  ov.querySelector('[data-cancel]').addEventListener('click', fechar);
+  ov.querySelector('[data-ok]').addEventListener('click', () => {
+    const btn = ov.querySelector('[data-ok]');
+    btn.disabled = true; btn.style.opacity = '.6'; btn.textContent = 'Gerando...';
+    _executarRegerarPix(id, ov);
+  });
+}
+
+async function _executarRegerarPix(id, ov) {
+  let res;
+  // ETAPA 1 — Pix (callable). Se falhar aqui, nada mudou: erro e fim.
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('regerarPixPedido');
+    res = (await fn({ slug, id })).data || {};
+  } catch (e) {
+    if (ov) ov.remove();
+    notify('Não foi possível regerar o Pix: ' + (e.message || 'erro desconhecido'), 'error');
+    return;
+  }
+  if (ov) ov.remove();
+  const codigo = res.pixCopiaECola || '';
+  notify('✅ Pix novo gerado' + (res.reaberto ? ' — pedido reaberto em "Em análise"' : ''));
+
+  // ETAPA 2 — WhatsApp. O Pix JÁ está gerado; daqui pra frente nada reverte.
+  const tel = (res.telefone || '').replace(/\D/g, '');
+  if (!tel) { _mostrarPixManual(id, codigo, 'Pedido sem telefone cadastrado.'); return; }
+  const msg = `📱 *Pix atualizado — Pedido ${id}*\n\n`
+    + `O código anterior expirou. Use o novo Pix abaixo, válido por *10 minutos*:\n\n`
+    + `${codigo}\n\n`
+    + `Assim que o pagamento cair, seu pedido entra na produção! 🍕`;
+  try {
+    const full = tel.startsWith('55') ? tel : '55' + tel;
+    const r    = await _botSend({ numero: full, mensagem: msg });
+    const data = await r.json().catch(() => ({}));
+    if (!data.ok) throw new Error(data.erro || `bot retornou ${r.status}`);
+    notify('💬 Pix novo enviado no WhatsApp do cliente');
+  } catch (e) {
+    // Falha SÓ no envio — o Pix continua válido. Mostra o código pro operador mandar na mão.
+    _mostrarPixManual(id, codigo, 'O Pix foi gerado, mas o envio no WhatsApp falhou: ' + (e.message || 'bot offline'));
+  }
+}
+
+// Fallback do envio: o Pix existe e é válido — só não saiu pelo bot.
+function _mostrarPixManual(id, codigo, motivo) {
+  notify('⚠️ ' + motivo, 'warning');
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px';
+  ov.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border2);border-radius:14px;max-width:420px;width:100%;padding:20px;box-shadow:0 14px 44px rgba(0,0,0,.55)">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">⚠️ Envie o Pix manualmente</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Pedido #${id} · ${motivo}</div>
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">Pix copia e cola</div>
+      <textarea id="pixManualTxt" readonly style="width:100%;height:96px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:10px;padding:10px;font-size:11px;font-family:monospace;resize:none;word-break:break-all">${codigo}</textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button data-copy="1" style="flex:1.4;padding:11px;background:var(--orange);border:none;color:#fff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 Copiar código</button>
+        <button data-cancel="1" style="flex:1;padding:11px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:10px;font-size:13px;cursor:pointer">Fechar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const fechar = () => ov.remove();
+  ov.addEventListener('click', e => { if (e.target === ov) fechar(); });
+  ov.querySelector('[data-cancel]').addEventListener('click', fechar);
+  ov.querySelector('[data-copy]').addEventListener('click', () => {
+    const ta = ov.querySelector('#pixManualTxt');
+    ta.select(); ta.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(codigo).then(
+      () => notify('📋 Código copiado'),
+      () => { try { document.execCommand('copy'); notify('📋 Código copiado'); } catch { notify('Copie o código manualmente', 'warning'); } }
+    );
+  });
 }
 
 function tocarSomPixPago() {
