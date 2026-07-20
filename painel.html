@@ -8455,9 +8455,9 @@ async function cancelarPedidoPix(id) {
 }
 
 // ── REGERAR PIX ──────────────────────────────────────────────────────────────
-// Pix expirou (10min) e o timer auto-cancelou o pedido, mas o cliente ainda quer
-// pagar. Em vez de refazer o pedido: cancela o pagamento antigo no MP, gera outro
-// e reabre o pedido em "Em análise".
+// O cliente não conseguiu pagar o Pix — não recebeu o código, o QR não abriu, ou
+// os 10min venceram e o timer auto-cancelou o pedido. Em vez de refazer o pedido:
+// cancela o pagamento antigo no MP, gera outro e (se preciso) reabre o pedido.
 //
 // Divisão de trabalho — a callable faz SÓ o Pix e DEVOLVE o copia-e-cola +
 // telefone; o envio do WhatsApp é daqui, porque o /send do joeyapi exige o ID
@@ -8465,10 +8465,18 @@ async function cancelarPedidoPix(id) {
 // Reusa _botSend — o MESMO caminho autenticado que o painel já usa.
 function _podeRegerarPix(p) {
   if (!p || p.pagamento !== 'pix' || p.pagamentoManual === true) return false;
-  if (p.pixStatus === 'pago') return false;                       // nunca em cima de um Pix pago
+  if (p.pixStatus === 'pago') return false;                       // GUARDA DURA: nunca em cima de um Pix pago
   if (!['novo','cancelado'].includes(p.status)) return false;      // já em produção/entregue → não faz sentido
   const s = p.pixStatus || '';
-  return s === 'expirado' || s.indexOf('erro') === 0;              // só quando falhou/expirou
+  // Todos os estados em que o pedido está TRAVADO no Pix e o dinheiro NÃO entrou.
+  // 'pendente' é o caso mais COMUM na prática (o cliente liga dizendo que não recebeu
+  // o código ou que o QR não abriu) e era justamente o que faltava aqui. Regerar com
+  // o Pix pendente é seguro porque a callable cancela o pixId anterior no Mercado Pago
+  // ANTES de criar o novo — nunca ficam dois QRs pagáveis do mesmo pedido no ar.
+  // Fora de propósito: 'gerando'/'aguardando_geracao', em que o trigger ainda está
+  // criando o PRIMEIRO Pix — regerar ali correria com ele e os dois escreveriam no
+  // mesmo doc. É um estado de poucos segundos.
+  return s === 'pendente' || s === 'expirado' || s.indexOf('erro') === 0;
 }
 
 function regerarPix(id) {
