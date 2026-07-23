@@ -81,6 +81,7 @@ function montarCtx(opts) {
     setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout,
     console: { log: () => {}, warn: () => {}, error: () => {} },
     Promise, JSON, String, Number, Object, URL,
+    LANG_EN: !!opts.en, _wt: (pt, en) => (opts.en ? en : pt),   // override i18n do screencast (opts.en liga o EN)
   };
   vm.createContext(ctx);
   vm.runInContext(bloco[0] + '\nthis.api = { wacIniciarSignup, renderCloudApiCard, _wacListenerConfig, wacVerDados, wacDesconectar, getSignup: () => _wacSignup, getEnviando: () => _wacEnviando };', ctx);
@@ -210,6 +211,19 @@ function montarCtx(opts) {
     ok('mostra o erro do servidor', /expirado/i.test(h.els.cloudSignupMsg.innerHTML) && h.els.cloudSignupMsg.style.color === '#f87171');
     ok('botão reabilitado após o erro', h.els.btnCloudSignup.disabled === false);
     ok('não ficou travado enviando', h.ctx.api.getEnviando() === false);
+  }
+
+  console.log('\n══ 9. Override EN (?lang=en): card conectado + Ver dados saem em inglês ══\n');
+  {
+    const h = montarCtx({ en: true });
+    h.ctx.api._wacListenerConfig();
+    h.fireSnap({ ativo: true, phoneNumberId: 'PN', wabaId: 'WA', businessId: 'BIZ', displayPhoneNumber: '+55 22 90000-0000', verifiedName: 'Joey Burger', appAssinado: true, conectadoEm: { toDate: () => new Date('2026-07-23T12:00:00-03:00') } });
+    const html = h.els.cloudConnectedBox.innerHTML;
+    ok('status "● Connected" (não "Conectado")', /● Connected/.test(html) && !/Conectado/.test(html));
+    ok('labels EN (Number / Display name / Connected on)', /Number/.test(html) && /Display name/.test(html) && /Connected on/.test(html));
+    ok('botões EN + tooltips + legenda whatsapp_business_management', /View data from Meta/.test(html) && /Disconnect/.test(html) && /title="[^"]*whatsapp_business_management/.test(html) && /full use case in action/.test(html));
+    await h.ctx.api.wacVerDados(); await esperar();
+    ok('Ver dados em EN (Number / Verified name / Quality)', /Number: /.test(h.els.cloudNumInfo.textContent) && /Verified name: /.test(h.els.cloudNumInfo.textContent) && /Quality rating: /.test(h.els.cloudNumInfo.textContent));
   }
 
   console.log('\n' + '─'.repeat(64));

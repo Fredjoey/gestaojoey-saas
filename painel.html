@@ -571,16 +571,16 @@ textarea.fi{resize:vertical;min-height:60px}
 <div id="loginScreen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
   <div class="login-card">
     <div class="login-logo">Gestão Joey</div>
-    <div class="login-sub">PAINEL DE PEDIDOS</div>
+    <div class="login-sub" data-en="ORDERS DASHBOARD">PAINEL DE PEDIDOS</div>
     <div class="fg" style="margin-bottom:10px">
-      <label class="fl">E-mail</label>
-      <input class="fi" id="loginEmail" type="email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')loginUser()">
+      <label class="fl" data-en="Email">E-mail</label>
+      <input class="fi" id="loginEmail" type="email" placeholder="seu@email.com" data-en-ph="you@email.com" onkeydown="if(event.key==='Enter')loginUser()">
     </div>
     <div class="fg" style="margin-bottom:16px">
-      <label class="fl">Senha</label>
+      <label class="fl" data-en="Password">Senha</label>
       <input class="fi" id="loginSenha" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')loginUser()">
     </div>
-    <button class="btn btn-primary" id="btnLogin" onclick="loginUser()" style="width:100%;padding:12px;font-size:14px">Entrar</button>
+    <button class="btn btn-primary" id="btnLogin" onclick="loginUser()" style="width:100%;padding:12px;font-size:14px" data-en="Sign in">Entrar</button>
     <div class="login-erro" id="loginErro"></div>
   </div>
 </div>
@@ -623,7 +623,7 @@ textarea.fi{resize:vertical;min-height:60px}
   <div class="nav-item" id="nav-fiscal" onclick="showPanel('fiscal',this)"><span class="nav-icon">🧾</span> Fiscal</div>
   <div class="nav-item" onclick="showPanel('config',this)"><span class="nav-icon">⚙️</span> Configurações</div>
   <div class="nav-item" onclick="showPanel('robo',this)"><span class="nav-icon">🤖</span> Robô</div>
-  <div class="nav-item" onclick="showPanel('whatsapp',this)"><span class="nav-icon">📱</span> Conexão WhatsApp</div>
+  <div class="nav-item" onclick="showPanel('whatsapp',this)"><span class="nav-icon">📱</span> <span data-en="WhatsApp Connection">Conexão WhatsApp</span></div>
   <div class="sb-bottom">
     <div class="sb-store">
       <div class="sb-avatar" id="sbAvatar">J</div>
@@ -1590,38 +1590,39 @@ textarea.fi{resize:vertical;min-height:60px}
 
     <div id="panel-whatsapp" style="display:none;height:100%;overflow:hidden">
       <div class="panel-inner">
-        <div class="panel-head"><h2>📱 Conexão WhatsApp</h2></div>
+        <div class="panel-head"><h2 data-en="📱 WhatsApp Connection">📱 Conexão WhatsApp</h2></div>
 
-        <p style="font-size:12.5px;color:var(--text2);margin:0 0 16px;line-height:1.5">Escolha como o robô conecta ao WhatsApp desta loja.</p>
+        <p style="font-size:12.5px;color:var(--text2);margin:0 0 16px;line-height:1.5" data-en="Choose how the bot connects to this store's WhatsApp.">Escolha como o robô conecta ao WhatsApp desta loja.</p>
 
         <div class="wac-grid">
           <!-- Baileys (QR Code) — método atual -->
           <div class="wac-card">
             <div class="wac-card-top">
               <span class="wac-card-title">📲 Baileys (QR Code)</span>
-              <span class="wac-tag wac-tag-atual">Padrão atual</span>
+              <span class="wac-tag wac-tag-atual" data-en="Current method">Padrão atual</span>
             </div>
-            <p class="wac-card-desc">Conecta lendo um QR Code com o WhatsApp do celular. É o método em uso hoje.</p>
+            <p class="wac-card-desc" data-en="Connects by scanning a QR code with your phone's WhatsApp. This is the method in use today.">Conecta lendo um QR Code com o WhatsApp do celular. É o método em uso hoje.</p>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
               <div id="waStatusDot" style="width:11px;height:11px;border-radius:50%;background:#ef4444;flex-shrink:0;transition:background .4s"></div>
               <div>
-                <div id="waStatusLabel" style="font-size:13px;font-weight:600;color:var(--text)">Verificando...</div>
-                <div style="font-size:11px;color:var(--text2);margin-top:2px">Atualiza automaticamente a cada 30 segundos</div>
+                <div id="waStatusLabel" style="font-size:13px;font-weight:600;color:var(--text)" data-en="Checking…">Verificando...</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px" data-en="Updates automatically every 30 seconds">Atualiza automaticamente a cada 30 segundos</div>
               </div>
             </div>
-            <button class="wac-btn wac-btn-baileys" onclick="buscarQRCode()">Conectar WhatsApp</button>
+            <button class="wac-btn wac-btn-baileys" onclick="buscarQRCode()" data-en="Connect WhatsApp" data-en-title="Connect via QR code (Baileys) — the current method.">Conectar WhatsApp</button>
           </div>
 
           <!-- Cloud API (oficial) — Embedded Signup da Meta -->
           <div class="wac-card">
             <div class="wac-card-top">
-              <span class="wac-card-title">☁️ Cloud API (oficial)</span>
-              <span class="wac-tag wac-tag-novo">Oficial · Meta</span>
+              <span class="wac-card-title" data-en="☁️ Cloud API (official)">☁️ Cloud API (oficial)</span>
+              <span class="wac-tag wac-tag-novo" data-en="Official · Meta">Oficial · Meta</span>
             </div>
-            <p class="wac-card-desc">Conexão oficial da Meta, mais estável e sem QR. Você autoriza pela sua conta do Facebook (Embedded Signup).</p>
+            <p class="wac-card-desc" data-en="Official Meta connection — more stable, no QR code. You authorize with your own Facebook account (Embedded Signup).">Conexão oficial da Meta, mais estável e sem QR. Você autoriza pela sua conta do Facebook (Embedded Signup).</p>
             <!-- Estado NÃO conectado: botão do Embedded Signup -->
             <div id="cloudConnectBox">
-              <button class="wac-btn wac-btn-cloud" id="btnCloudSignup" onclick="wacIniciarSignup()">Conectar WhatsApp (Cloud API)</button>
+              <button class="wac-btn wac-btn-cloud" id="btnCloudSignup" onclick="wacIniciarSignup()" data-en="Connect WhatsApp (Cloud API)" data-en-title="Start Meta's Embedded Signup to connect this store's WhatsApp Business account. You sign in with Facebook and grant access; we never see your password.">Conectar WhatsApp (Cloud API)</button>
+              <div class="wac-cap" data-en="Official WhatsApp onboarding via Meta's Embedded Signup: you sign in with Facebook, pick your WhatsApp Business account, and grant access. The code is exchanged for a token on our server (never in the browser)." style="display:none;font-size:11.5px;color:var(--text2);margin-top:8px;line-height:1.5"></div>
               <div id="cloudSignupMsg" style="display:none;font-size:12px;margin-top:10px"></div>
             </div>
             <!-- Estado conectado: dados da conta + ações (preenchido por renderCloudApiCard) -->
@@ -2101,6 +2102,20 @@ const db      = firebase.firestore();
 const auth    = firebase.auth();
 const storage = firebase.storage();
 const hostname = window.location.hostname;
+// ── i18n LEVE só p/ o screencast da Meta (flag ?lang=en). NÃO é um sistema de chaves: é um
+// override pontual das telas de LOGIN e CONEXÃO WHATSAPP. Sem ?lang=en, tudo em PT (inalterado).
+// Estáticos: atributos data-en / data-en-ph / data-en-title (inertes sem a flag). Dinâmicos: _wt().
+const LANG_EN = /[?&]lang=en(?:&|$)/i.test(location.search);
+const _wt = (pt, en) => (LANG_EN ? en : pt);   // "which text" — PT normal; EN só no modo screencast
+function _aplicarLangEn() {
+  if (!LANG_EN) return;
+  document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
+  document.querySelectorAll('[data-en-ph]').forEach(el => { el.setAttribute('placeholder', el.getAttribute('data-en-ph')); });
+  document.querySelectorAll('[data-en-title]').forEach(el => { el.setAttribute('title', el.getAttribute('data-en-title')); });
+  document.querySelectorAll('.wac-cap').forEach(el => { el.style.display = 'block'; });   // revela legendas do screencast
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _aplicarLangEn);
+else _aplicarLangEn();
 // Hosts "universais" (app único do SaaS): o tenant NÃO vem do hostname — vem do usuário logado
 // (query por authUid, após o login). app.gestaojoey.com.br = instalador novo do SaaS;
 // pedidos-joey.web.app = app Electron já instalado (transição, pra não quebrar quem já usa).
@@ -2371,6 +2386,7 @@ function showPanel(panel, navEl) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   if (navEl) navEl.classList.add('active');
   document.getElementById('topbarTitle').textContent = titulos[panel]||'';
+  if (LANG_EN && panel === 'whatsapp') document.getElementById('topbarTitle').textContent = '📱 WhatsApp Connection';   // só o screencast
   if (panel==='pedidos')    _pararTitleFlash();
   if (panel==='cardapio')   { renderCatFilters(); renderCardapioEditor(); }
   if (panel==='config')     carregarConfig();
@@ -2468,12 +2484,12 @@ async function atualizarStatusWA() {
     const data = await res.json();
     const connected = data.status === 'connected';
     document.getElementById('waStatusDot').style.background = connected ? '#22c55e' : '#ef4444';
-    document.getElementById('waStatusLabel').textContent = connected ? 'Conectado' : 'Desconectado';
+    document.getElementById('waStatusLabel').textContent = connected ? _wt('Conectado', 'Connected') : _wt('Desconectado', 'Disconnected');
     if (connected) document.getElementById('waQRSection').style.display = 'none';
     _aplicarStatusBot(connected);
   } catch {
     document.getElementById('waStatusDot').style.background = '#ef4444';
-    document.getElementById('waStatusLabel').textContent = 'Sem resposta da API';
+    document.getElementById('waStatusLabel').textContent = _wt('Sem resposta da API', 'No response from API');
     _aplicarStatusBot(false);
   }
 }
@@ -2544,7 +2560,7 @@ function _wacEncerrar() {                 // fim do fluxo (sucesso, erro ou canc
 function _wacDiagnostico() {
   if (_wacEnviando) return;               // já está trocando o code no servidor — deixa concluir
   if (_wacSignup.code) return;            // já temos o code → o servidor conclui (deriva waba/phone)
-  _wacMsg('Não recebi o login do Facebook. Feche o cadastro e tente de novo. Se persistir, veja o console (F12) nas linhas <b>[WAC]</b>.', 'erro');
+  _wacMsg(_wt('Não recebi o login do Facebook. Feche o cadastro e tente de novo. Se persistir, veja o console (F12) nas linhas <b>[WAC]</b>.', "I didn't receive the Facebook login. Close the signup and try again. If it persists, check the console (F12) for <b>[WAC]</b> lines."), 'erro');
   _wacEncerrar();
 }
 
@@ -2556,21 +2572,21 @@ async function _wacTalvezConcluir() {
   if (_wacEnviando) return;                              // evita disparo duplo
   _wacEnviando = true;
   _wacLimparTimers();
-  _wacMsg('Conectando sua conta…', '');
+  _wacMsg(_wt('Conectando sua conta…', 'Connecting your account…'), '');
   try {
     const fn = firebase.app().functions('southamerica-east1').httpsCallable('trocarCodeWhatsApp');
     const resp = await fn({ slug, code, waba_id, phone_number_id, business_id });
     const data = (resp && resp.data) || {};
     console.log('[WAC] trocarCodeWhatsApp:', data);
     if (data.ok) {
-      _wacMsg('✅ WhatsApp conectado via Cloud API!' + (data.appAssinado === false ? ' (app ainda não assinado — verifique depois)' : ''), 'ok');
-      notify('WhatsApp Cloud API conectado! ✅');   // o listener de config vira o card p/ o estado conectado
+      _wacMsg(_wt('✅ WhatsApp conectado via Cloud API!', '✅ WhatsApp connected via Cloud API!') + (data.appAssinado === false ? _wt(' (app ainda não assinado — verifique depois)', ' (app not subscribed yet — check later)') : ''), 'ok');
+      notify(_wt('WhatsApp Cloud API conectado! ✅', 'WhatsApp Cloud API connected! ✅'));   // o listener de config vira o card p/ o estado conectado
     } else {
-      _wacMsg('Não foi possível concluir a conexão.', 'erro');
+      _wacMsg(_wt('Não foi possível concluir a conexão.', 'Could not complete the connection.'), 'erro');
     }
   } catch (e) {
     console.error('[WAC] erro ao chamar trocarCodeWhatsApp:', e);
-    _wacMsg((e && e.message) || 'Erro ao conectar. O código pode ter expirado — tente reconectar.', 'erro');
+    _wacMsg((e && e.message) || _wt('Erro ao conectar. O código pode ter expirado — tente reconectar.', 'Error connecting. The code may have expired — try reconnecting.'), 'erro');
   } finally {
     _wacEnviando = false;
     _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null };  // zera p/ próxima tentativa
@@ -2594,10 +2610,10 @@ window.addEventListener('message', (ev) => {
     _wacSignup.business_id      = (data.data && data.data.business_id) || _wacSignup.business_id || null;   // nem sempre vem no FINISH
     _wacTalvezConcluir();
   } else if (data.event === 'CANCEL') {
-    _wacMsg('Conexão cancelada' + (data.data && data.data.current_step ? ' (etapa: ' + data.data.current_step + ').' : '.'), 'erro');
+    _wacMsg(_wt('Conexão cancelada', 'Connection canceled') + (data.data && data.data.current_step ? _wt(' (etapa: ', ' (step: ') + data.data.current_step + ').' : '.'), 'erro');
     _wacEncerrar();
   } else if (data.event === 'ERROR') {
-    _wacMsg('A Meta retornou um erro no cadastro' + (data.data && data.data.error_message ? ': ' + data.data.error_message : '.'), 'erro');
+    _wacMsg(_wt('A Meta retornou um erro no cadastro', 'Meta returned an error during signup') + (data.data && data.data.error_message ? ': ' + data.data.error_message : '.'), 'erro');
     _wacEncerrar();
   }
 });
@@ -2625,7 +2641,7 @@ async function wacIniciarSignup() {
   _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null }; // zera a cada tentativa
   _wacInProgress = true;
   _wacLimparTimers();
-  _wacMsg('Abrindo o cadastro oficial da Meta…', '');
+  _wacMsg(_wt('Abrindo o cadastro oficial da Meta…', "Opening Meta's official signup…"), '');
   if (btn) btn.disabled = true;
   // Backstop: se NADA voltar em 60s (ex.: popup sem window.opener), não trava — diagnostica.
   _wacWatchdog = setTimeout(_wacDiagnostico, 60000);
@@ -2641,7 +2657,7 @@ async function wacIniciarSignup() {
         if (_wacSignup.waba_id && _wacSignup.phone_number_id) {
           _wacTalvezConcluir();                          // a mensagem já trouxe tudo → conclui já
         } else {
-          _wacMsg('Login recebido ✓ — finalizando no servidor…', '');
+          _wacMsg(_wt('Login recebido ✓ — finalizando no servidor…', 'Login received ✓ — finishing on the server…'), '');
           // dá um instante pro postMessage (quando o SDK o emite); senão o servidor deriva do token
           if (_wacGraca) clearTimeout(_wacGraca);
           _wacGraca = setTimeout(_wacTalvezConcluir, 1500);
@@ -2650,11 +2666,11 @@ async function wacIniciarSignup() {
         // App configurado p/ devolver token em vez de code — o servidor precisa do code.
         // NÃO loga o `response` (contém o accessToken — credencial).
         console.log('[WAC] FB.login devolveu accessToken em vez de code (ver config do Embedded Signup).');
-        _wacMsg('A Meta devolveu um token em vez de um código. Ajuste a config do Embedded Signup (response_type=code).', 'erro');
+        _wacMsg(_wt('A Meta devolveu um token em vez de um código. Ajuste a config do Embedded Signup (response_type=code).', 'Meta returned a token instead of a code. Adjust the Embedded Signup config (response_type=code).'), 'erro');
         _wacEncerrar();
       } else {
         console.log('[WAC] FB.login sem code (status:', (response && response.status) || '?', ').');   // sem despejar o response
-        _wacMsg('Login não concluído.', 'erro');
+        _wacMsg(_wt('Login não concluído.', 'Login not completed.'), 'erro');
         _wacEncerrar();
       }
     }, {
@@ -2669,7 +2685,7 @@ async function wacIniciarSignup() {
     });
   } catch (e) {
     console.error('[WAC] erro ao iniciar signup:', e);
-    _wacMsg('Não foi possível carregar o cadastro da Meta. Tente novamente.', 'erro');
+    _wacMsg(_wt('Não foi possível carregar o cadastro da Meta. Tente novamente.', "Could not load Meta's signup. Please try again."), 'erro');
     _wacEncerrar();
   }
 }
@@ -2698,26 +2714,31 @@ function renderCloudApiCard() {
     return;
   }
   const dt = (c.conectadoEm && c.conectadoEm.toDate)
-    ? c.conectadoEm.toDate().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
-  const statusTxt = c.appAssinado === false ? '⚠️ app não assinado na WABA' : 'ativo';
+    ? c.conectadoEm.toDate().toLocaleString(LANG_EN ? 'en-US' : 'pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
+  const statusTxt = c.appAssinado === false ? _wt('⚠️ app não assinado na WABA', '⚠️ app not subscribed to the WABA') : _wt('ativo', 'active');
   const row = (k, v) => '<div class="wac-conn-row"><span class="wac-conn-k">' + k +
     '</span><span class="wac-conn-v">' + _esc(String(v == null || v === '' ? '—' : v)) + '</span></div>';
+  const tDados = _wt('Buscar os dados deste número na Graph API da Meta (usa whatsapp_business_management).',
+                     "Fetch this number's details from Meta's Graph API (uses whatsapp_business_management).");
+  const tOff   = _wt('Desconectar esta conta do WhatsApp e parar o robô de usá-la.',
+                     'Disconnect this WhatsApp Business account and stop the bot from using it.');
   conn.innerHTML =
-    '<div class="wac-conn-status">● Conectado</div>' +
+    '<div class="wac-conn-status">● ' + _wt('Conectado', 'Connected') + '</div>' +
     '<div style="margin-top:10px">' +
-      row('Número', c.displayPhoneNumber) +
-      row('Nome de exibição', c.verifiedName) +
+      row(_wt('Número', 'Number'), c.displayPhoneNumber) +
+      row(_wt('Nome de exibição', 'Display name'), c.verifiedName) +
       row('WABA ID', c.wabaId) +
       (c.businessId ? row('Business ID', c.businessId) : '') +
       row('Phone Number ID', c.phoneNumberId) +
       row('Status', statusTxt) +
-      row('Conectado em', dt) +
+      row(_wt('Conectado em', 'Connected on'), dt) +
     '</div>' +
     '<div id="cloudNumInfo" class="wac-numbox"></div>' +
     '<div class="wac-mini">' +
-      '<button class="wac-mini-info" id="btnWacDados" onclick="wacVerDados()">🔎 Ver dados na Meta</button>' +
-      '<button class="wac-mini-off" onclick="wacDesconectar()">Desconectar</button>' +
-    '</div>';
+      '<button class="wac-mini-info" id="btnWacDados" title="' + tDados + '" onclick="wacVerDados()">' + _wt('🔎 Ver dados na Meta', '🔎 View data from Meta') + '</button>' +
+      '<button class="wac-mini-off" title="' + tOff + '" onclick="wacDesconectar()">' + _wt('Desconectar', 'Disconnect') + '</button>' +
+    '</div>' +
+    (LANG_EN ? '<div class="wac-cap" style="display:block;font-size:11.5px;color:var(--text2);margin-top:10px;line-height:1.5">“View data from Meta” calls our server, which reads this number from Meta using the <b>whatsapp_business_management</b> permission — the full use case in action.</div>' : '');
 }
 
 // Ação que USA whatsapp_business_management: lê os dados do número na Graph API (via CF) e mostra.
@@ -2725,36 +2746,36 @@ async function wacVerDados() {
   const btn  = document.getElementById('btnWacDados');
   const info = document.getElementById('cloudNumInfo');
   if (btn) btn.disabled = true;
-  if (info) { info.style.display = 'block'; info.textContent = 'Buscando na Meta…'; }
+  if (info) { info.style.display = 'block'; info.textContent = _wt('Buscando na Meta…', 'Fetching from Meta…'); }
   try {
     const fn = firebase.app().functions('southamerica-east1').httpsCallable('detalhesNumeroWhatsApp');
     const resp = await fn({ slug });
     const d = (resp && resp.data) || {};
-    if (!d.ok) throw new Error(d.erro || 'Falha ao consultar.');
+    if (!d.ok) throw new Error(d.erro || _wt('Falha ao consultar.', 'Lookup failed.'));
     const n = d.numero || {};
     if (info) info.textContent =
-      'Número: ' + (n.display_phone_number || '—') + '\n' +
-      'Nome verificado: ' + (n.verified_name || '—') + '\n' +
-      'Qualidade: ' + (n.quality_rating || '—') + '\n' +
-      'Verificação do nome: ' + (n.name_status || n.code_verification_status || '—') + '\n' +
-      'Plataforma: ' + (n.platform_type || '—');
+      _wt('Número', 'Number') + ': ' + (n.display_phone_number || '—') + '\n' +
+      _wt('Nome verificado', 'Verified name') + ': ' + (n.verified_name || '—') + '\n' +
+      _wt('Qualidade', 'Quality rating') + ': ' + (n.quality_rating || '—') + '\n' +
+      _wt('Verificação do nome', 'Name review status') + ': ' + (n.name_status || n.code_verification_status || '—') + '\n' +
+      _wt('Plataforma', 'Platform') + ': ' + (n.platform_type || '—');
   } catch (e) {
-    if (info) info.textContent = 'Erro ao buscar dados: ' + ((e && e.message) || e);
+    if (info) info.textContent = _wt('Erro ao buscar dados: ', 'Error fetching data: ') + ((e && e.message) || e);
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
 async function wacDesconectar() {
-  if (!confirm('Desconectar o WhatsApp Cloud API desta loja? O robô volta a usar o método atual (Baileys/QR).')) return;
+  if (!confirm(_wt('Desconectar o WhatsApp Cloud API desta loja? O robô volta a usar o método atual (Baileys/QR).', "Disconnect this store's WhatsApp Cloud API? The bot goes back to the current method (Baileys/QR)."))) return;
   try {
     const fn = firebase.app().functions('southamerica-east1').httpsCallable('desconectarWhatsAppCloud');
     const resp = await fn({ slug });
     const d = (resp && resp.data) || {};
-    if (!d.ok) throw new Error(d.erro || 'Falha ao desconectar.');
-    notify('WhatsApp Cloud API desconectado.');   // o listener re-renderiza p/ o estado não-conectado
+    if (!d.ok) throw new Error(d.erro || _wt('Falha ao desconectar.', 'Failed to disconnect.'));
+    notify(_wt('WhatsApp Cloud API desconectado.', 'WhatsApp Cloud API disconnected.'));   // o listener re-renderiza p/ o estado não-conectado
   } catch (e) {
-    notify('Erro ao desconectar: ' + ((e && e.message) || e), 'error');
+    notify(_wt('Erro ao desconectar: ', 'Error disconnecting: ') + ((e && e.message) || e), 'error');
   }
 }
 // ─────────────────────────────────────────────────────────────────
