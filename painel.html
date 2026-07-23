@@ -2517,6 +2517,10 @@ let _wacWatchdog   = null;    // backstop (60s) caso NADA volte da Meta (ex.: ja
 let _wacGraca      = null;    // grace curto (8s) após o popup fechar sem trazer os dados do número
 let _wacConfig     = null;    // último clientes/{slug}/config/whatsappCloud (estado conectado)
 let _wacUnsub      = null;    // unsubscribe do listener de config
+// Debug OFF por padrão: o dump cru de postMessage inclui frames internos do SDK com a URL
+// OAuth (contém o `code`) — credencial. Ligue com localStorage.setItem('wacDebug','1') p/ depurar.
+let _wacDebug = false;
+try { _wacDebug = (typeof localStorage !== 'undefined' && localStorage.getItem('wacDebug') === '1'); } catch (_) {}
 
 function _wacMsg(txt, tipo) {
   const el = document.getElementById('cloudSignupMsg');
@@ -2535,29 +2539,20 @@ function _wacEncerrar() {                 // fim do fluxo (sucesso, erro ou canc
   const btn = document.getElementById('btnCloudSignup');
   if (btn) btn.disabled = false;
 }
-// Mensagem de diagnóstico quando a Meta não devolve os 3 pedaços — NUNCA deixa "Abrindo…" pendurado.
+// Backstop: só dispara se o LOGIN do Facebook não voltar (sem o code não há o que concluir).
+// Com o code, o servidor deriva waba/phone do token — então este ramo não culpa o domínio.
 function _wacDiagnostico() {
   if (_wacEnviando) return;               // já está trocando o code no servidor — deixa concluir
-  const { code, waba_id, phone_number_id } = _wacSignup;
-  if (code && waba_id && phone_number_id) return;
-  const falta = !code ? 'o login do Facebook (o <code>code</code>)'
-                      : 'os dados do número (waba_id / phone_number_id)';
-  _wacMsg('⚠️ A Meta não devolveu ' + falta + '. Verifique se o domínio <b>' + location.hostname +
-          '</b> está em “Domínios do SDK do JavaScript” no app da Meta e tente de novo. ' +
-          'Abra o console (F12) e me mande as linhas <b>[WAC]</b>.', 'erro');
+  if (_wacSignup.code) return;            // já temos o code → o servidor conclui (deriva waba/phone)
+  _wacMsg('Não recebi o login do Facebook. Feche o cadastro e tente de novo. Se persistir, veja o console (F12) nas linhas <b>[WAC]</b>.', 'erro');
   _wacEncerrar();
 }
 
-// Junta os retornos; com os 3, troca o code no servidor. Sem os 3, mostra progresso parcial.
+// Com o `code` já dá pra concluir: o servidor troca por token e DERIVA waba_id/phone_number_id
+// quando o postMessage (FINISH) não os trouxe. Passa waba/phone/business só como dica quando há.
 async function _wacTalvezConcluir() {
   const { code, waba_id, phone_number_id, business_id } = _wacSignup;
-  if (!code && !waba_id && !phone_number_id) return;
-  if (!code || !waba_id || !phone_number_id) {
-    // progresso parcial (nunca fica em "Abrindo…"): diz exatamente o que falta
-    _wacMsg(code ? 'Login recebido ✓ — aguardando os dados do número da Meta…'
-                 : 'Dados do número recebidos ✓ — aguardando o login do Facebook…', '');
-    return;
-  }
+  if (!code) return;                                    // sem o code não há o que concluir
   if (_wacEnviando) return;                              // evita disparo duplo
   _wacEnviando = true;
   _wacLimparTimers();
@@ -2585,15 +2580,14 @@ async function _wacTalvezConcluir() {
 
 // A Meta posta waba_id + phone_number_id por aqui (type WA_EMBEDDED_SIGNUP, event FINISH).
 window.addEventListener('message', (ev) => {
-  // Diagnóstico: durante um signup, loga TODO postMessage vindo do Facebook (origem/dados crus).
-  // É o que revela se o FINISH chega — e em que formato — quando "nada é capturado".
-  const doFb = String(ev.origin || '').endsWith('.facebook.com');
-  if (_wacInProgress && doFb) console.log('[WAC] postMessage do FB:', ev.origin, ev.data);
-  if (!doFb) return;
+  // Dump cru SÓ com a flag de debug (o payload pode conter a URL OAuth com o `code`).
+  if (_wacInProgress && _wacDebug) { try { console.log('[WAC] postMessage:', ev.origin, ev.data); } catch (_) {} }
+  let _host = ''; try { _host = new URL(ev.origin).hostname; } catch (_) {}
+  if (!/(^|\.)facebook\.com$/.test(_host)) return;      // aceita www / web / business .facebook.com
   let data;
   try { data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch { return; }
   if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
-  console.log('[WAC] Embedded Signup event:', data.event, data.data || {});
+  console.log('[WAC] Embedded Signup event:', data.event);   // sem despejar data.data (ids ficam no dump de debug)
   if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
     _wacSignup.waba_id         = (data.data && data.data.waba_id) || _wacSignup.waba_id || null;
     _wacSignup.phone_number_id = (data.data && data.data.phone_number_id) || _wacSignup.phone_number_id || null;
@@ -2644,19 +2638,22 @@ async function wacIniciarSignup() {
       if (code) {
         _wacSignup.code = code;
         console.log('[WAC] FB.login: code recebido (expira em ~30s).');
-        _wacTalvezConcluir();
-        // Popup fechou com login OK. Se em 8s o número não vier pelo postMessage, diagnostica.
-        if (!(_wacSignup.waba_id && _wacSignup.phone_number_id)) {
+        if (_wacSignup.waba_id && _wacSignup.phone_number_id) {
+          _wacTalvezConcluir();                          // a mensagem já trouxe tudo → conclui já
+        } else {
+          _wacMsg('Login recebido ✓ — finalizando no servidor…', '');
+          // dá um instante pro postMessage (quando o SDK o emite); senão o servidor deriva do token
           if (_wacGraca) clearTimeout(_wacGraca);
-          _wacGraca = setTimeout(_wacDiagnostico, 8000);
+          _wacGraca = setTimeout(_wacTalvezConcluir, 1500);
         }
       } else if (auth.accessToken) {
         // App configurado p/ devolver token em vez de code — o servidor precisa do code.
-        console.log('[WAC] FB.login devolveu accessToken (esperado: code).', response);
-        _wacMsg('A Meta devolveu um token em vez de um código. Ajuste a config do Embedded Signup (response_type=code). (Ver console [WAC].)', 'erro');
+        // NÃO loga o `response` (contém o accessToken — credencial).
+        console.log('[WAC] FB.login devolveu accessToken em vez de code (ver config do Embedded Signup).');
+        _wacMsg('A Meta devolveu um token em vez de um código. Ajuste a config do Embedded Signup (response_type=code).', 'erro');
         _wacEncerrar();
       } else {
-        console.log('[WAC] FB.login sem code:', response);
+        console.log('[WAC] FB.login sem code (status:', (response && response.status) || '?', ').');   // sem despejar o response
         _wacMsg('Login não concluído.', 'erro');
         _wacEncerrar();
       }
@@ -2664,7 +2661,10 @@ async function wacIniciarSignup() {
       config_id: WAC_FB_CONFIG_ID,
       response_type: 'code',
       override_default_response_type: true,
-      extras: { setup: {} },
+      // sessionInfoVersion faz o SDK EMITIR o postMessage WA_EMBEDDED_SIGNUP (FINISH). Sem ele,
+      // só o `code` voltava e waba_id/phone_number_id nunca chegavam pelo front (era o bug).
+      // O servidor deriva de qualquer jeito (Plano B), então isto é robustez extra, não dependência.
+      extras: { feature: 'whatsapp_embedded_signup', setup: {}, featureType: '', sessionInfoVersion: '3' },
       version: WAC_FB_VERSION,
     });
   } catch (e) {

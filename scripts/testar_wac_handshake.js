@@ -80,7 +80,7 @@ function montarCtx(opts) {
     confirm: () => (opts.confirm !== false),
     setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout,
     console: { log: () => {}, warn: () => {}, error: () => {} },
-    Promise, JSON, String, Number, Object,
+    Promise, JSON, String, Number, Object, URL,
   };
   vm.createContext(ctx);
   vm.runInContext(bloco[0] + '\nthis.api = { wacIniciarSignup, renderCloudApiCard, _wacListenerConfig, wacVerDados, wacDesconectar, getSignup: () => _wacSignup, getEnviando: () => _wacEnviando };', ctx);
@@ -93,6 +93,7 @@ function montarCtx(opts) {
     fireLoginNone:  ()     => fbLogin.cb && fbLogin.cb({}),
     fireSnap: (data) => snapCb && snapCb({ exists: !!data, data: () => data }),
     loginPronto: () => !!fbLogin.cb,
+    loginParams: () => fbLogin.params,
   };
 }
 
@@ -102,10 +103,11 @@ function montarCtx(opts) {
     const h = montarCtx();
     h.ctx.api.wacIniciarSignup(); await esperar();
     ok('popup abriu (FB.login registrou callback)', h.loginPronto());
+    ok('extras pede sessionInfoVersion (SDK emite o FINISH)', (h.loginParams().extras || {}).sessionInfoVersion === '3');
     ok('botão desabilitado durante o fluxo', h.els.btnCloudSignup.disabled === true);
     h.fireLoginCode('CODE-1');                       // FB.login volta o code
-    ok('só com o code ainda NÃO chamou o servidor', h.chamadas.length === 0);
-    ok('mensagem parcial (não fica em "Abrindo…")', /aguardando os dados do número/i.test(h.els.cloudSignupMsg.innerHTML));
+    ok('só com o code ainda NÃO chamou o servidor (aguardando grace/FINISH)', h.chamadas.length === 0);
+    ok('mensagem "finalizando no servidor" (não fica em "Abrindo…")', /finalizando no servidor/i.test(h.els.cloudSignupMsg.innerHTML));
     h.fireMsg('FINISH', { waba_id: 'W1', phone_number_id: 'P1', business_id: 'B1' }); await esperar(); await esperar();
     ok('chamou trocarCodeWhatsApp exatamente 1×', h.chamadas.filter(c => c.nome === 'trocarCodeWhatsApp').length === 1);
     ok('payload = {slug, code, waba_id, phone_number_id, business_id}', JSON.stringify(h.chamadas[0].payload) === JSON.stringify({ slug: 'joey', code: 'CODE-1', waba_id: 'W1', phone_number_id: 'P1', business_id: 'B1' }));
@@ -124,16 +126,19 @@ function montarCtx(opts) {
     ok('payload correto', h.chamadas[0].payload.code === 'CODE-2' && h.chamadas[0].payload.phone_number_id === 'P2');
   }
 
-  console.log('\n══ 3. code sem FINISH: grace/watchdog diagnostica e NÃO trava, sem chamar o servidor ══\n');
+  console.log('\n══ 3. code SEM FINISH (Plano B): servidor recebe o code e deriva waba/phone ══\n');
   {
     const h = montarCtx();
     h.ctx.api.wacIniciarSignup(); await esperar();
-    h.fireLoginCode('CODE-3');                        // popup fechou com login, número nunca vem
-    h.flushTimers();                                  // dispara grace(8s)+watchdog(60s)
-    ok('NÃO chamou trocarCodeWhatsApp', h.chamadas.length === 0);
-    ok('mostrou diagnóstico com o domínio (não ficou em "Abrindo…")', /Domínios do SDK/i.test(h.els.cloudSignupMsg.innerHTML) && /app\.gestaojoey\.com\.br/.test(h.els.cloudSignupMsg.innerHTML));
-    ok('mensagem é de erro (vermelha)', h.els.cloudSignupMsg.style.color === '#f87171');
-    ok('botão reabilitado', h.els.btnCloudSignup.disabled === false);
+    h.fireLoginCode('CODE-3');                        // popup fechou com login; FINISH nunca vem
+    ok('mensagem "finalizando no servidor"', /finalizando no servidor/i.test(h.els.cloudSignupMsg.innerHTML));
+    ok('ainda não chamou (aguardando o grace)', h.chamadas.length === 0);
+    h.flushTimers();                                  // dispara o grace(1,5s) → conclui pelo servidor
+    await esperar(); await esperar();
+    ok('CHAMOU trocarCodeWhatsApp mesmo sem FINISH', h.chamadas.filter(c => c.nome === 'trocarCodeWhatsApp').length === 1);
+    ok('payload leva code + waba/phone null (servidor deriva do token)', h.chamadas[0].payload.code === 'CODE-3' && h.chamadas[0].payload.waba_id === null && h.chamadas[0].payload.phone_number_id === null);
+    ok('mensagem de sucesso na tela', /conectado via Cloud API/i.test(h.els.cloudSignupMsg.innerHTML));
+    ok('não ficou preso enviando', h.ctx.api.getEnviando() === false);
   }
 
   console.log('\n══ 4. CANCEL e ERROR: mensagem clara, encerra, sem chamar o servidor ══\n');
