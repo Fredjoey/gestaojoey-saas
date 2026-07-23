@@ -542,6 +542,18 @@ textarea.fi{resize:vertical;min-height:60px}
 .wac-btn:disabled{opacity:.6;cursor:default;filter:none}
 .wac-btn-baileys{background:var(--orange);color:#fff}
 .wac-btn-cloud{background:#E87722;color:#fff}
+/* Cloud API — estado conectado */
+.wac-conn-status{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:#13332a;color:#7BC47F}
+.wac-conn-row{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:5px 0;border-bottom:1px solid #232323}
+.wac-conn-row:last-child{border-bottom:none}
+.wac-conn-k{color:var(--text2);white-space:nowrap}
+.wac-conn-v{color:var(--text);font-weight:600;text-align:right;word-break:break-all}
+.wac-numbox{margin-top:12px;font-size:12px;color:var(--text2);background:#0f0f0f;border:1px solid #232323;border-radius:8px;padding:10px;display:none;white-space:pre-wrap;line-height:1.7}
+.wac-mini{display:flex;gap:8px;margin-top:12px}
+.wac-mini button{flex:1;padding:9px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid transparent}
+.wac-mini-info{background:rgba(232,119,34,.14);color:#E87722;border-color:rgba(232,119,34,.35)!important}
+.wac-mini-off{background:rgba(239,68,68,.12);color:#f87171;border-color:rgba(239,68,68,.3)!important}
+.wac-mini button:disabled{opacity:.6;cursor:default}
 /* ====== ANIVERSARIANTES ====== */
 #aniversariantesBar{display:none;background:linear-gradient(135deg,rgba(236,72,153,.1),rgba(249,115,22,.08));border-bottom:1px solid rgba(236,72,153,.22);padding:7px 14px;flex-shrink:0}
 .aniv-nome{font-size:12px;font-weight:600;color:var(--text)}
@@ -1607,8 +1619,13 @@ textarea.fi{resize:vertical;min-height:60px}
               <span class="wac-tag wac-tag-novo">Oficial · Meta</span>
             </div>
             <p class="wac-card-desc">Conexão oficial da Meta, mais estável e sem QR. Você autoriza pela sua conta do Facebook (Embedded Signup).</p>
-            <button class="wac-btn wac-btn-cloud" id="btnCloudSignup" onclick="wacIniciarSignup()">Conectar WhatsApp (Cloud API)</button>
-            <div id="cloudSignupMsg" style="display:none;font-size:12px;margin-top:10px"></div>
+            <!-- Estado NÃO conectado: botão do Embedded Signup -->
+            <div id="cloudConnectBox">
+              <button class="wac-btn wac-btn-cloud" id="btnCloudSignup" onclick="wacIniciarSignup()">Conectar WhatsApp (Cloud API)</button>
+              <div id="cloudSignupMsg" style="display:none;font-size:12px;margin-top:10px"></div>
+            </div>
+            <!-- Estado conectado: dados da conta + ações (preenchido por renderCloudApiCard) -->
+            <div id="cloudConnectedBox" style="display:none"></div>
           </div>
         </div>
 
@@ -2363,6 +2380,7 @@ function showPanel(panel, navEl) {
   if (panel==='robo')       carregarRobo();
   if (panel==='salao')      renderSalao();
   if (panel==='caixa')      renderCaixa();
+  if (panel==='whatsapp')   renderCloudApiCard();
 }
 
 // ── Conexão WhatsApp ──────────────────────────────────────────────
@@ -2482,39 +2500,76 @@ async function buscarQRCode() {
 atualizarStatusWA();
 setInterval(atualizarStatusWA, 30000);
 
-// ── WhatsApp Cloud API — Embedded Signup (FASE 1) ──────────────────
-// Captura o `code` (do FB.login, expira em ~30s) + `waba_id`/`phone_number_id`
-// (do postMessage da Meta) e SÓ LOGA o objeto juntado. NÃO chama backend (isso é a Fase 2).
+// ── WhatsApp Cloud API — Embedded Signup (handshake completo) ──────
+// Junta o `code` (callback do FB.login, expira ~30s) + `waba_id`/`phone_number_id`
+// (postMessage da Meta, event FINISH) e chama a Cloud Function trocarCodeWhatsApp, que
+// troca o code por token NO SERVIDOR e grava clientes/{slug}/config/whatsappCloud.
+// O estado conectado é dirigido por _wacListenerConfig (onSnapshot) → renderCloudApiCard.
 const WAC_FB_APP_ID    = '1092362123966651';   // App ID público (client-side, não é segredo)
 const WAC_FB_CONFIG_ID = '2010774560314805';   // Config do Embedded Signup
 const WAC_FB_VERSION   = 'v25.0';
 
-let _wacSignup    = { code: null, waba_id: null, phone_number_id: null };
+let _wacSignup    = { code: null, waba_id: null, phone_number_id: null, business_id: null };
 let _wacSdkPromise = null;
 let _wacEnviando   = false;   // trava p/ não chamar a function 2x (o code só vale 1x, ~30s)
+let _wacInProgress = false;   // um signup está em andamento (liga o log de diagnóstico + watchdogs)
+let _wacWatchdog   = null;    // backstop (60s) caso NADA volte da Meta (ex.: janela sem opener)
+let _wacGraca      = null;    // grace curto (8s) após o popup fechar sem trazer os dados do número
+let _wacConfig     = null;    // último clientes/{slug}/config/whatsappCloud (estado conectado)
+let _wacUnsub      = null;    // unsubscribe do listener de config
 
 function _wacMsg(txt, tipo) {
   const el = document.getElementById('cloudSignupMsg');
   if (!el) return;
-  el.textContent = txt || '';
+  el.innerHTML = txt || '';
   el.style.display = txt ? 'block' : 'none';
   el.style.color = tipo === 'erro' ? '#f87171' : tipo === 'ok' ? '#34d399' : 'var(--text2)';
 }
-
-// Junta os dois retornos; quando tiver os 3, loga (Fase 2 mandará ao backend)
-async function _wacTalvezConcluir() {
+function _wacLimparTimers() {
+  if (_wacWatchdog) { clearTimeout(_wacWatchdog); _wacWatchdog = null; }
+  if (_wacGraca)    { clearTimeout(_wacGraca);    _wacGraca = null; }
+}
+function _wacEncerrar() {                 // fim do fluxo (sucesso, erro ou cancelamento)
+  _wacInProgress = false;
+  _wacLimparTimers();
+  const btn = document.getElementById('btnCloudSignup');
+  if (btn) btn.disabled = false;
+}
+// Mensagem de diagnóstico quando a Meta não devolve os 3 pedaços — NUNCA deixa "Abrindo…" pendurado.
+function _wacDiagnostico() {
+  if (_wacEnviando) return;               // já está trocando o code no servidor — deixa concluir
   const { code, waba_id, phone_number_id } = _wacSignup;
-  if (!code || !waba_id || !phone_number_id) return;   // ainda faltam pedaços (code OU waba/phone)
+  if (code && waba_id && phone_number_id) return;
+  const falta = !code ? 'o login do Facebook (o <code>code</code>)'
+                      : 'os dados do número (waba_id / phone_number_id)';
+  _wacMsg('⚠️ A Meta não devolveu ' + falta + '. Verifique se o domínio <b>' + location.hostname +
+          '</b> está em “Domínios do SDK do JavaScript” no app da Meta e tente de novo. ' +
+          'Abra o console (F12) e me mande as linhas <b>[WAC]</b>.', 'erro');
+  _wacEncerrar();
+}
+
+// Junta os retornos; com os 3, troca o code no servidor. Sem os 3, mostra progresso parcial.
+async function _wacTalvezConcluir() {
+  const { code, waba_id, phone_number_id, business_id } = _wacSignup;
+  if (!code && !waba_id && !phone_number_id) return;
+  if (!code || !waba_id || !phone_number_id) {
+    // progresso parcial (nunca fica em "Abrindo…"): diz exatamente o que falta
+    _wacMsg(code ? 'Login recebido ✓ — aguardando os dados do número da Meta…'
+                 : 'Dados do número recebidos ✓ — aguardando o login do Facebook…', '');
+    return;
+  }
   if (_wacEnviando) return;                              // evita disparo duplo
   _wacEnviando = true;
+  _wacLimparTimers();
   _wacMsg('Conectando sua conta…', '');
   try {
     const fn = firebase.app().functions('southamerica-east1').httpsCallable('trocarCodeWhatsApp');
-    const resp = await fn({ slug, code, waba_id, phone_number_id });
+    const resp = await fn({ slug, code, waba_id, phone_number_id, business_id });
     const data = (resp && resp.data) || {};
     console.log('[WAC] trocarCodeWhatsApp:', data);
     if (data.ok) {
-      _wacMsg('✅ WhatsApp conectado via Cloud API!' + (data.appAssinado === false ? ' (app ainda não assinado na conta — verifique depois)' : ''), 'ok');
+      _wacMsg('✅ WhatsApp conectado via Cloud API!' + (data.appAssinado === false ? ' (app ainda não assinado — verifique depois)' : ''), 'ok');
+      notify('WhatsApp Cloud API conectado! ✅');   // o listener de config vira o card p/ o estado conectado
     } else {
       _wacMsg('Não foi possível concluir a conexão.', 'erro');
     }
@@ -2523,25 +2578,33 @@ async function _wacTalvezConcluir() {
     _wacMsg((e && e.message) || 'Erro ao conectar. O código pode ter expirado — tente reconectar.', 'erro');
   } finally {
     _wacEnviando = false;
-    _wacSignup = { code: null, waba_id: null, phone_number_id: null };  // zera p/ próxima tentativa
+    _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null };  // zera p/ próxima tentativa
+    _wacEncerrar();
   }
 }
 
-// A Meta posta waba_id + phone_number_id por aqui (type WA_EMBEDDED_SIGNUP, event FINISH)
+// A Meta posta waba_id + phone_number_id por aqui (type WA_EMBEDDED_SIGNUP, event FINISH).
 window.addEventListener('message', (ev) => {
-  if (!String(ev.origin || '').endsWith('.facebook.com')) return;
+  // Diagnóstico: durante um signup, loga TODO postMessage vindo do Facebook (origem/dados crus).
+  // É o que revela se o FINISH chega — e em que formato — quando "nada é capturado".
+  const doFb = String(ev.origin || '').endsWith('.facebook.com');
+  if (_wacInProgress && doFb) console.log('[WAC] postMessage do FB:', ev.origin, ev.data);
+  if (!doFb) return;
   let data;
   try { data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch { return; }
   if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
-  console.log('[WAC] Embedded Signup message:', data);
-  if (data.event === 'FINISH') {
-    _wacSignup.waba_id         = (data.data && data.data.waba_id) || null;
-    _wacSignup.phone_number_id = (data.data && data.data.phone_number_id) || null;
+  console.log('[WAC] Embedded Signup event:', data.event, data.data || {});
+  if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+    _wacSignup.waba_id         = (data.data && data.data.waba_id) || _wacSignup.waba_id || null;
+    _wacSignup.phone_number_id = (data.data && data.data.phone_number_id) || _wacSignup.phone_number_id || null;
+    _wacSignup.business_id      = (data.data && data.data.business_id) || _wacSignup.business_id || null;   // nem sempre vem no FINISH
     _wacTalvezConcluir();
   } else if (data.event === 'CANCEL') {
-    _wacMsg('Conexão cancelada.', 'erro');
+    _wacMsg('Conexão cancelada' + (data.data && data.data.current_step ? ' (etapa: ' + data.data.current_step + ').' : '.'), 'erro');
+    _wacEncerrar();
   } else if (data.event === 'ERROR') {
-    _wacMsg('A Meta retornou um erro no cadastro.', 'erro');
+    _wacMsg('A Meta retornou um erro no cadastro' + (data.data && data.data.error_message ? ': ' + data.data.error_message : '.'), 'erro');
+    _wacEncerrar();
   }
 });
 
@@ -2565,23 +2628,38 @@ function _wacCarregarSdk() {
 
 async function wacIniciarSignup() {
   const btn = document.getElementById('btnCloudSignup');
-  _wacSignup = { code: null, waba_id: null, phone_number_id: null }; // zera a cada tentativa
+  _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null }; // zera a cada tentativa
+  _wacInProgress = true;
+  _wacLimparTimers();
   _wacMsg('Abrindo o cadastro oficial da Meta…', '');
   if (btn) btn.disabled = true;
+  // Backstop: se NADA voltar em 60s (ex.: popup sem window.opener), não trava — diagnostica.
+  _wacWatchdog = setTimeout(_wacDiagnostico, 60000);
   try {
     const FB = await _wacCarregarSdk();
     FB.login((response) => {
-      // O `code` chega aqui (expira em ~30s); waba_id/phone_number_id vêm pelo listener 'message'
-      const code = response && response.authResponse && response.authResponse.code;
+      // O `code` chega aqui (expira ~30s); waba_id/phone_number_id vêm pelo listener 'message'.
+      const auth = (response && response.authResponse) || {};
+      const code = auth.code;
       if (code) {
         _wacSignup.code = code;
         console.log('[WAC] FB.login: code recebido (expira em ~30s).');
         _wacTalvezConcluir();
+        // Popup fechou com login OK. Se em 8s o número não vier pelo postMessage, diagnostica.
+        if (!(_wacSignup.waba_id && _wacSignup.phone_number_id)) {
+          if (_wacGraca) clearTimeout(_wacGraca);
+          _wacGraca = setTimeout(_wacDiagnostico, 8000);
+        }
+      } else if (auth.accessToken) {
+        // App configurado p/ devolver token em vez de code — o servidor precisa do code.
+        console.log('[WAC] FB.login devolveu accessToken (esperado: code).', response);
+        _wacMsg('A Meta devolveu um token em vez de um código. Ajuste a config do Embedded Signup (response_type=code). (Ver console [WAC].)', 'erro');
+        _wacEncerrar();
       } else {
         console.log('[WAC] FB.login sem code:', response);
         _wacMsg('Login não concluído.', 'erro');
+        _wacEncerrar();
       }
-      if (btn) btn.disabled = false;
     }, {
       config_id: WAC_FB_CONFIG_ID,
       response_type: 'code',
@@ -2592,7 +2670,86 @@ async function wacIniciarSignup() {
   } catch (e) {
     console.error('[WAC] erro ao iniciar signup:', e);
     _wacMsg('Não foi possível carregar o cadastro da Meta. Tente novamente.', 'erro');
+    _wacEncerrar();
+  }
+}
+
+// ── Estado conectado: listener + render + ações (desconectar / ver dados na Meta) ──
+function _wacListenerConfig() {
+  if (_wacUnsub || !slug) return;
+  _wacUnsub = db.doc('clientes/' + slug + '/config/whatsappCloud').onSnapshot(snap => {
+    _wacConfig = snap.exists ? snap.data() : null;
+    renderCloudApiCard();
+  }, err => console.warn('[WAC] listener config:', err && err.message));
+}
+
+function renderCloudApiCard() {
+  const box  = document.getElementById('cloudConnectBox');
+  const conn = document.getElementById('cloudConnectedBox');
+  if (!box || !conn) return;
+  const c = _wacConfig;
+  const conectado = !!(c && c.ativo && c.phoneNumberId);
+  box.style.display  = conectado ? 'none' : '';
+  conn.style.display = conectado ? '' : 'none';
+  if (!conectado) return;
+  const dt = (c.conectadoEm && c.conectadoEm.toDate)
+    ? c.conectadoEm.toDate().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
+  const statusTxt = c.appAssinado === false ? '⚠️ app não assinado na WABA' : 'ativo';
+  const row = (k, v) => '<div class="wac-conn-row"><span class="wac-conn-k">' + k +
+    '</span><span class="wac-conn-v">' + _esc(String(v == null || v === '' ? '—' : v)) + '</span></div>';
+  conn.innerHTML =
+    '<div class="wac-conn-status">● Conectado</div>' +
+    '<div style="margin-top:10px">' +
+      row('Número', c.displayPhoneNumber) +
+      row('Nome de exibição', c.verifiedName) +
+      row('WABA ID', c.wabaId) +
+      (c.businessId ? row('Business ID', c.businessId) : '') +
+      row('Phone Number ID', c.phoneNumberId) +
+      row('Status', statusTxt) +
+      row('Conectado em', dt) +
+    '</div>' +
+    '<div id="cloudNumInfo" class="wac-numbox"></div>' +
+    '<div class="wac-mini">' +
+      '<button class="wac-mini-info" id="btnWacDados" onclick="wacVerDados()">🔎 Ver dados na Meta</button>' +
+      '<button class="wac-mini-off" onclick="wacDesconectar()">Desconectar</button>' +
+    '</div>';
+}
+
+// Ação que USA whatsapp_business_management: lê os dados do número na Graph API (via CF) e mostra.
+async function wacVerDados() {
+  const btn  = document.getElementById('btnWacDados');
+  const info = document.getElementById('cloudNumInfo');
+  if (btn) btn.disabled = true;
+  if (info) { info.style.display = 'block'; info.textContent = 'Buscando na Meta…'; }
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('detalhesNumeroWhatsApp');
+    const resp = await fn({ slug });
+    const d = (resp && resp.data) || {};
+    if (!d.ok) throw new Error(d.erro || 'Falha ao consultar.');
+    const n = d.numero || {};
+    if (info) info.textContent =
+      'Número: ' + (n.display_phone_number || '—') + '\n' +
+      'Nome verificado: ' + (n.verified_name || '—') + '\n' +
+      'Qualidade: ' + (n.quality_rating || '—') + '\n' +
+      'Verificação do nome: ' + (n.name_status || n.code_verification_status || '—') + '\n' +
+      'Plataforma: ' + (n.platform_type || '—');
+  } catch (e) {
+    if (info) info.textContent = 'Erro ao buscar dados: ' + ((e && e.message) || e);
+  } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+async function wacDesconectar() {
+  if (!confirm('Desconectar o WhatsApp Cloud API desta loja? O robô volta a usar o método atual (Baileys/QR).')) return;
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('desconectarWhatsAppCloud');
+    const resp = await fn({ slug });
+    const d = (resp && resp.data) || {};
+    if (!d.ok) throw new Error(d.erro || 'Falha ao desconectar.');
+    notify('WhatsApp Cloud API desconectado.');   // o listener re-renderiza p/ o estado não-conectado
+  } catch (e) {
+    notify('Erro ao desconectar: ' + ((e && e.message) || e), 'error');
   }
 }
 // ─────────────────────────────────────────────────────────────────
@@ -7486,6 +7643,7 @@ let _listenersIniciados = false;
 function iniciarListenersFirestore() {
   carregarAutoAceitar();
   iniciarIaListeners();
+  _wacListenerConfig();   // estado conectado do WhatsApp Cloud API (config/whatsappCloud)
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
     const defaults = { nome:'Joey Pizza', wpp:'', taxa:5, end:'', aberto:true, horarios:{}, bairros:[], impressaoAtiva:true, viasImpressao:1, impressoraNome:'' };
     config = snap.exists ? { ...defaults, ...snap.data() } : defaults;
