@@ -73,9 +73,9 @@
     <div class="rota-card">
       <div class="rota-title">Abrir rota com…</div>
       <div class="rota-status" id="rotaStatus"></div>
-      <a class="rota-opt" id="rotaGoogle" target="_blank" rel="noopener" onclick="fecharRota()">🗺️ Google Maps</a>
-      <a class="rota-opt" id="rotaWaze"   target="_blank" rel="noopener" onclick="fecharRota()">🚗 Waze</a>
-      <a class="rota-opt" id="rotaApple"  target="_blank" rel="noopener" onclick="fecharRota()">🍎 Apple Maps</a>
+      <a class="rota-opt" id="rotaGoogle" href="#" onclick="return abrirApp('google')">🗺️ Google Maps</a>
+      <a class="rota-opt" id="rotaWaze"   href="#" onclick="return abrirApp('waze')">🚗 Waze</a>
+      <a class="rota-opt" id="rotaApple"  href="#" onclick="return abrirApp('apple')">🍎 Apple Maps</a>
       <button class="rota-cancel" onclick="fecharRota()">Cancelar</button>
     </div>
   </div>
@@ -160,13 +160,19 @@ function destinoRota(p) {
 }
 
 // ORIGEM — GPS REAL do celular do motoboy.
-// Sem `origin=`, o Google Maps *web* (o que abre no navegador do WhatsApp, onde não há
-// permissão de GPS) chuta a origem pelo IP da operadora — daí a rota "começar" em outra
-// cidade. Passando a coordenada dele, a rota parte de onde ele está: na loja ou na rua.
+// Duas frentes contra a rota "começar" em outra cidade:
+//   1) Ao tocar num app, tentamos ABRIR O APP NATIVO (google.navigation: / comgooglemaps://
+//      / maps://): o app usa o GPS do próprio aparelho, então nem precisa de origem.
+//   2) Só se nenhum app abrir caímos na URL *web* — e aí SIM mandamos `origin=<GPS>`, porque
+//      o Google Maps web dentro do navegador do WhatsApp não lê o GPS e, sem origem, chutaria
+//      pelo IP da operadora (o tal "ponto fixo" em outra cidade).
 let _rotaDest = '', _rotaDestCoord = false;
 
 function _pegarGps(timeoutMs) {
   return new Promise(resolve => {
+    // Coordenada "quente" do watchPosition (aquecido no load) — instantânea e recente.
+    const quente = (typeof _gpsQuenteFresco === 'function') ? _gpsQuenteFresco() : null;
+    if (quente) return resolve(quente);
     if (!navigator.geolocation) return resolve(null);
     let feito = false;
     const encerra = (v) => { if (feito) return; feito = true; resolve(v); };
@@ -174,7 +180,7 @@ function _pegarGps(timeoutMs) {
     navigator.geolocation.getCurrentPosition(
       pos => encerra({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6) }),
       ()  => encerra(null),                                        // negou permissão ou falhou → fallback
-      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 5000 }   // fix fresco (era 60000)
     );
   });
 }
@@ -182,14 +188,18 @@ function _pegarGps(timeoutMs) {
 function _rotaSetHrefs(origem) {
   const d = _rotaDest;
   const o = origem ? encodeURIComponent(origem.lat + ',' + origem.lng) : '';
-  document.getElementById('rotaGoogle').href =
-    'https://www.google.com/maps/dir/?api=1&destination=' + d + (o ? '&origin=' + o : '') + '&travelmode=driving';
-  // Waze só navega a partir do GPS do próprio app (não aceita origem) — some com o `q=`
-  // quando o destino é coordenada, que é o formato que ele entende de verdade.
-  document.getElementById('rotaWaze').href =
-    'https://waze.com/ul?' + (_rotaDestCoord ? 'll=' + d : 'q=' + d) + '&navigate=yes';
-  document.getElementById('rotaApple').href =
-    'https://maps.apple.com/?daddr=' + d + (o ? '&saddr=' + o : '') + '&dirflg=d';
+  // URLs WEB (fallback final). Guardam origin=<GPS> — na web do WhatsApp é a única forma
+  // de a rota partir do motoboy; se abrir num app nativo, o próprio app ignora a origem.
+  const gWeb = 'https://www.google.com/maps/dir/?api=1&destination=' + d + (o ? '&origin=' + o : '') + '&travelmode=driving';
+  // Waze só navega a partir do GPS do próprio app (não aceita origem) — usa `ll=` quando o
+  // destino é coordenada (formato que ele entende) e `q=` quando é texto.
+  const wWeb = 'https://waze.com/ul?' + (_rotaDestCoord ? 'll=' + d : 'q=' + d) + '&navigate=yes';
+  const aWeb = 'https://maps.apple.com/?daddr=' + d + (o ? '&saddr=' + o : '') + '&dirflg=d';
+  document.getElementById('rotaGoogle').href = gWeb;
+  document.getElementById('rotaWaze').href   = wWeb;
+  document.getElementById('rotaApple').href  = aWeb;
+  // Monta as cadeias app-nativo→web (helper fora deste bloco; no teste headless nem roda).
+  if (typeof _rotaMontarCadeias === 'function') _rotaMontarCadeias(d, gWeb, wWeb, aWeb);
 }
 
 function _rotaStatus(estado) {
@@ -197,7 +207,7 @@ function _rotaStatus(estado) {
   if (!el) return;
   if (estado === 'buscando') { el.textContent = '📍 Pegando sua localização…'; el.style.color = 'var(--text2)'; }
   else if (estado === 'ok')  { el.textContent = '📍 A rota parte de onde você está'; el.style.color = 'var(--green)'; }
-  else                       { el.textContent = '⚠️ Sem GPS — o app escolhe o ponto de partida'; el.style.color = '#fbbf24'; }
+  else                       { el.textContent = '⚠️ Sem GPS aqui. Abrindo direto no app de mapas a rota já parte de você; se cair no navegador do WhatsApp, toque no menu (⋮ / compartilhar) → "Abrir no Chrome/Safari".'; el.style.color = '#fbbf24'; }
 }
 
 async function abrirRotaMenu(encDest, ehCoord) {
@@ -211,12 +221,89 @@ async function abrirRotaMenu(encDest, ehCoord) {
   _rotaStatus('buscando');
   document.getElementById('rotaSheet').classList.add('show');
 
-  const gps = await _pegarGps(8000);
+  const gps = await _pegarGps(10000);
   if (!document.getElementById('rotaSheet').classList.contains('show')) return;   // fechou/abriu antes
   if (gps) { _rotaSetHrefs(gps); _rotaStatus('ok'); }
   else     { _rotaStatus('sem'); }
 }
 function fecharRota() { document.getElementById('rotaSheet').classList.remove('show'); }
+
+// ── APP NATIVO PRIMEIRO (o GPS de verdade mora no app, não na WebView do WhatsApp) ──
+// Detecção de plataforma só pra escolher o esquema certo (Android × iOS).
+const _ua = navigator.userAgent || '';
+const _isIOS = /iPad|iPhone|iPod/.test(_ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const _isAndroid = /Android/.test(_ua);
+let _rotaNativo = { google: [], waze: [], apple: [] };   // cadeia ordenada por app (web é o último elo)
+
+// Monta, por app, a cadeia [app-nativo…, web]. `d` = destino já url-encodado.
+// Nos esquemas nativos NÃO vai origem: o app parte do GPS do aparelho por conta própria.
+function _rotaMontarCadeias(d, gWeb, wWeb, aWeb) {
+  const wNat = 'waze://?' + (_rotaDestCoord ? 'll=' + d : 'q=' + d) + '&navigate=yes';
+  const aNat = 'maps://?daddr=' + d + '&dirflg=d';
+  if (_isIOS)          _rotaNativo.google = ['comgooglemaps://?daddr=' + d + '&directionsmode=driving', aNat, gWeb];
+  else if (_isAndroid) _rotaNativo.google = ['google.navigation:q=' + d + '&mode=d', gWeb];
+  else                 _rotaNativo.google = [gWeb];
+  _rotaNativo.waze  = [wNat, wWeb];
+  _rotaNativo.apple = _isIOS ? [aNat, aWeb] : [aWeb];
+}
+
+// Tenta cada URI em ordem: se a página some (o app abriu) para; senão ~1,2s depois vai pra
+// próxima. Ao chegar num http(s) — a web — encerra (a web sempre "abre").
+function _abrirCadeia(uris) {
+  if (!uris || !uris.length) return;
+  let saiu = false;
+  const marcar = () => { saiu = true; };
+  const limpar = () => {
+    document.removeEventListener('visibilitychange', marcar);
+    window.removeEventListener('pagehide', marcar);
+    window.removeEventListener('blur', marcar);
+  };
+  document.addEventListener('visibilitychange', marcar);
+  window.addEventListener('pagehide', marcar);
+  window.addEventListener('blur', marcar);
+  let i = 0;
+  const passo = () => {
+    if (saiu || document.hidden || i >= uris.length) return limpar();
+    const u = uris[i++];
+    try { window.location.href = u; } catch (_) {}
+    if (/^https?:/i.test(u)) return limpar();          // web = elo final da cadeia
+    setTimeout(passo, 1200);
+  };
+  passo();
+}
+
+// Chamado pelos <a> da folha de rota (retorna false: quem navega é a cadeia, não o href).
+function abrirApp(app) {
+  const chain = (_rotaNativo && _rotaNativo[app]) ? _rotaNativo[app].slice() : [];
+  fecharRota();
+  if (chain.length) { _abrirCadeia(chain); }
+  else {
+    const el = document.getElementById(app === 'waze' ? 'rotaWaze' : app === 'apple' ? 'rotaApple' : 'rotaGoogle');
+    if (el && el.href) window.location.href = el.href;   // rede de segurança: usa o href web já montado
+  }
+  return false;
+}
+
+// ── GPS QUENTE — aquece a localização no CARREGAMENTO, não só ao tocar "Abrir rota" ──
+// watchPosition mantém uma coordenada recente pronta; quando o motoboy toca, a origem da web
+// já sai instantânea (e a permissão foi pedida assim que ele abriu a página).
+let _gpsQuente = null, _gpsWatchId = null;
+function _iniciarGpsQuente() {
+  if (!navigator.geolocation || _gpsWatchId != null) return;
+  try {
+    _gpsWatchId = navigator.geolocation.watchPosition(
+      pos => { _gpsQuente = { lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6), ts: Date.now() }; },
+      ()  => {},                                             // negou/sem sinal → segue no fallback ao abrir a rota
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 15000 }
+    );
+  } catch (_) {}
+}
+// Só serve a coordenada se for recente (≤30s) — nada de fix velho como no maximumAge:60000 de antes.
+function _gpsQuenteFresco() {
+  if (!_gpsQuente) return null;
+  if (Date.now() - _gpsQuente.ts > 30000) return null;
+  return { lat: _gpsQuente.lat, lng: _gpsQuente.lng };
+}
 
 function render(lista) {
   if (!lista.length) {
@@ -266,6 +353,7 @@ async function entreguei(id, btn) {
   }
 }
 
+_iniciarGpsQuente();   // pede a localização já no load (permissão + coordenada quente)
 init();
 </script>
 </body>
