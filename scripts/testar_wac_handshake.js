@@ -178,6 +178,12 @@ function montarCtx(opts) {
     ok('mostra número, nome, WABA, business id, phone id', /99999-0000/.test(html) && /Joey Burger/.test(html) && /WABA123/.test(html) && /BIZ789/.test(html) && /PN456/.test(html));
     ok('tem botão Desconectar e Ver dados', /wacDesconectar\(\)/.test(html) && /wacVerDados\(\)/.test(html));
     ok('mostra "Conectado"', /Conectado/.test(html));
+    // desconectar: a msg verde "conectado" NÃO pode ficar pendurada abaixo do botão
+    h.els.cloudSignupMsg.innerHTML = '✅ WhatsApp conectado via Cloud API!';
+    h.els.cloudSignupMsg.style.display = 'block';
+    h.fireSnap(null);   // config sumiu (ativo:false / doc apagado) → volta pro estado inicial
+    ok('desconectou → mostra o botão de novo', h.els.cloudConnectBox.style.display === '' && h.els.cloudConnectedBox.style.display === 'none');
+    ok('desconectou → limpa a mensagem verde pendurada', h.els.cloudSignupMsg.innerHTML === '' && h.els.cloudSignupMsg.style.display === 'none');
   }
 
   console.log('\n══ 7. Ver dados na Meta (whatsapp_business_management) e Desconectar ══\n');

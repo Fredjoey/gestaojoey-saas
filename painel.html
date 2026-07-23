@@ -2691,7 +2691,12 @@ function renderCloudApiCard() {
   const conectado = !!(c && c.ativo && c.phoneNumberId);
   box.style.display  = conectado ? 'none' : '';
   conn.style.display = conectado ? '' : 'none';
-  if (!conectado) return;
+  if (!conectado) {
+    // Limpa a mensagem verde de "conectado" que ficaria pendurada abaixo do botão após
+    // desconectar. Não apaga se um signup estiver em andamento (senão some "Conectando…").
+    if (!_wacInProgress && !_wacEnviando) _wacMsg('');
+    return;
+  }
   const dt = (c.conectadoEm && c.conectadoEm.toDate)
     ? c.conectadoEm.toDate().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
   const statusTxt = c.appAssinado === false ? '⚠️ app não assinado na WABA' : 'ativo';
