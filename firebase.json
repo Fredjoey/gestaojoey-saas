@@ -55,7 +55,17 @@
         "pegar*.js",
         "redeploy*.js",
         "renomear*.js",
-        "seed*.js"
+        "seed*.js",
+        "*.md",
+        "docs/**",
+        "config/**",
+        "clientes*.json",
+        "contatos*.json",
+        "backup_*.json",
+        "backup_*/**",
+        "*.rules",
+        "package.json",
+        "package-lock.json"
       ],
       "headers": [
         {
@@ -144,7 +154,17 @@
         "pegar*.js",
         "redeploy*.js",
         "renomear*.js",
-        "seed*.js"
+        "seed*.js",
+        "*.md",
+        "docs/**",
+        "config/**",
+        "clientes*.json",
+        "contatos*.json",
+        "backup_*.json",
+        "backup_*/**",
+        "*.rules",
+        "package.json",
+        "package-lock.json"
       ],
       "headers": [
         {
@@ -234,7 +254,17 @@
         "pegar*.js",
         "redeploy*.js",
         "renomear*.js",
-        "seed*.js"
+        "seed*.js",
+        "*.md",
+        "docs/**",
+        "config/**",
+        "clientes*.json",
+        "contatos*.json",
+        "backup_*.json",
+        "backup_*/**",
+        "*.rules",
+        "package.json",
+        "package-lock.json"
       ],
       "headers": [
         { "source": "/painel.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
