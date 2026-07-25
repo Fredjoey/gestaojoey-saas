@@ -47,3 +47,10 @@ verificar_railway_servicos.js
 backup_*.json
 backup_*/
 *.ttf
+
+# Docs internos — NUNCA versionar (repo publico) nem servir no hosting
+# docs/ tem as credenciais do clienteteste mandadas pra Meta;
+# os dois .md descrevem a arquitetura do Firestore e o faturamento real.
+docs/
+INTEGRACAO_ASSESSOR.md
+ESTRUTURA_COMPRAS_ESTOQUE.md
