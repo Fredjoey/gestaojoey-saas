@@ -373,6 +373,27 @@ textarea.fi{resize:vertical;min-height:60px}
   animation:tarjaSlide .3s ease;
 }
 @keyframes tarjaSlide{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+
+/* TARJA MODO SUPORTE (super admin no painel de outro tenant) */
+#suporteBar{
+  display:none;position:fixed;top:0;left:0;right:0;z-index:10000;
+  height:36px;box-sizing:border-box;background:#B3261E;color:#fff;
+  align-items:center;gap:12px;padding:0 14px;
+  font-size:13px;font-weight:600;letter-spacing:.2px;
+  animation:tarjaSlide .3s ease;
+}
+#suporteBar .sup-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#suporteBar .sup-sair{
+  flex-shrink:0;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.55);
+  color:#fff;border-radius:6px;padding:4px 11px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:inherit;
+}
+#suporteBar .sup-sair:hover{background:rgba(255,255,255,.3)}
+/* empurra o app 36px pra baixo — .sidebar e .main-wrap são height:100vh, então descontam a tarja */
+body.suporte-on{padding-top:36px}
+body.suporte-on .sidebar,
+body.suporte-on .main-wrap{height:calc(100vh - 36px)}
+body.suporte-on #botAlertBanner{top:36px}
 #botAlertClose{
   position:absolute;top:50%;right:10px;transform:translateY(-50%);
   display:flex;align-items:center;justify-content:center;
@@ -566,6 +587,12 @@ textarea.fi{resize:vertical;min-height:60px}
 
 <!-- TARJA BOT DESCONECTADO -->
 <div id="botAlertBanner">⚠️ Bot WhatsApp desconectado — as mensagens automáticas não estão sendo enviadas. Reconecte o bot.<button id="botAlertClose" type="button" onclick="dispensarAlertaBot()" aria-label="Dispensar aviso" title="Dispensar">✕</button></div>
+
+<!-- TARJA MODO SUPORTE — só aparece quando um super admin abre o painel de OUTRO tenant -->
+<div id="suporteBar">
+  <span class="sup-txt" id="suporteTxt">⚠ MODO SUPORTE</span>
+  <button type="button" class="sup-sair" onclick="sairModoSuporte()">Sair do modo suporte</button>
+</div>
 
 <!-- TELA DE LOGIN -->
 <div id="loginScreen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
@@ -2128,9 +2155,16 @@ const hostnameSlug = (
   hostname === 'localhost' ||
   hostname === '127.0.0.1'
 ) ? 'joey' : hostname.split('.')[0];
-// Em subdomínio o slug é imediato (SEM query — idêntico ao de hoje). Em host universal começa null
-// e é resolvido após o login (onAuthStateChanged). 'let' porque o universal o define depois.
-let slug = IS_UNIVERSAL ? null : hostnameSlug;
+// MODO SUPORTE (?tenant=<slug>): abre o painel de QUALQUER cliente, mas SÓ para quem tem o claim
+// { superAdmin: true } no JWT (concedido por gestaojoey-saas/scripts/setSuperAdmin.js). O claim só
+// pode ser lido depois do login, então aqui o slug fica null (igual ao host universal) — assim
+// nenhum listener sobe apontando pro tenant errado antes da validação. Sem ?tenant=, nada muda.
+const TENANT_QS = ((new URLSearchParams(location.search)).get('tenant') || '').trim().toLowerCase();
+const TENANT_SUPORTE = /^[a-z0-9-]{2,40}$/.test(TENANT_QS) ? TENANT_QS : '';
+let IS_SUPORTE = false;   // true só quando o super admin está num tenant que NÃO é o dele
+// Em subdomínio o slug é imediato (SEM query — idêntico ao de hoje). Em host universal (ou com
+// ?tenant= pendente de validação) começa null e é resolvido após o login (onAuthStateChanged).
+let slug = (IS_UNIVERSAL || TENANT_SUPORTE) ? null : hostnameSlug;
 
 let CLIENTE_PLANO = 'essencial';
 function iniciarPlanoListener() {
@@ -7521,6 +7555,98 @@ function _mostrarTela(id) { // id = 'loginScreen' | 'universalLoading' | 'semRes
   });
 }
 
+// ── MODO SUPORTE: tarja + saída ──────────────────────────────────────────────
+function _mostrarTarjaSuporte(tenantAlvo) {
+  const bar = document.getElementById('suporteBar');
+  const txt = document.getElementById('suporteTxt');
+  if (!bar || !txt) return;
+  txt.textContent = '⚠ MODO SUPORTE — ' + tenantAlvo;
+  bar.style.display = 'flex';
+  document.body.classList.add('suporte-on');
+  // Nome de exibição do cliente (best-effort — a tarja já apareceu com o slug).
+  db.doc('clientes/' + tenantAlvo).get()
+    .then((s) => {
+      const nome = (s.exists && (s.data() || {}).nome) || '';
+      if (nome) txt.textContent = '⚠ MODO SUPORTE — ' + nome;
+    })
+    .catch(() => {});
+}
+// Volta pro painel PRÓPRIO: só remove o ?tenant= (o slug volta a sair do subdomínio ou do authUid).
+function sairModoSuporte() {
+  const u = new URL(location.href);
+  u.searchParams.delete('tenant');
+  const qs = u.searchParams.toString();
+  location.href = u.pathname + (qs ? '?' + qs : '');
+}
+
+// ── MODO SUPORTE: auditoria central de TODA escrita ──────────────────────────
+// O painel tem ~147 pontos de escrita. Instrumentar um por um seria frágil (qualquer escrita nova
+// nasceria sem auditoria), então interceptamos UMA vez os métodos de escrita do SDK compat.
+// Fire-and-forget: falha de auditoria NUNCA bloqueia nem derruba a ação do suporte.
+// Regra que autoriza a gravação: auditoria/{tenant}/acoes — create-only, ver firestore.rules.
+let _auditoriaInstalada = false;
+function _instalarAuditoriaSuporte(user, tenantAlvo) {
+  if (_auditoriaInstalada) return;
+  _auditoriaInstalada = true;
+  const FS = firebase.firestore;
+  const colAud = db.collection('auditoria/' + tenantAlvo + '/acoes');
+  const origAdd = FS.CollectionReference.prototype.add;   // referência ORIGINAL: não recursiona
+
+  const registrar = (acao) => {
+    if (!acao) return;
+    try {
+      origAdd.call(colAud, {
+        quem: user.email || null,
+        uid: user.uid,
+        quando: FS.FieldValue.serverTimestamp(),
+        acao: String(acao).slice(0, 500),
+        tenantAlvo,
+      }).catch((e) => console.warn('[suporte] auditoria falhou:', e && e.message));
+    } catch (e) { console.warn('[suporte] auditoria falhou:', e && e.message); }
+  };
+
+  // hook devolve a descrição da ação (string) ou '' pra não registrar nada.
+  const envolver = (proto, metodo, hook) => {
+    if (!proto || typeof proto[metodo] !== 'function') return;
+    const orig = proto[metodo];
+    proto[metodo] = function (...args) {
+      try { registrar(hook(this, args)); } catch (_) { /* auditoria nunca quebra a operação */ }
+      return orig.apply(this, args);
+    };
+  };
+  const caminho = (o) => { try { return (o && o.path) || ''; } catch (_) { return ''; } };
+
+  // doc().set/update/delete e collection().add
+  envolver(FS.DocumentReference.prototype,   'set',    (r) => 'set ' + caminho(r));
+  envolver(FS.DocumentReference.prototype,   'update', (r) => 'update ' + caminho(r));
+  envolver(FS.DocumentReference.prototype,   'delete', (r) => 'delete ' + caminho(r));
+  envolver(FS.CollectionReference.prototype, 'add',    (r) => 'add ' + caminho(r));
+
+  // batch: acumula os caminhos e registra UMA linha no commit (o que realmente foi aplicado).
+  const acumular = (verbo) => (b, a) => {
+    const p = caminho(a && a[0]);
+    if (p) (b.__auditPaths = b.__auditPaths || []).push(verbo + ' ' + p);
+    return '';
+  };
+  envolver(FS.WriteBatch.prototype, 'set',    acumular('set'));
+  envolver(FS.WriteBatch.prototype, 'update', acumular('update'));
+  envolver(FS.WriteBatch.prototype, 'delete', acumular('delete'));
+  envolver(FS.WriteBatch.prototype, 'commit', (b) => {
+    const ps = b.__auditPaths || [];
+    b.__auditPaths = [];
+    return ps.length ? ('batch (' + ps.length + '): ' + ps.slice(0, 10).join(' | ')) : '';
+  });
+
+  // transação: as escritas saem do objeto Transaction dentro do callback.
+  if (FS.Transaction) {
+    envolver(FS.Transaction.prototype, 'set',    (t, a) => 'transaction set ' + caminho(a && a[0]));
+    envolver(FS.Transaction.prototype, 'update', (t, a) => 'transaction update ' + caminho(a && a[0]));
+    envolver(FS.Transaction.prototype, 'delete', (t, a) => 'transaction delete ' + caminho(a && a[0]));
+  }
+
+  console.info('[suporte] auditoria ativa → auditoria/' + tenantAlvo + '/acoes');
+}
+
 auth.onAuthStateChanged(async (user) => {
   if (!user) {
     // Em host universal, ao deslogar depois de ter resolvido um tenant, recarrega pra limpar slug+listeners
@@ -7530,6 +7656,35 @@ auth.onAuthStateChanged(async (user) => {
     return;
   }
   if (user.isAnonymous) { auth.signOut(); return; }
+
+  // ── Claims: super admin? ───────────────────────────────────────────────────
+  // O JWT em cache pode ser ANTERIOR à concessão do claim. Se veio ?tenant=, força um refresh
+  // (getIdTokenResult(true)) pra não obrigar o suporte a fazer logout/login.
+  let isSuper = false;
+  try {
+    let tr = await user.getIdTokenResult();
+    isSuper = tr.claims.superAdmin === true;
+    if (!isSuper && TENANT_SUPORTE) {
+      tr = await user.getIdTokenResult(true);
+      isSuper = tr.claims.superAdmin === true;
+    }
+  } catch (e) { console.error('[suporte] falha lendo claims:', e); }
+
+  // ── Tenant: (a) ?tenant= só p/ superAdmin → (b) subdomínio → (c) host universal por authUid ──
+  let meuTenant = null;
+  if (TENANT_SUPORTE) {
+    if (isSuper) {
+      try { meuTenant = await _resolverSlugDoUsuario(user.uid); } catch (_) { /* sem tenant próprio */ }
+      slug = TENANT_SUPORTE;
+      IS_SUPORTE = (slug !== meuTenant);   // no próprio tenant não é "suporte": painel normal
+      definirUrlsDoSlug();
+      iniciarPlanoListener();
+    } else {
+      // Sem o claim, ?tenant= é IGNORADO (não vaza tenant de ninguém): cai no fluxo normal.
+      console.warn('[suporte] ?tenant= ignorado: usuário sem o claim superAdmin.');
+      if (!IS_UNIVERSAL) { slug = hostnameSlug; definirUrlsDoSlug(); iniciarPlanoListener(); }
+    }
+  }
 
   // Host universal (app único do SaaS): o tenant vem do USUÁRIO logado (query authUid), não do hostname.
   // Em subdomínio, IS_UNIVERSAL é false e o slug já foi definido no load → este bloco é PULADO (inalterado).
@@ -7547,7 +7702,11 @@ auth.onAuthStateChanged(async (user) => {
     }
     if (!resolvido) { // conta sem restaurante vinculado → NUNCA abre painel de outro tenant
       const m = document.getElementById('semRestauranteMsg');
-      if (m) m.textContent = 'Não encontramos um restaurante vinculado a esta conta. Confira se entrou com o e-mail certo ou fale com o suporte.';
+      // Super admin não é "expulso por não pertencer": ele simplesmente não tem tenant PRÓPRIO
+      // pra abrir aqui — o caminho dele é o botão "Abrir painel" do admin (?tenant=<slug>).
+      if (m) m.textContent = isSuper
+        ? 'Sua conta não tem restaurante próprio. Para dar suporte, abra o painel de um cliente pelo botão "Abrir painel" no admin.'
+        : 'Não encontramos um restaurante vinculado a esta conta. Confira se entrou com o e-mail certo ou fale com o suporte.';
       _mostrarTela('semRestaurante');
       return; // NÃO sobe listeners sem slug
     }
@@ -7557,6 +7716,8 @@ auth.onAuthStateChanged(async (user) => {
   }
 
   // Daqui pra baixo o slug está resolvido (subdomínio: desde o load; universal: pela query acima).
+  // MODO SUPORTE: instala a auditoria ANTES de qualquer escrita possível e mostra a tarja.
+  if (IS_SUPORTE) { _instalarAuditoriaSuporte(user, slug); _mostrarTarjaSuporte(slug); }
   _mostrarTela(null); // esconde login/carregando/sem-restaurante → revela o painel
   if (!_listenersIniciados) { iniciarListenersFirestore(); _listenersIniciados = true; }
   atualizarBtnNotificacao();
