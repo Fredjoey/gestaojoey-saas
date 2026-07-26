@@ -8878,7 +8878,11 @@ if ('serviceWorker' in navigator) {
 const BOT_DEFAULTS = {
   saudacao: { resposta: `{saudacao}, {nome}! Bem-vindo ao Joey! 🍕\n\nPara fazer seu pedido acesse nosso cardápio:\n👉 ${CARDAPIO_URL}\n\nEscolha seus produtos, informe seu endereço e finalize o pedido direto pelo link!\n\nDúvidas? Digite *atendente* para falar conosco.`, keywords: [] },
   cardapio:  { resposta: `Acesse nosso cardápio completo pelo link:\n👉 ${CARDAPIO_URL}\n\nEscolha seus produtos e finalize o pedido direto pelo site! 🍕`, keywords: ['cardápio','cardapio','menu','pratos','pizza'] },
-  horario:   { resposta: 'Nosso horário de funcionamento é:\n🕐 Terça a Domingo: 18h às 23h\n\nSegunda-feira fechado.', keywords: ['horário','horario','funciona','abre','fecha'] },
+  // {horarios} é resolvido pelo joeyapi no ENVIO (buildResposta → montarHorarioTxt),
+  // a partir de config/loja.horarios. Antes era texto fixo — "Terça a Domingo: 18h
+  // às 23h" — e estava ERRADO: a loja abre quarta a domingo, 18h30 às 23h. Texto
+  // fixo aqui desatualiza calado a cada mudança de horário; o placeholder não.
+  horario:   { resposta: '🕐 *Nosso horário de funcionamento:*\n{horarios}', keywords: ['horário','horario','funciona','abre','fecha'] },
   entrega:   { resposta: `Fazemos entrega! 🛵\n\nO tempo estimado é de 40 a 60 minutos.\nA taxa de entrega varia por bairro.\n\nFaça seu pedido: 👉 ${CARDAPIO_URL}`, keywords: ['entrega','deliver','motoboy','tempo'] },
   bairros:   { resposta: 'Atendemos os seguintes bairros:\n\n📍 Centro, Quitandinha, Alto da Serra...\n\nPara ver a taxa de cada bairro, acesse o cardápio e selecione seu bairro no checkout.', keywords: ['bairro','bairros','atende','região','região'] },
   pagamento: { resposta: 'Aceitamos as seguintes formas de pagamento:\n💳 Cartão de crédito e débito\n📱 Pix\n💵 Dinheiro (troco informado no pedido)', keywords: ['pagamento','pagar','cartão','cartao','pix','dinheiro'] },
