@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "pedidos-joey"
+    "default": "gestaojoey",
+    "pedidos": "pedidos-joey",
+    "gestaojoey": "gestaojoey"
   },
   "targets": {
     "gestaojoey": {
