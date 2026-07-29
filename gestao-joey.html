@@ -1305,7 +1305,24 @@
 
             <!-- FORMULÁRIO NOVA NOTA -->
             <div class="section-title">✏️ Nova Nota</div>
+            <style>
+              /* Leitura de nota por IA — destaque dos campos que precisam de conferência */
+              .nota-ia-conferir{border-color:#f0b429 !important; background:rgba(240,180,41,.07) !important}
+              .nota-ia-aviso{grid-column:1/-1; margin:2px 0 6px; padding:7px 10px; border-radius:6px;
+                background:rgba(240,180,41,.12); border-left:3px solid #f0b429; color:#e8c86a; font-size:11.5px; line-height:1.5}
+              .nota-ia-aviso b{color:#f0b429}
+              .nota-ia-opcoes{grid-column:1/-1; margin:2px 0 6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:11.5px; color:#e8c86a}
+              .nota-ia-opcoes select{padding:6px 8px; border:1px solid #f0b429; border-radius:6px; font-size:12px; background:var(--bg4); color:var(--text)}
+              #notaIaResumo{margin-bottom:12px; padding:11px 13px; border-radius:7px; font-size:12.5px; line-height:1.6}
+            </style>
             <div style="background:#2c2c2c; padding:1.5rem; border-radius:8px; border:1px solid #3a3a3a; margin-bottom:1.5rem;">
+                <!-- LER NOTA POR IA — só preenche o formulário; salvar continua manual -->
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; padding-bottom:14px; border-bottom:1px dashed #444;">
+                    <input type="file" id="notaIaArquivo" accept="image/jpeg,image/png,image/webp,application/pdf" style="display:none" onchange="lerNotaPorIA(this)">
+                    <button type="button" id="notaIaBtn" class="secondary" onclick="document.getElementById('notaIaArquivo').click()"
+                            style="border-color:#E87722; color:#E87722; background:transparent;">📸 Ler nota (foto/PDF)</button>
+                    <span id="notaIaStatus" style="font-size:12px; color:#888;">A IA preenche o formulário — você confere e salva.</span>
+                </div>
                 <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr; gap:12px; margin-bottom:16px; width:100%;">
                     <div class="form-group" style="width:100%;">
                         <label>Fornecedor</label>
@@ -6334,6 +6351,117 @@
         // Inicializar primeira linha da nota
         adicionarLinhaItem();
 
+        // ===== LEITURA DE NOTA POR IA (aba Compras) =====
+        // Os avisos vêm do servidor, mas passam por escape: parte deles ecoa texto
+        // que a IA leu DENTRO da nota (nome de produto), e isso é conteúdo de terceiro.
+        const _notaIaEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        // A IA só PREENCHE o formulário. Salvar continua sendo o salvarNota() de
+        // sempre, com o modal de reajustes — nada aqui grava nem altera preço.
+        function _notaIaStatus(txt, cor) {
+            const el = document.getElementById('notaIaStatus');
+            if (el) { el.textContent = txt; el.style.color = cor || '#888'; }
+        }
+        function _notaIaBusy(on) {
+            const b = document.getElementById('notaIaBtn');
+            if (b) { b.disabled = on; b.textContent = on ? '⏳ Lendo a nota…' : '📸 Ler nota (foto/PDF)'; b.style.opacity = on ? '.6' : '1'; }
+        }
+        // Marca um campo como "confira este valor" (borda amarela + title).
+        function _notaIaFlag(el, motivo) {
+            if (!el) return;
+            el.classList.add('nota-ia-conferir');
+            if (motivo) el.title = motivo;
+        }
+        // Preenche o formulário com o que a function devolveu. Reusa
+        // adicionarLinhaItem() de propósito: a linha precisa ter EXATAMENTE a
+        // mesma estrutura que o salvarNota() lê.
+        function preencherNotaDaIA(nota) {
+            const set = (id, v) => { const e = document.getElementById(id); if (e && v) e.value = v; return e; };
+            set('notaFornecedor', nota.fornecedor);
+            set('notaData', nota.data);
+            set('notaNumero', nota.numero);
+            set('notaVencimento', nota.vencimento);
+            set('notaFormaPagamento', nota.formaPagamento);
+            // Campos que a IA não conseguiu ler ficam vazios E destacados.
+            (nota.naoLidos || []).forEach(c => {
+                const mapa = { fornecedor:'notaFornecedor', data:'notaData', numero:'notaNumero', vencimento:'notaVencimento', total:'notaValorTotal', totalDeclarado:'notaValorTotal' };
+                _notaIaFlag(document.getElementById(mapa[c] || ''), 'A IA não conseguiu ler este campo na nota — preencha à mão.');
+            });
+
+            const cont = document.getElementById('notaItens');
+            cont.innerHTML = '';
+            (nota.itens || []).forEach((it, idx) => {
+                adicionarLinhaItem();
+                const row = cont.lastElementChild;
+                const q = (cls) => row.querySelector(cls);
+                q('.nota-produto').value    = it.produto || '';
+                q('.nota-tipo').value       = it.tipo || 'insumo';
+                q('.nota-qtd').value        = it.qtd != null ? it.qtd : '';
+                q('.nota-unidade').value    = it.unidade || '';
+                q('.nota-valor-unit').value = it.valorUnit != null ? it.valorUnit : '';
+                q('.nota-valor').value      = it.valor != null ? it.valor : '';
+
+                if (it.conferir) {
+                    ['.nota-produto', '.nota-qtd', '.nota-unidade', '.nota-valor-unit'].forEach(c => _notaIaFlag(q(c), 'Confira este valor'));
+                }
+                // Ambiguidade de insumo → seletor, em vez de escolher em silêncio.
+                if (it.opcoes && it.opcoes.length > 1) {
+                    const box = document.createElement('div');
+                    box.className = 'nota-ia-opcoes';
+                    box.innerHTML = '<span>⚠️ Qual insumo é este?</span>';
+                    const sel = document.createElement('select');
+                    it.opcoes.forEach(o => { const op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
+                    sel.value = it.insumo || it.opcoes[0];
+                    sel.onchange = function () { q('.nota-produto').value = this.value; q('.nota-produto').classList.remove('nota-ia-conferir'); };
+                    box.appendChild(sel);
+                    row.appendChild(box);
+                }
+                // Leituras de embalagem → o usuário troca com 1 clique.
+                if (it.embalagem && it.embalagem.leituras && it.embalagem.leituras.length > 1) {
+                    const box = document.createElement('div');
+                    box.className = 'nota-ia-opcoes';
+                    box.innerHTML = '<span>📦 Como ler a embalagem "<b>' + _notaIaEsc(it.embalagem.texto || '') + '</b>"?</span>';
+                    const sel = document.createElement('select');
+                    it.embalagem.leituras.forEach(l => { const op = document.createElement('option'); op.value = l.base; op.textContent = l.rotulo; sel.appendChild(op); });
+                    sel.value = it.embalagem.escolhida;
+                    sel.onchange = function () {
+                        const l = it.embalagem.leituras.find(x => x.base === this.value);
+                        if (!l) return;
+                        q('.nota-qtd').value = l.qtd; q('.nota-unidade').value = l.unidade; q('.nota-valor-unit').value = l.valorUnit;
+                        atualizarTotalNota();
+                    };
+                    box.appendChild(sel);
+                    row.appendChild(box);
+                }
+                if (it.avisos && it.avisos.length) {
+                    const av = document.createElement('div');
+                    av.className = 'nota-ia-aviso';
+                    av.innerHTML = it.avisos.map(a => '• ' + _notaIaEsc(a)).join('<br>');
+                    row.appendChild(av);
+                }
+            });
+            if (!(nota.itens || []).length) adicionarLinhaItem();
+
+            // Total: o DECLARADO na nota (é o que o salvarNota grava). Marcado como
+            // manual para o atualizarTotalNota() não sobrescrever com a soma —
+            // assim, se soma ≠ total, a divergência fica visível em vez de sumir.
+            const elTot = document.getElementById('notaValorTotal');
+            if (elTot && nota.totalDeclarado != null) { elTot.value = Number(nota.totalDeclarado).toFixed(2); elTot.dataset.manual = 'true'; }
+            atualizarTotalNota();
+            if (elTot && nota.totalConfere === false) _notaIaFlag(elTot, 'A soma dos itens não bate com o total da nota.');
+
+            // Resumo dentro do #notaItens de propósito: o salvarNota() limpa esse
+            // container ao salvar, então o resumo some sozinho junto com a nota.
+            const grave = nota.totalConfere === false || (nota.naoLidos || []).length > 0;
+            const resumo = document.createElement('div');
+            resumo.id = 'notaIaResumo';
+            resumo.style.cssText = grave
+                ? 'background:rgba(231,76,60,.12); border-left:3px solid #e74c3c; color:#f5b7b1;'
+                : 'background:rgba(46,204,113,.10); border-left:3px solid #27ae60; color:#a9dfbf;';
+            resumo.innerHTML = '<b>' + (grave ? '⚠️ Leitura com pendências' : '✅ Nota lida') + '</b> — confira tudo antes de salvar.'
+                + ((nota.alertas || []).length ? '<br>' + nota.alertas.map(a => '• ' + _notaIaEsc(a)).join('<br>') : '');
+            cont.insertBefore(resumo, cont.firstChild);
+        }
+
                 function adicionarLinhaItem() {
             const container = document.getElementById('notaItens');
             const div = document.createElement('div');
@@ -9728,6 +9856,49 @@
         </div>
       </div>
     </div>
+    <!-- Ler nota de compra por IA — consome a callable extrairNotaCompra.
+         Só preenche o formulário da aba Compras; salvar continua no fluxo normal. -->
+    <script type="module">
+      import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+      import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
+      const _notaIaCallable = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'extrairNotaCompra');
+      const _notaIaSlug = () => (window._fb && window._fb.slug) || (function () {
+        const h = location.hostname;
+        return (h === 'gestao.hamburgueriajoey.com.br' || h === 'sistema-joey.web.app' || h === 'localhost' || h === '127.0.0.1') ? 'joey' : h.split('.')[0];
+      })();
+      const MAX_MB = 4;
+
+      window.lerNotaPorIA = async function (input) {
+        const file = input && input.files && input.files[0];
+        input.value = '';                       // permite reenviar o MESMO arquivo
+        if (!file) return;
+        if (file.size > MAX_MB * 1024 * 1024) {
+          _notaIaStatus(`Arquivo de ${(file.size / 1024 / 1024).toFixed(1)} MB — o limite é ${MAX_MB} MB. Tire a foto de novo.`, '#e74c3c');
+          return;
+        }
+        _notaIaBusy(true);
+        _notaIaStatus('Lendo a nota… isso leva uns 15 segundos.', '#E87722');
+        try {
+          const base64 = await new Promise((ok, err) => {
+            const r = new FileReader();
+            r.onload = () => ok(String(r.result).split(',')[1] || '');
+            r.onerror = () => err(new Error('não consegui ler o arquivo'));
+            r.readAsDataURL(file);
+          });
+          const r = await _notaIaCallable({ slug: _notaIaSlug(), base64, mimetype: file.type });
+          const nota = r && r.data && r.data.nota;
+          if (!nota) throw new Error('resposta vazia');
+          preencherNotaDaIA(nota);
+          const nConf = (nota.itens || []).filter(i => i.conferir).length;
+          _notaIaStatus(nConf ? `Preenchido. ${nConf} item(ns) precisam de conferência — veja os destaques.` : 'Preenchido. Confira e clique em Salvar Nota.', nConf ? '#f0b429' : '#27ae60');
+        } catch (e) {
+          console.error('[nota IA]', e);
+          _notaIaStatus((e && e.message) || 'Não consegui ler a nota. Tente outra foto.', '#e74c3c');
+        } finally {
+          _notaIaBusy(false);
+        }
+      };
+    </script>
     <!-- Joey IA — consome a callable perguntarGestao (módulo isolado; SDK modular v10) -->
     <script type="module">
       import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
