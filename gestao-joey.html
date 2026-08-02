@@ -1250,6 +1250,18 @@
             <!-- ④ PAGAMENTOS -->
             <div class="section-title">④ Breakdown por Meio de Pagamento</div>
             <div id="finPagContainer" style="margin-bottom:2rem;"></div>
+
+            <!-- ⑤ FLUXO DE CAIXA REALIZADO (bloco aditivo — regime de CAIXA, não mexe na DRE) -->
+            <div class="section-title">⑤ Fluxo de Caixa Realizado <span id="flxCaixaLabel" style="font-size:10px; color:var(--text3); font-weight:500; text-transform:none; letter-spacing:0; margin-left:8px;"></span></div>
+            <div id="flxCaixaContainer" style="margin-bottom:2rem;"></div>
+
+            <!-- ⑥ AGENDA DE DESEMBOLSO -->
+            <div class="section-title">⑥ Agenda de Desembolso <span style="font-size:10px; color:var(--text3); font-weight:500; text-transform:none; letter-spacing:0; margin-left:8px;">próximos 60 dias · a partir de hoje (não depende do período acima)</span></div>
+            <div id="flxAgendaContainer" style="margin-bottom:2rem;"></div>
+
+            <!-- ⑦ PRA ONDE FOI O DINHEIRO -->
+            <div class="section-title">⑦ Pra Onde Foi o Dinheiro <span style="font-size:10px; color:var(--text3); font-weight:500; text-transform:none; letter-spacing:0; margin-left:8px;">por categoria e por fornecedor · período selecionado</span></div>
+            <div id="flxCategoriasContainer" style="margin-bottom:2rem;"></div>
         </div>
     </div>
 
@@ -2119,6 +2131,23 @@
             });
         }
 
+        // Fechamentos de conta de mesa (clientes/{slug}/fechamentos) — campo `data` em DD/MM/AAAA.
+        // Usados SÓ para descobrir a FORMA de pagamento das vendas de mesa: o valor da venda já
+        // entra pelo pedido, então somar o fechamento duplicaria (mesma regra do painel.html).
+        async function fbQueryFechamentos(dataInicio, dataFim) {
+            const snap = await getDocs(collection(db, `clientes/${slug}/fechamentos`));
+            const [iy, im, id] = dataInicio.split('-').map(Number);
+            const [fy, fm, fd] = dataFim.split('-').map(Number);
+            const ini = new Date(iy, im - 1, id);
+            const fim = new Date(fy, fm - 1, fd);
+            return snap.docs.map(d => d.data()).filter(f => {
+                const p = String(f.data || '').split('/');
+                if (p.length !== 3) return false;
+                const dt = new Date(+p[2], +p[1] - 1, +p[0]);
+                return dt >= ini && dt <= fim;
+            });
+        }
+
         // Busca o mapa de status do cardápio (ativo/inativo) no projeto pedidos-joey
         async function fbGetCatalogoStatus() {
             const snap = await getDocs(collection(db, `clientes/${slug}/catalogoStatus`));
@@ -2127,7 +2156,7 @@
             return map;
         }
 
-        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbGetEntreguesMes, fbGetCatalogoStatus, slug };
+        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbQueryFechamentos, fbGetEntreguesMes, fbGetCatalogoStatus, slug };
 
     </script>
     <script>
@@ -9207,6 +9236,464 @@
             _finRenderComparativo(dre, drePrev);
             _finRenderPie(dre);
             _finRenderPagamentos(dre);
+            await _flxUpdate(dre, cur, _finPeriod);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FLUXO DE CAIXA REALIZADO + AGENDA DE DESEMBOLSO  (bloco ADITIVO)
+        // Nada aqui altera a DRE nem _dreDoPeriodo. A DRE é por COMPETÊNCIA (data da
+        // venda, custo teórico da ficha técnica); este bloco é por CAIXA (data em que o
+        // dinheiro entrou/saiu de fato). Usa só dados que já existem.
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        // Fator de rateio CANÔNICO — o mesmo de _finFixosRateado (dias decorridos ÷ dias
+        // do mês). Único lugar onde esse fator é calculado para o bloco de caixa.
+        function _flxFatorRateio(periodo, periodKey) {
+            if (!periodo || periodKey === 'todos') return 1;
+            const inf = _finFixosDias(periodo);
+            return inf.diasNoMes > 0 ? (inf.dias / inf.diasNoMes) : 1;
+        }
+
+        // Normaliza a forma de pagamento vinda de QUALQUER origem (cardápio, garçom,
+        // pedido manual do painel, fechamento de mesa): 'Crédito'/'CREDITO'/'credito' →
+        // 'credito'. Vive só aqui — não toca _finPagamentosPedidos (motor da DRE).
+        function _flxNormPag(s) {
+            const p = String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+            if (!p) return null;
+            if (p.includes('pix')) return 'pix';
+            if (p.includes('dinheiro') || p.includes('especie')) return 'dinheiro';
+            if (p.includes('cred')) return 'credito';
+            if (p.includes('deb')) return 'debito';
+            if (p.includes('vr') || p.includes('vale')) return 'vr';
+            if (p.includes('cart')) return 'cartao';
+            return null;   // 'mesa' / 'local' / 'pendente' / 'balcao' → sem forma identificada
+        }
+
+        const _FLX_FORMAS = [
+            { k:'pix',      lbl:'PIX',               ico:'⚡' },
+            { k:'dinheiro', lbl:'Dinheiro',          ico:'💵' },
+            { k:'debito',   lbl:'Débito',            ico:'💳' },
+            { k:'credito',  lbl:'Crédito',           ico:'💳' },
+            { k:'cartao',   lbl:'Cartão (genérico)', ico:'💳' },
+            { k:'vr',       lbl:'VR/VA',             ico:'🍱' }
+        ];
+
+        // Detecta custos variáveis criados por importarCustosDeNotas ("📦 Embalagem — junho de 2026").
+        // Se a nota correspondente também estiver marcada como paga no período, o valor é
+        // contado duas vezes — avisamos em vez de sumir com o número silenciosamente.
+        function _flxEhCustoImportado(nome) {
+            return /—\s*[a-zç]+\s+de\s+\d{4}\s*$/i.test(String(nome || ''));
+        }
+
+        // CÁLCULO ÚNICO do fluxo de caixa do período. Recebe o `dre` já calculado por
+        // _dreDoPeriodo — assim o faturamento e os fixos batem exatamente com a DRE
+        // acima e nenhuma consulta de pedidos é refeita.
+        async function _flxCalcular(dre, periodo, periodKey) {
+            const iniStr = _anaDateToStr(periodo.start);
+            const fimStr = _anaDateToStr(periodo.end);
+            const fator  = _flxFatorRateio(periodo, periodKey);
+
+            // ── ENTRADAS ──────────────────────────────────────────────────────────
+            // Total = MESMA receita da DRE (pedidos reais + relatórios Anota pré-corte).
+            const entradasTotal = dre.fat || 0;
+
+            // Quebra por forma: parte do mesmo `dre.pag` da DRE. O que sobra são as vendas
+            // de mesa, que no pedido ficam como 'mesa'/'local'/'pendente' e por isso caem
+            // fora do breakdown da DRE.
+            const formas = { pix:0, dinheiro:0, debito:0, credito:0, cartao:0, vr:0 };
+            for (const k of Object.keys(formas)) formas[k] = (dre.pag && dre.pag[k]) || 0;
+            const semForma = Math.max(0, entradasTotal - Object.values(formas).reduce((s, v) => s + v, 0));
+
+            // Os fechamentos de mesa dizem COMO essas vendas foram pagas. Usamos só o MIX
+            // (proporção entre as formas) para distribuir o `semForma` — nunca o valor
+            // bruto: somá-lo estouraria o faturamento, porque o consumo lançado como
+            // comanda no Salão do painel não vira documento em `pedidos`, então o
+            // fechamento costuma somar MAIS que os pedidos daquelas mesas. Assim a quebra
+            // fecha exatamente com o total, sempre.
+            const fechMix = { pix:0, dinheiro:0, debito:0, credito:0, cartao:0, vr:0 };
+            let fechValor = 0, fechQtd = 0;
+            if (window._fb?.fbQueryFechamentos) {
+                try {
+                    const fechs = await window._fb.fbQueryFechamentos(iniStr, fimStr);
+                    for (const f of fechs) {
+                        const k = _flxNormPag(f.pagamento);
+                        const v = Number(f.total) || 0;
+                        if (k && fechMix[k] !== undefined && v > 0) { fechMix[k] += v; fechValor += v; fechQtd++; }
+                    }
+                } catch (e) { console.warn('[Fluxo de caixa] fechamentos de mesa:', e); }
+            }
+            let naoIdentificado = semForma;
+            if (fechValor > 0 && semForma > 0) {
+                for (const k of Object.keys(formas)) formas[k] += semForma * (fechMix[k] / fechValor);
+                naoIdentificado = 0;
+            }
+            // Descasamento: quanto o fechamento de mesa registra a mais (ou a menos) que os
+            // pedidos daquelas mesas. > 0 = consumo lançado só como comanda no Salão.
+            const descasamento = fechValor > 0 ? (fechValor - semForma) : 0;
+
+            // ── SAÍDAS: dinheiro que REALMENTE saiu no período ────────────────────
+            // 1) Notas PAGAS — chave é a dataPagamento (desembolso), NÃO a data da nota.
+            const notasPagas = (notasLancadas || []).filter(n =>
+                n.statusPagamento === 'pago' && n.dataPagamento &&
+                n.dataPagamento >= iniStr && n.dataPagamento <= fimStr);
+            const saiuNotas = notasPagas.reduce((s, n) => s + (parseFloat(n.total) || 0), 0);
+            // 2) Custos fixos — rateio CANÔNICO, mesmo valor da linha da DRE.
+            const saiuFixos = dre.fixos || 0;
+            // 3) Custos variáveis — ficam FORA da DRE de propósito, mas aqui ENTRAM:
+            //    é dinheiro que sai. Rateados pelo mesmo fator dos fixos.
+            const varMensal     = (variableCosts || []).reduce((s, c) => s + (c.value || 0), 0);
+            const saiuVariaveis = varMensal * fator;
+            // 4) Retiradas do dono (calendário) — mesma função que a DRE usa.
+            const saiuRetiradas = dre.retiradas || 0;
+
+            const saidasTotal = saiuNotas + saiuFixos + saiuVariaveis + saiuRetiradas;
+
+            // Aviso de dupla contagem: variáveis importados de notas × notas pagas.
+            const importados = (variableCosts || []).filter(c => _flxEhCustoImportado(c.name));
+            const riscoDupla = (notasPagas.length > 0 && importados.length > 0)
+                ? importados.reduce((s, c) => s + (c.value || 0), 0) * fator : 0;
+
+            return {
+                periodo, periodKey, iniStr, fimStr, fator,
+                entradasTotal, formas, naoIdentificado, semForma, descasamento, fechValor, fechQtd,
+                notasPagas, saiuNotas, saiuFixos, saiuVariaveis, varMensal, saiuRetiradas,
+                saidasTotal, variacao: entradasTotal - saidasTotal,
+                retiradasLista: dre.retiradasLista || [],
+                riscoDupla, importadosQtd: importados.length
+            };
+        }
+
+        // Ocorrências de eventos do calendário numa janela FUTURA. Generaliza a lógica de
+        // _retiradasNoPeriodo — aquela é capada no mês corrente de propósito (pro filtro
+        // "Tudo" não explodir) e por isso não serve pra projeção. Aquela fica intacta.
+        function _flxAgendaOcorrencias(iniStr, fimStr, excluirTipos) {
+            const out = [];
+            if (!Array.isArray(_agenda)) return out;
+            const push = (occ, ev) => {
+                if (occ >= iniStr && occ <= fimStr)
+                    out.push({ data: occ, titulo: ev.titulo || 'Evento', valor: Number(ev.valor) || 0, tipo: ev.tipo });
+            };
+            for (const ev of _agenda) {
+                if (!ev || (excluirTipos && excluirTipos.includes(ev.tipo))) continue;
+                if (!(Number(ev.valor) > 0)) continue;
+                if (ev.recorrencia === 'mensal') {
+                    const diaMes = Number(ev.diaMes) || (ev.data ? Number(ev.data.split('-')[2]) : 1);
+                    let y = +iniStr.slice(0, 4), m = +iniStr.slice(5, 7);
+                    const ey = +fimStr.slice(0, 4), em = +fimStr.slice(5, 7);
+                    let g = 0;
+                    while ((y < ey || (y === ey && m <= em)) && g++ < 36) {
+                        const diasNoMes = new Date(y, m, 0).getDate();
+                        push(`${y}-${String(m).padStart(2, '0')}-${String(Math.min(diaMes, diasNoMes)).padStart(2, '0')}`, ev);
+                        m++; if (m > 12) { m = 1; y++; }
+                    }
+                } else if (ev.recorrencia === 'diario' || ev.recorrencia === 'semanal') {
+                    const passo = ev.recorrencia === 'diario' ? 1 : 7;
+                    const cur = new Date(iniStr + 'T12:00:00');
+                    if (ev.recorrencia === 'semanal' && ev.data) {
+                        const dow = new Date(ev.data + 'T12:00:00').getDay();
+                        let g0 = 0; while (cur.getDay() !== dow && g0++ < 7) cur.setDate(cur.getDate() + 1);
+                    }
+                    let g = 0;
+                    while (g++ < 400) {
+                        const occ = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                        if (occ > fimStr) break;
+                        push(occ, ev);
+                        cur.setDate(cur.getDate() + passo);
+                    }
+                } else if (ev.data && !ev.concluido) {
+                    push(ev.data, ev);
+                }
+            }
+            return out;
+        }
+
+        const _FLX_FAIXAS = [
+            { key:'vencido', lbl:'Vencido',           min:-99999, max:-1, cor:'#E24B4A', dias:0  },
+            { key:'d7',      lbl:'Próximos 7 dias',   min:0,      max:7,  cor:'#EF9F27', dias:8  },
+            { key:'d15',     lbl:'8 a 15 dias',       min:8,      max:15, cor:'#E87722', dias:8  },
+            { key:'d30',     lbl:'16 a 30 dias',      min:16,     max:30, cor:'#7F77DD', dias:15 },
+            { key:'d60',     lbl:'31 a 60 dias',      min:31,     max:60, cor:'#5f6b7a', dias:30 }
+        ];
+
+        // Agenda de desembolso: o que há PRA PAGAR daqui pra frente (independe do período
+        // selecionado — é sempre a partir de hoje).
+        function _flxAgendaDesembolso() {
+            const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+            const hojeStr = _anaDateToStr(hoje);
+            const somaDias = n => { const x = new Date(hoje); x.setDate(x.getDate() + n); return _anaDateToStr(x); };
+            const fim60 = somaDias(60);
+            const diasAte = s => Math.round((new Date(s + 'T12:00:00') - hoje) / 86400000);
+
+            const linhas = [];
+            // 1) Notas em aberto (contas a pagar) — mesma regra da aba Compras.
+            (notasLancadas || []).forEach(n => {
+                if (!n.vencimento || n.statusPagamento === 'pago') return;
+                if (n.vencimento > fim60) return;
+                linhas.push({
+                    data: n.vencimento, dias: diasAte(n.vencimento),
+                    titulo: (n.fornecedor || 'Fornecedor') + (n.numero ? ' nº ' + n.numero : ''),
+                    valor: parseFloat(n.total) || 0, fonte: 'nota'
+                });
+            });
+            // 2) Calendário — aluguel, gás, contas, retiradas recorrentes. Exclui
+            //    'conta_pagar': esse tipo é espelho automático da nota e já entrou acima.
+            _flxAgendaOcorrencias(hojeStr, fim60, ['conta_pagar']).forEach(o => {
+                linhas.push({ data: o.data, dias: diasAte(o.data), titulo: o.titulo, valor: o.valor, fonte: 'agenda' });
+            });
+
+            // 3) Custos fixos: NÃO têm vencimento cadastrado. Em vez de inventar uma data,
+            //    entram rateados por dia (mesmo critério de rateio da DRE).
+            const fixoMensal = (fixedCosts || []).reduce((s, c) => s + (c.value || 0), 0);
+            const fixoDia = fixoMensal / 30;
+
+            const buckets = {};
+            _FLX_FAIXAS.forEach(f => { buckets[f.key] = { ...f, notas: 0, agenda: 0, fixos: fixoDia * f.dias, itens: [] }; });
+            linhas.sort((a, b) => a.data.localeCompare(b.data)).forEach(l => {
+                const f = _FLX_FAIXAS.find(x => l.dias >= x.min && l.dias <= x.max);
+                if (!f) return;
+                buckets[f.key][l.fonte === 'nota' ? 'notas' : 'agenda'] += l.valor;
+                buckets[f.key].itens.push(l);
+            });
+            Object.values(buckets).forEach(b => { b.total = b.notas + b.agenda + b.fixos; });
+            const total60 = Object.values(buckets).reduce((s, b) => s + b.total, 0);
+            // Notas em aberto SEM vencimento cadastrado: não têm data, então não cabem na
+            // linha do tempo — mas são dinheiro a pagar e não podem ficar invisíveis.
+            const semVenc = (notasLancadas || []).filter(n => !n.vencimento && n.statusPagamento !== 'pago');
+            const semVencTotal = semVenc.reduce((s, n) => s + (parseFloat(n.total) || 0), 0);
+            return { buckets, ordem: _FLX_FAIXAS.map(f => f.key), total60, fixoMensal,
+                     semVencQtd: semVenc.length, semVencTotal };
+        }
+
+        // "Pra onde foi o dinheiro": agrega o desembolso do período POR CATEGORIA. Os
+        // campos `category`/`categoria` já existiam em fixedCosts, variableCosts e
+        // operacionaisData e nunca eram exibidos em lugar nenhum.
+        function _flxPorCategoria(f) {
+            const cats = {}, forn = {};
+            const add = (c, v) => { if (v > 0.005) cats[c] = (cats[c] || 0) + v; };
+
+            (fixedCosts    || []).forEach(c => add(c.category || 'Outros', (c.value || 0) * f.fator));
+            (variableCosts || []).forEach(c => add(c.category || 'Outros', (c.value || 0) * f.fator));
+
+            f.notasPagas.forEach(n => {
+                const total = parseFloat(n.total) || 0;
+                if (total <= 0) return;
+                const nome = n.fornecedor || '—';
+                forn[nome] = (forn[nome] || 0) + total;
+                const itens = n.itens || [];
+                const soma = itens.reduce((s, i) => s + (Number(i.valor) || 0), 0);
+                // O total da nota pode ser digitado à mão e diferir da soma dos itens →
+                // rateia o total pelos itens em vez de somar os itens.
+                if (!itens.length || soma <= 0) { add('Sem categoria', total); return; }
+                itens.forEach(i => {
+                    const parte = total * ((Number(i.valor) || 0) / soma);
+                    const cat = (i.tipo === 'operacional')
+                        ? ((operacionaisData[i.produto] || {}).categoria || 'Outros')
+                        : 'Matéria-Prima';
+                    add(cat, parte);
+                });
+            });
+            add('Retiradas do dono', f.saiuRetiradas);
+
+            const lista = Object.entries(cats).map(([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor);
+            const fornLista = Object.entries(forn).map(([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor);
+            return { lista, fornLista, total: lista.reduce((s, c) => s + c.valor, 0) };
+        }
+
+        // Barra horizontal ranqueada — mesma linguagem visual da Análise de Compras.
+        // Uma cor por gráfico (a identidade vem do rótulo, não do matiz).
+        function _flxBarra(label, pct, valorTxt, cor) {
+            return `
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; gap:8px;">
+                        <span style="color:#ccc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_calEsc(label)}</span>
+                        <span style="color:${cor}; font-weight:600; white-space:nowrap;">${valorTxt}</span>
+                    </div>
+                    <div style="background:#141414; border-radius:4px; height:7px; overflow:hidden;">
+                        <div style="background:${cor}; height:100%; width:${Math.max(1, pct)}%; border-radius:4px;"></div>
+                    </div>
+                </div>`;
+        }
+
+        async function _flxUpdate(dre, periodo, periodKey) {
+            const lbl = document.getElementById('flxCaixaLabel');
+            if (lbl) lbl.textContent = (periodKey === 'todos')
+                ? 'todo o período' : `${_anaFmtDate(periodo.start)} → ${_anaFmtDate(periodo.end)}`;
+            let f;
+            try { f = await _flxCalcular(dre, periodo, periodKey); }
+            catch (e) { console.error('[Fluxo de caixa]', e); return; }
+            _flxLast = f;
+            _flxRenderCaixa(f);
+            _flxRenderAgenda();
+            _flxRenderCategorias(f);
+        }
+        let _flxLast = null;
+
+        function _flxRenderCaixa(f) {
+            const c = document.getElementById('flxCaixaContainer');
+            if (!c) return;
+            const fmt = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const positivo = f.variacao >= 0;
+            const corVar = positivo ? '#4ade80' : '#e74c3c';
+
+            const linhaForma = (lb, ico, v) => {
+                if (!(v > 0.005)) return '';
+                const pct = f.entradasTotal > 0 ? (v / f.entradasTotal) * 100 : 0;
+                return `<div style="display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #202020; font-size:12px;">
+                    <span style="color:#bbb;">${ico} ${lb}</span>
+                    <span style="white-space:nowrap;"><span style="color:#666; margin-right:8px;">${pct.toFixed(1)}%</span><span style="color:#e8e8e8; font-weight:600;">${fmt(v)}</span></span>
+                </div>`;
+            };
+            const linhaSaida = (lb, v, obs) => `
+                <div style="display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #202020; font-size:12px;">
+                    <span style="color:#bbb;">${lb}${obs ? `<span style="color:#666; font-size:10px; display:block; margin-top:1px;">${obs}</span>` : ''}</span>
+                    <span style="color:#e74c3c; font-weight:600; white-space:nowrap;">− ${fmt(v)}</span>
+                </div>`;
+
+            c.innerHTML = `
+                <div style="background:#141414; border:1px solid #262626; border-radius:10px; padding:12px 16px; margin-bottom:1rem; font-size:11.5px; color:#9aa0a6; line-height:1.6;">
+                    ℹ️ A <strong style="color:#e8e8e8;">DRE acima</strong> mostra o lucro do que foi <strong style="color:#e8e8e8;">VENDIDO</strong> (custo teórico da ficha técnica).
+                    O <strong style="color:#E87722;">fluxo de caixa</strong> mostra o dinheiro que <strong style="color:#e8e8e8;">ENTROU e SAIU de verdade</strong>.
+                    Um mês de compra pesada pode ter <strong style="color:#e8e8e8;">lucro bom e caixa apertado</strong> — e o contrário também acontece.
+                </div>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-bottom:1rem;">
+                    <div style="background:#0f0f0f; border:1px solid #262626; border-left:3px solid #4ade80; border-radius:10px; padding:14px 18px;">
+                        <div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Entrou</div>
+                        <div style="font-size:26px; font-weight:700; color:#4ade80; margin-top:4px;">${fmt(f.entradasTotal)}</div>
+                    </div>
+                    <div style="background:#0f0f0f; border:1px solid #262626; border-left:3px solid #e74c3c; border-radius:10px; padding:14px 18px;">
+                        <div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Saiu</div>
+                        <div style="font-size:26px; font-weight:700; color:#e74c3c; margin-top:4px;">${fmt(f.saidasTotal)}</div>
+                    </div>
+                    <div style="background:#0f0f0f; border:1px solid #262626; border-left:3px solid ${corVar}; border-radius:10px; padding:14px 18px;">
+                        <div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">${positivo ? 'Sobrou em caixa' : 'Faltou em caixa'}</div>
+                        <div style="font-size:26px; font-weight:700; color:${corVar}; margin-top:4px;">${positivo ? '' : '− '}${fmt(Math.abs(f.variacao))}</div>
+                        <div style="font-size:10px; color:#666; margin-top:3px;">variação do caixa no período</div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                    <div style="background:#141414; border:1px solid #262626; border-radius:10px; padding:1.1rem 1.25rem;">
+                        <div style="font-size:11px; font-weight:700; color:#4ade80; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">↓ Entradas por forma de pagamento</div>
+                        ${_FLX_FORMAS.map(x => linhaForma(x.lbl, x.ico, f.formas[x.k])).join('')}
+                        ${f.naoIdentificado > 0.005 ? `<div style="display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid #202020; font-size:12px;">
+                            <span style="color:#777;">❔ Sem forma identificada</span>
+                            <span style="white-space:nowrap;"><span style="color:#666; margin-right:8px;">${f.entradasTotal > 0 ? ((f.naoIdentificado / f.entradasTotal) * 100).toFixed(1) : '0.0'}%</span><span style="color:#999; font-weight:600;">${fmt(f.naoIdentificado)}</span></span>
+                        </div>` : ''}
+                        <div style="display:flex; justify-content:space-between; padding:9px 0 2px; margin-top:6px; border-top:1px solid #2a2a2a;">
+                            <span style="color:#e8e8e8; font-weight:700; font-size:13px;">Total que entrou</span>
+                            <span style="color:#4ade80; font-weight:700; font-size:13px;">${fmt(f.entradasTotal)}</span>
+                        </div>
+                        ${f.fechQtd > 0 ? `<div style="font-size:10px; color:#666; margin-top:8px; line-height:1.5;">💡 ${fmt(f.semForma)} veio de vendas de mesa (no pedido ficam como "local"/"mesa", sem forma). ${f.fechQtd} fechamento(s) de mesa foram usados para descobrir COMO foram pagas — só a proporção entre as formas, nunca o valor, para não somar a mesma venda duas vezes.</div>` : ''}
+                        ${Math.abs(f.descasamento) > 0.005 ? `<div style="font-size:10px; color:#fbbf24; margin-top:8px; line-height:1.5;">⚠️ Os fechamentos de mesa somam ${fmt(f.fechValor)}, mas os pedidos dessas mesas somam ${fmt(f.semForma)} — diferença de ${fmt(Math.abs(f.descasamento))}. ${f.descasamento > 0 ? 'É consumo lançado como comanda no Salão do painel, que não vira pedido: essa receita <strong>não está</strong> no faturamento nem na DRE.' : 'Há mais venda de mesa em pedidos do que fechamento registrado no período (mesa fechada em outro dia).'}</div>` : ''}
+                    </div>
+
+                    <div style="background:#141414; border:1px solid #262626; border-radius:10px; padding:1.1rem 1.25rem;">
+                        <div style="font-size:11px; font-weight:700; color:#e74c3c; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">↑ Saídas de caixa</div>
+                        ${linhaSaida('Notas de compra pagas', f.saiuNotas, `${f.notasPagas.length} nota(s) · pela data em que o pagamento foi marcado`)}
+                        ${linhaSaida('Custos fixos', f.saiuFixos, f.periodKey === 'todos' ? 'integral' : `rateados: ${_finFixosDias(f.periodo).dias}/${_finFixosDias(f.periodo).diasNoMes} dias`)}
+                        ${linhaSaida('Custos variáveis', f.saiuVariaveis, `${fmt(f.varMensal)}/mês${f.periodKey === 'todos' ? '' : ' rateado'} · fora da DRE, dentro do caixa`)}
+                        ${linhaSaida('Retiradas do dono', f.saiuRetiradas, 'lançadas no calendário')}
+                        <div style="display:flex; justify-content:space-between; padding:9px 0 2px; margin-top:6px; border-top:1px solid #2a2a2a;">
+                            <span style="color:#e8e8e8; font-weight:700; font-size:13px;">Total que saiu</span>
+                            <span style="color:#e74c3c; font-weight:700; font-size:13px;">${fmt(f.saidasTotal)}</span>
+                        </div>
+                        ${f.riscoDupla > 0.005 ? `<div style="font-size:10px; color:#fbbf24; margin-top:8px; line-height:1.5;">⚠️ ${f.importadosQtd} custo(s) variável(is) parecem ter sido importados de notas ("Importar Operacionais das Notas"). Se as notas correspondentes também estão marcadas como pagas neste período, até ${fmt(f.riscoDupla)} está contado duas vezes.</div>` : ''}
+                        <div style="font-size:10px; color:#666; margin-top:8px; line-height:1.5;">📌 A nota entra no caixa pela <strong>dataPagamento</strong>, que é gravada quando você clica "Marcar pago". Notas de meses anteriores marcadas hoje caem no mês de hoje.</div>
+                    </div>
+                </div>`;
+        }
+
+        function _flxRenderAgenda() {
+            const c = document.getElementById('flxAgendaContainer');
+            if (!c) return;
+            const a = _flxAgendaDesembolso();
+            const fmt = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const maxB = Math.max(...a.ordem.map(k => a.buckets[k].total), 1);
+            const ddmm = s => { const p = String(s).split('-'); return `${p[2]}/${p[1]}`; };
+
+            const cards = a.ordem.map(k => {
+                const b = a.buckets[k];
+                const vencido = k === 'vencido';
+                if (vencido && b.total <= 0.005) return '';
+                const detalhe = [
+                    b.notas  > 0.005 ? `notas ${fmt(b.notas)}`   : '',
+                    b.agenda > 0.005 ? `calendário ${fmt(b.agenda)}` : '',
+                    b.fixos  > 0.005 ? `fixos ${fmt(b.fixos)}`   : ''
+                ].filter(Boolean).join(' · ');
+                return `
+                    <div style="background:#0f0f0f; border:1px solid #262626; border-left:3px solid ${b.cor}; border-radius:10px; padding:13px 16px;">
+                        <div style="font-size:11px; color:${vencido ? b.cor : '#888'}; text-transform:uppercase; letter-spacing:0.5px; font-weight:${vencido ? '700' : '400'};">${vencido ? '⚠ ' : ''}${b.lbl}</div>
+                        <div style="font-size:21px; font-weight:700; color:${b.total > 0.005 ? '#e8e8e8' : '#555'}; margin-top:4px;">${fmt(b.total)}</div>
+                        <div style="background:#141414; border-radius:3px; height:5px; overflow:hidden; margin-top:8px;">
+                            <div style="background:${b.cor}; height:100%; width:${Math.max(1, Math.round((b.total / maxB) * 100))}%; border-radius:3px;"></div>
+                        </div>
+                        <div style="font-size:10px; color:#666; margin-top:7px; line-height:1.45;">${detalhe || 'nada previsto'}</div>
+                    </div>`;
+            }).join('');
+
+            const itensLista = a.ordem.flatMap(k => a.buckets[k].itens.map(i => ({ ...i, cor: a.buckets[k].cor })))
+                .sort((x, y) => x.data.localeCompare(y.data));
+            const linhas = itensLista.length ? itensLista.map(i => `
+                <div style="display:grid; grid-template-columns:56px 1fr 84px 110px; gap:10px; align-items:center; padding:7px 0; border-bottom:1px solid #202020; font-size:12px;">
+                    <span style="color:${i.cor}; font-weight:600;">${ddmm(i.data)}</span>
+                    <span style="color:#e8e8e8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_calEsc(i.titulo)}</span>
+                    <span style="color:#666; font-size:10px; text-transform:uppercase; letter-spacing:0.4px;">${i.fonte === 'nota' ? 'nota' : 'calendário'}</span>
+                    <span style="color:#e74c3c; font-weight:600; text-align:right; white-space:nowrap;">${fmt(i.valor)}</span>
+                </div>`).join('')
+                : '<div style="color:#666; font-size:12px; padding:10px 0;">Nenhuma conta com vencimento nos próximos 60 dias.</div>';
+
+            c.innerHTML = `
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(165px, 1fr)); gap:12px; margin-bottom:1rem;">${cards}</div>
+                <div style="background:#141414; border:1px solid #262626; border-radius:10px; padding:1.1rem 1.25rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                        <span style="font-size:11px; font-weight:700; color:#E87722; text-transform:uppercase; letter-spacing:0.5px;">📅 Linha do tempo — o que vence</span>
+                        <span style="font-size:12px; color:#aaa;">Total 60 dias: <strong style="color:#e8e8e8;">${fmt(a.total60)}</strong></span>
+                    </div>
+                    ${linhas}
+                    ${a.semVencQtd > 0 ? `<div style="margin-top:12px; padding:10px 13px; background:rgba(239,159,39,.08); border-left:3px solid #EF9F27; border-radius:6px; font-size:11.5px; color:#e8c86a; line-height:1.55;">
+                        ⚠️ <strong>${a.semVencQtd} nota(s) em aberto somando ${fmt(a.semVencTotal)}</strong> não têm vencimento cadastrado — ficam fora desta linha do tempo (e também dos cards "A pagar" da aba Compras, que dependem do vencimento). Inclui notas antigas que nunca tiveram o pagamento marcado.
+                    </div>` : ''}
+                    <div style="font-size:10px; color:#666; margin-top:10px; line-height:1.5;">
+                        Custos fixos (${fmt(a.fixoMensal)}/mês) não têm vencimento cadastrado — entram rateados por dia em cada faixa, com o mesmo critério de rateio da DRE, e por isso não aparecem na lista acima.
+                        Contas do calendário do tipo "conta a pagar" são espelho automático das notas e não são contadas duas vezes.
+                    </div>
+                </div>`;
+        }
+
+        function _flxRenderCategorias(f) {
+            const c = document.getElementById('flxCategoriasContainer');
+            if (!c) return;
+            const g = _flxPorCategoria(f);
+            const fmt = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (!g.lista.length) {
+                c.innerHTML = '<div style="background:#141414; border:1px solid #262626; border-radius:10px; padding:1.5rem; color:#777; text-align:center; font-size:13px;">Sem desembolso registrado neste período.</div>';
+                return;
+            }
+            const maxCat  = g.lista[0].valor || 1;
+            const maxForn = g.fornLista[0]?.valor || 1;
+            const totForn = g.fornLista.reduce((s, x) => s + x.valor, 0) || 1;
+
+            c.innerHTML = `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                    <div style="background:#141414; border:1px solid #262626; border-radius:10px; padding:1.1rem 1.25rem;">
+                        <div style="font-size:11px; font-weight:700; color:#E87722; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">🗂️ Gasto por categoria</div>
+                        ${g.lista.map(x => _flxBarra(x.nome, Math.round((x.valor / maxCat) * 100), fmt(x.valor), '#E87722')).join('')}
+                        <div style="display:flex; justify-content:space-between; padding:8px 0 2px; margin-top:4px; border-top:1px solid #2a2a2a;">
+                            <span style="color:#e8e8e8; font-weight:700; font-size:13px;">Total categorizado</span>
+                            <span style="color:#E87722; font-weight:700; font-size:13px;">${fmt(g.total)}</span>
+                        </div>
+                        <div style="font-size:10px; color:#666; margin-top:8px; line-height:1.5;">Categorias de custos fixos e variáveis (rateados no período) + itens das notas pagas (operacional pela categoria do insumo operacional, insumo como Matéria-Prima) + retiradas.</div>
+                    </div>
+                    <div style="background:#141414; border:1px solid #262626; border-radius:10px; padding:1.1rem 1.25rem;">
+                        <div style="font-size:11px; font-weight:700; color:#7F77DD; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">🏢 Gasto por fornecedor <span style="color:#666; font-weight:400; text-transform:none; letter-spacing:0;">(notas pagas no período)</span></div>
+                        ${g.fornLista.length
+                            ? g.fornLista.slice(0, 10).map(x => _flxBarra(x.nome, Math.round((x.valor / maxForn) * 100), `${fmt(x.valor)} · ${((x.valor / totForn) * 100).toFixed(1)}%`, '#7F77DD')).join('')
+                            : '<div style="color:#666; font-size:12px; padding:6px 0;">Nenhuma nota paga neste período.</div>'}
+                        ${g.fornLista.length > 10 ? `<div style="font-size:10px; color:#666; margin-top:6px;">+${g.fornLista.length - 10} outro(s) fornecedor(es).</div>` : ''}
+                        <div style="font-size:10px; color:#666; margin-top:8px; line-height:1.5;">Conta pela <strong>data do pagamento</strong> — a aba Compras agrupa pela data da nota, então os números podem divergir de propósito.</div>
+                    </div>
+                </div>`;
         }
 
         function _finRenderDre(dre, prev) {
