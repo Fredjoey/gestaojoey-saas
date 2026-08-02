@@ -1345,7 +1345,7 @@
                     </div>
                     <div class="form-group">
                         <label>Data da Nota</label>
-                        <input type="date" id="notaData">
+                        <input type="date" id="notaData" min="2020-01-01" max="2100-12-31">
                     </div>
                     <div class="form-group">
                         <label>Número da Nota</label>
@@ -1353,7 +1353,7 @@
                     </div>
                     <div class="form-group">
                         <label>Vencimento</label>
-                        <input type="date" id="notaVencimento">
+                        <input type="date" id="notaVencimento" min="2020-01-01" max="2100-12-31">
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#ccc;cursor:pointer;margin-top:6px">
                           <input type="checkbox" id="notaJaPaga" onchange="toggleNotaJaPaga()"> Nota já paga
                         </label>
@@ -1453,6 +1453,9 @@
 
             <!-- LISTA DE NOTAS -->
             <div class="section-title" style="margin-top:1.5rem;">Notas Lançadas</div>
+            <!-- Notas em aberto/com problema que o filtro está escondendo — sem isto, uma nota
+                 vencida de outro mês fica inalcançável (os botões ✏️/🗑 só existem nesta lista). -->
+            <div id="notasForaDoFiltro" style="display:none;"></div>
             <div id="notasLancadas"></div>
         </div>
 
@@ -6321,6 +6324,30 @@
 
         // ===== NOTAS =====
         let notasLancadas = [];
+
+        // ===== SANIDADE DE DATA DAS NOTAS =====
+        // Declarado AQUI (e não junto de _badgeStatusNota) porque a inicialização chama
+        // filtrarNotasMesAtual() -> renderNotasLancadas() antes daquele ponto do script:
+        // com `const` mais abaixo isso cairia na temporal dead zone.
+        // Uma nota salva com o ano errado ("0006-08-13", digitado como "13/08/6") produzia
+        // "VENCIDA há 737779 dias" e alimentava os cards de "A pagar" sem ninguém questionar.
+        // 10 anos de folga: cobre qualquer vencimento real e pega erro de digitação de ano.
+        const _DIAS_ABSURDO  = 3650;
+        const _ANO_MIN_NOTA  = 2020;
+        const _ANO_MAX_NOTA  = 2100;
+        const _BADGE_INVALIDA = 'background:#3a1a00; color:#fb923c; border:1px solid #7c3a00;';
+        function _anoDeISO(s) {
+            const m = String(s || '').match(/^(-?\d+)-(\d{1,2})-(\d{1,2})/);
+            return m ? parseInt(m[1], 10) : null;
+        }
+        // true quando a data é inutilizável: fora da faixa plausível ou distante demais de hoje.
+        function _dataNotaAbsurda(s) {
+            if (!s) return false;
+            const ano = _anoDeISO(s);
+            if (ano === null || ano < _ANO_MIN_NOTA || ano > _ANO_MAX_NOTA) return true;
+            const d = _diasAteVencimento(s);
+            return d === null || Math.abs(d) > _DIAS_ABSURDO;
+        }
         let historicoPrecos = [];
         let _notasAnaliseTop5 = [];
         (async () => {
@@ -6630,6 +6657,48 @@
             const mes = hoje.toISOString().substring(0, 7);
             document.getElementById('notaFiltroMes').value = mes;
             renderNotasLancadas();
+        }
+
+        // ===== NOTAS QUE O FILTRO ESTÁ ESCONDENDO =====
+        // O filtro de mês vem pré-aplicado no mês corrente (filtrarNotasMesAtual, no load),
+        // e os botões ✏️/🗑 só existem nesta lista — então uma nota vencida ou com data
+        // inválida de um mês anterior ficava inalcançável pela tela.
+        function _renderNotasForaDoFiltro(filtered) {
+            const box = document.getElementById('notasForaDoFiltro');
+            if (!box) return;
+            const visiveis = new Set((filtered || []).map(n => n.id));
+            const precisaAtencao = n => {
+                if (!n || n.statusPagamento === 'pago' || !n.vencimento) return false;
+                if (_dataNotaAbsurda(n.vencimento)) return true;
+                const d = _diasAteVencimento(n.vencimento);
+                return d !== null && d <= 7;            // vencida ou vencendo em até 7 dias
+            };
+            const fora = (notasLancadas || []).filter(n => precisaAtencao(n) && !visiveis.has(n.id));
+            if (!fora.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+            const total = fora.reduce((s, n) => s + (parseFloat(n.total) || 0), 0);
+            const invalidas = fora.filter(n => _dataNotaAbsurda(n.vencimento)).length;
+            const fmtR = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const plural = fora.length > 1;
+            box.style.display = 'block';
+            box.innerHTML = `
+                <div onclick="verNotasForaDoFiltro()" title="Clique para limpar os filtros e ver estas notas"
+                     style="background:#2a1a00; border:1px solid #7c3a00; border-left:3px solid #fb923c; border-radius:8px;
+                            padding:11px 15px; margin-bottom:10px; cursor:pointer; display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:16px; flex-shrink:0;">⚠️</span>
+                    <div style="flex:1; min-width:0; font-size:12.5px; color:#e8c86a; line-height:1.5;">
+                        <strong style="color:#fb923c;">${fora.length} nota${plural ? 's' : ''} em aberto fora deste filtro</strong>
+                        — ${fmtR(total)}${invalidas ? ` · <strong style="color:#fb923c;">${invalidas} com data inválida</strong>` : ''}.
+                        ${plural ? 'Elas venceram' : 'Ela venceu'} ou ${plural ? 'vencem' : 'vence'} em até 7 dias e não ${plural ? 'aparecem' : 'aparece'} na lista abaixo.
+                    </div>
+                    <span style="flex-shrink:0; font-size:12px; font-weight:700; color:#fb923c; border:1px solid #fb923c;
+                                 border-radius:6px; padding:5px 11px; white-space:nowrap;">Ver ${plural ? 'todas' : 'a nota'} →</span>
+                </div>`;
+        }
+
+        function verNotasForaDoFiltro() {
+            limparFiltrosNotas();
+            document.getElementById('notasLancadas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function atualizarDatalistFornecedores() { /* mantido para compatibilidade */ }
@@ -6982,6 +7051,29 @@
             }).join('');
         }
 
+        // Valida as datas da nota. Devolve false quando o usuário deve corrigir.
+        // O <input type="date"> aceita ano de 0001 a 275760 — foi assim que "13/08/6" virou
+        // "0006-08-13" e produziu "VENCIDA há 737779 dias". min/max no HTML não bastam:
+        // o navegador não bloqueia submit programático, só marca o campo como inválido.
+        function _validarDatasNota(data, vencimento) {
+            const foraDaFaixa = s => { const a = _anoDeISO(s); return a === null || a < _ANO_MIN_NOTA || a > _ANO_MAX_NOTA; };
+            if (foraDaFaixa(data)) {
+                alert(`⚠️ Data da nota inválida: "${data}".\n\nO ano precisa estar entre ${_ANO_MIN_NOTA} e ${_ANO_MAX_NOTA}. Confira se digitou o ano com 4 dígitos.`);
+                return false;
+            }
+            if (vencimento) {
+                if (foraDaFaixa(vencimento)) {
+                    alert(`⚠️ Vencimento inválido: "${vencimento}".\n\nO ano precisa estar entre ${_ANO_MIN_NOTA} e ${_ANO_MAX_NOTA}. Confira se digitou o ano com 4 dígitos (ex.: 2026, não 6).`);
+                    return false;
+                }
+                if (vencimento < data) {
+                    const br = s => { const p = String(s).split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+                    if (!confirm(`⚠️ O vencimento (${br(vencimento)}) é ANTERIOR à data da nota (${br(data)}).\n\nIsso costuma ser erro de digitação. Salvar assim mesmo?`)) return false;
+                }
+            }
+            return true;
+        }
+
         function salvarNota() {
             const fornecedor = document.getElementById('notaFornecedor').value.trim();
             const data       = document.getElementById('notaData').value;
@@ -6991,6 +7083,7 @@
                 alert('⚠️ Preencha o fornecedor e a data da nota!');
                 return;
             }
+            if (!_validarDatasNota(data, document.getElementById('notaVencimento')?.value || '')) return;
 
             const itens = [];
             let totalNota = 0;
@@ -7386,6 +7479,11 @@
                 }
             }
 
+            // Avisa sobre notas que precisam de conserto e que o filtro está escondendo.
+            // Vem ANTES do early-return: o caso mais importante é justamente a lista vazia
+            // (filtro no mês corrente, nota problemática num mês anterior).
+            _renderNotasForaDoFiltro(filtered);
+
             if (filtered.length === 0) {
                 container.innerHTML = '<div class="empty-state"><p>Nenhuma nota encontrada.</p></div>';
                 return;
@@ -7446,6 +7544,8 @@
             const base = 'display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:8px; text-transform:uppercase; letter-spacing:0.3px;';
             if (nota.statusPagamento === 'pago')
                 return `<span style="${base} background:#103a1a; color:#4ade80; border:1px solid #1c5c30;">Pago</span>`;
+            if (_dataNotaAbsurda(nota.vencimento))
+                return `<span style="${base} ${_BADGE_INVALIDA}" title="Vencimento gravado como ${nota.vencimento} — corrija a nota">⚠ Data inválida</span>`;
             const dias = _diasAteVencimento(nota.vencimento);
             if (dias === null) return '';
             if (dias < 0)
@@ -7508,6 +7608,7 @@
             const banner = document.getElementById('notasAPagarBanner');
             const ddmm = v => { const d = new Date(v + 'T00:00:00'); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); };
             const rotuloVenc = (d, v) => {
+                if (_dataNotaAbsurda(v)) return `<strong style="color:#fb923c">⚠ data de vencimento inválida (${v}) — corrija a nota</strong>`;
                 const data = ddmm(v);
                 if (d < 0) { const k = Math.abs(d); return `<strong style="color:#f87171">VENCIDA há ${k} dia${k > 1 ? 's' : ''} (${data})</strong>`; }
                 if (d === 0) return `<strong style="color:#fbbf24">vence HOJE (${data})</strong>`;
@@ -7533,20 +7634,27 @@
             }
 
             const card = (n, cor) => {
+                const invalida = _dataNotaAbsurda(n.vencimento);
                 const d = dias(n.vencimento);
                 let badge;
-                if (d < 0) badge = `<span style="background:#F7C1C1;color:#791F1F;font-size:11px;font-weight:500;padding:2px 8px;border-radius:100px">Vencida há ${Math.abs(d)}d</span>`;
+                if (invalida) badge = `<span style="background:#3a1a00;color:#fb923c;border:1px solid #7c3a00;font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px" title="Vencimento gravado como ${n.vencimento}">⚠ Data inválida</span>`;
+                else if (d < 0) badge = `<span style="background:#F7C1C1;color:#791F1F;font-size:11px;font-weight:500;padding:2px 8px;border-radius:100px">Vencida há ${Math.abs(d)}d</span>`;
                 else if (d === 0) badge = `<span style="background:#FAC775;color:#633806;font-size:11px;font-weight:500;padding:2px 8px;border-radius:100px">Vence hoje</span>`;
                 else badge = `<span style="background:#2a2a2a;color:#aaa;font-size:11px;font-weight:500;padding:2px 8px;border-radius:100px">Em ${d} dia${d!==1?'s':''}</span>`;
-                const vencFmt = new Date(n.vencimento+'T00:00:00').toLocaleDateString('pt-BR');
-                return `<div style="background:#1a1a1a;border-left:3px solid ${cor};border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px">
+                const _dv = new Date(n.vencimento+'T00:00:00');
+                const vencFmt = (invalida || isNaN(_dv)) ? String(n.vencimento) : _dv.toLocaleDateString('pt-BR');
+                // ✏️/🗑 aqui também: este card é onde a nota problemática APARECE, mas até agora só
+                // dava para "Marcar pago" — e a lista que tem os botões some com o filtro de mês.
+                return `<div style="background:#1a1a1a;border-left:3px solid ${invalida ? '#fb923c' : cor};border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px">
                   <div style="flex:1;min-width:0">
                     <div style="font-size:13px;font-weight:500;color:#eee">${n.fornecedor||'—'}</div>
                     <div style="font-size:11px;color:#888">NF ${n.numero||'s/n'} · vence ${vencFmt}</div>
                   </div>
                   ${badge}
                   <div style="font-size:14px;font-weight:500;color:#eee;white-space:nowrap">${fmt(parseFloat(n.total)||0)}</div>
-                  <button onclick="marcarNotaPaga(${n.id})" style="font-size:12px;font-weight:500;color:#E87722;background:transparent;border:1px solid #E87722;border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap">Marcar pago</button>
+                  ${invalida ? '' : `<button onclick="marcarNotaPaga(${n.id})" style="font-size:12px;font-weight:500;color:#E87722;background:transparent;border:1px solid #E87722;border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap">Marcar pago</button>`}
+                  <button onclick="editarNota(${n.id})" title="Editar esta nota" style="font-size:12px;font-weight:500;color:#60a5fa;background:transparent;border:1px solid #60a5fa;border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap">✏️</button>
+                  <button onclick="excluirNota(${n.id})" title="Excluir esta nota" style="font-size:12px;font-weight:500;color:#f87171;background:transparent;border:1px solid #f87171;border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap">🗑</button>
                 </div>`;
             };
 
@@ -7578,6 +7686,7 @@
                 const moeda = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const ddmm = venc => { const d = new Date(venc + 'T12:00:00'); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); };
                 const rotuloVenc = (dias, venc) => {
+                    if (_dataNotaAbsurda(venc)) return `<strong style="color:#fb923c">⚠ data de vencimento inválida (${venc}) — corrija a nota</strong>`;
                     const data = ddmm(venc);
                     if (dias < 0) { const n = Math.abs(dias); return `<strong style="color:#f87171">VENCIDA há ${n} dia${n > 1 ? 's' : ''} (${data})</strong>`; }
                     if (dias === 0) return `<strong style="color:#fbbf24">vence HOJE (${data})</strong>`;
@@ -7748,6 +7857,7 @@
                 alert('⚠️ Preencha o fornecedor e a data!');
                 return;
             }
+            if (!_validarDatasNota(data, document.getElementById('notaVencimento')?.value || '')) return;
 
             const itens = [];
             let totalNota = 0;
