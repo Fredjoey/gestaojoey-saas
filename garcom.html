@@ -416,6 +416,53 @@ function _boot(){
 
 // ===================== LÓGICA DE MESA (mesma do Salão) =====================
 function _mesaPedidoAtivo(p){ return !!p && p.status!=='cancelado' && p.status!=='finalizado'; }
+
+// ═══ FORMA DE PAGAMENTO DE VOLTA NO PEDIDO ═══════════════════════════════════════
+// Espelho do painel.html: o pedido de mesa nasce com placeholder ('mesa'/'pendente'/
+// 'local') e a forma só ia para `fechamentos`, sumindo do breakdown e da DRE.
+const _MESA_PLACEHOLDERS=['','local','mesa','pendente','balcao'];
+function _mesaNormForma(s){
+  const p=String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  if(!p)return null;
+  if(p.includes('pix'))return'pix';
+  if(p.includes('dinheiro')||p.includes('especie'))return'dinheiro';
+  if(p.includes('cred'))return'credito';
+  if(p.includes('deb'))return'debito';
+  if(p.includes('vr')||p.includes('vale'))return'vr';
+  if(p.includes('cart'))return'cartao';
+  return null;
+}
+// Alocação por MAIOR SALDO RESTANTE: cada pedido comporta UMA forma, então o agregado
+// por forma fica o mais perto possível do que foi realmente pago. Devolve Map(id->forma).
+function _mesaAlocarFormas(pedidosAtivos,pagamentos,opts){
+  const fecharTudo=!!(opts&&opts.fecharTudo), out=new Map(), cap={};
+  (pagamentos||[]).forEach(pg=>{const k=_mesaNormForma(pg&&pg.forma);if(!k)return;cap[k]=(cap[k]||0)+(Number(pg.valor)||0);});
+  const formas=Object.keys(cap); if(!formas.length)return out;
+  const limite=new Date();limite.setHours(0,0,0,0);limite.setDate(limite.getDate()-1);
+  const janela=p=>{const q=String(p.data||'').split('/');if(q.length!==3)return false;return new Date(+q[2],+q[1]-1,+q[0])>=limite;};
+  const alvos=(pedidosAtivos||[])
+    .filter(p=>p&&_MESA_PLACEHOLDERS.includes(String(p.pagamento||'').toLowerCase()))
+    .filter(janela)
+    .sort((a,b)=>(Number(b.total)||0)-(Number(a.total)||0));
+  for(const p of alvos){
+    const v=Number(p.total)||0;
+    // Best-fit decreasing (igual ao painel.html): menor saldo que ainda comporta o pedido.
+    let melhor=null;
+    for(const k of formas)if(cap[k]>=v-0.005&&(melhor===null||cap[k]<cap[melhor]))melhor=k;
+    if(melhor===null){
+      for(const k of formas)if(melhor===null||cap[k]>cap[melhor])melhor=k;
+      if(cap[melhor]<=0.005&&!fecharTudo)break;
+    }
+    cap[melhor]-=v;
+    out.set(p.id,melhor);
+  }
+  return out;
+}
+function _mesaUpdatePedido(p,formaDe,extra){
+  const upd=Object.assign({},extra), f=formaDe.get(p.id);
+  if(f){upd.pagamento=f;upd.pagamentoOrigem='fechamento-mesa';}
+  return upd;
+}
 function _pedidosDaMesa(mesaId){
   const num = String(mesaId).replace(/^mesa-/,'');
   return pedidos.filter(p=>{ const pm=String(p.mesa||''); return pm && (pm===mesaId || pm===num || pm==='mesa-'+num); });
@@ -785,8 +832,12 @@ async function fecharContaFinal(){
     for(const pg of pagamentos){
       await db.collection(`clientes/${slug}/fechamentos`).add({mesa:mesaId,mesaNome,total:Number(pg.valor)||0,pagamento:pg.forma,descricao:pg.descricao||'',data,hora,tipo:'mesa-conta',timestamp:firebase.firestore.FieldValue.serverTimestamp()});
     }
+    // finaliza os pedidos da mesa E grava a forma de pagamento de volta em cada um
     const ativos=_pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
-    await Promise.all(ativos.map(p=>db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({status:'finalizado'}).catch(e=>console.warn('[fechar]',p.id,e))));
+    const formaDe=_mesaAlocarFormas(ativos,pagamentos,{fecharTudo:true});
+    await Promise.all(ativos.map(p=>db.collection(`clientes/${slug}/pedidos`).doc(p.id)
+      .update(_mesaUpdatePedido(p,formaDe,{status:'finalizado'}))
+      .catch(e=>console.warn('[fechar]',p.id,e))));
     await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({status:'livre',comandas:{},pedidos:[],total:0,conta:{pagamentos:[],itensPagos:[],divisao:null}},{merge:false});
     fechar('contaSheet'); fechar('mesaSheet');
     toast('Conta da '+mesaNome+' fechada! Recebido '+fmt(pago));

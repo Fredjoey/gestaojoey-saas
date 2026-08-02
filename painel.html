@@ -9913,6 +9913,91 @@ function _mesaPedidoAtivo(p) {
   return !!p && p.status !== 'cancelado' && p.status !== 'finalizado';
 }
 
+// ═══ FORMA DE PAGAMENTO DE VOLTA NO PEDIDO (vendas de mesa/salão) ═══════════════
+// O pedido de mesa nasce com um PLACEHOLDER ('local'/'mesa'/'pendente') porque na hora
+// do pedido ninguém sabe ainda como vai pagar — é conta aberta, e isso está certo. O
+// problema era que ao fechar a conta a forma ia só para `fechamentos` e nunca voltava
+// para o pedido: como o breakdown por meio de pagamento (_finPagamentosPedidos) lê só
+// p.pagamento, 21% do faturamento sumia da quebra e da taxa de cartão da DRE.
+
+// Chaves canônicas do sistema — SEMPRE minúsculo sem acento.
+const _MESA_PLACEHOLDERS = ['', 'local', 'mesa', 'pendente', 'balcao'];
+
+// Normaliza qualquer rótulo ('Crédito', 'CARTAO DE DEBITO') para a chave canônica.
+function _mesaNormForma(s) {
+  const p = String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  if (!p) return null;
+  if (p.includes('pix')) return 'pix';
+  if (p.includes('dinheiro') || p.includes('especie')) return 'dinheiro';
+  if (p.includes('cred')) return 'credito';
+  if (p.includes('deb')) return 'debito';
+  if (p.includes('vr') || p.includes('vale')) return 'vr';
+  if (p.includes('cart')) return 'cartao';
+  return null;
+}
+
+// Distribui as formas de pagamento da conta entre os pedidos da mesa.
+// O campo p.pagamento é UMA string, então um pedido só comporta UMA forma. Quando a
+// conta é paga em várias formas usamos alocação por MAIOR SALDO RESTANTE: percorre os
+// pedidos do maior para o menor e dá a cada um a forma que ainda tem mais valor a
+// alocar. Isso faz o AGREGADO por forma — que é o que o breakdown e a DRE consomem —
+// ficar o mais perto possível do que foi de fato pago, bem melhor do que carimbar a
+// forma predominante em todos os pedidos.
+// NÃO grava; devolve Map(pedidoId -> forma) para o chamador juntar no update que ele
+// já faz (evita update duplo e problema de ordem com o filtro de "ativo").
+function _mesaAlocarFormas(pedidosAtivos, pagamentos, opts) {
+  const fecharTudo = !!(opts && opts.fecharTudo);
+  const out = new Map();
+  const cap = {};
+  (pagamentos || []).forEach(pg => {
+    const k = _mesaNormForma(pg && pg.forma);
+    if (!k) return;
+    cap[k] = (cap[k] || 0) + (Number(pg.valor) || 0);
+  });
+  const formas = Object.keys(cap);
+  if (!formas.length) return out;
+
+  // Janela de 2 dias: protege contra carimbar pedido órfão de uma sessão antiga da mesa
+  // (_pedidosDaMesa não filtra data, de propósito, para a conta atravessar a meia-noite).
+  const limite = new Date(); limite.setHours(0, 0, 0, 0); limite.setDate(limite.getDate() - 1);
+  const dentroDaJanela = p => {
+    const q = String(p.data || '').split('/');
+    if (q.length !== 3) return false;
+    return new Date(+q[2], +q[1] - 1, +q[0]) >= limite;
+  };
+
+  // Só preenche pedido que ainda está com placeholder — NUNCA sobrescreve forma real
+  // (ex.: mesa que pagou PIX online, ou pedido já corrigido à mão no Relatório do dia).
+  const alvos = (pedidosAtivos || [])
+    .filter(p => p && _MESA_PLACEHOLDERS.includes(String(p.pagamento || '').toLowerCase()))
+    .filter(dentroDaJanela)
+    .sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0));
+
+  for (const p of alvos) {
+    const v = Number(p.total) || 0;
+    // Best-fit decreasing: entre as formas que ainda comportam o valor do pedido escolhe
+    // a de MENOR saldo (encaixa justo e preserva as maiores para os pedidos maiores).
+    // Isso zera o erro do agregado nos casos comuns; "maior saldo" errava ~13%.
+    let melhor = null;
+    for (const k of formas) if (cap[k] >= v - 0.005 && (melhor === null || cap[k] < cap[melhor])) melhor = k;
+    if (melhor === null) {                       // nenhuma comporta: cai para a de maior saldo
+      for (const k of formas) if (melhor === null || cap[k] > cap[melhor]) melhor = k;
+      if (cap[melhor] <= 0.005 && !fecharTudo) break;   // pagamento parcial: não estoura
+    }
+    cap[melhor] -= v;
+    out.set(p.id, melhor);
+  }
+  return out;
+}
+
+// Monta o update de um pedido de mesa somando a forma alocada (se houver) ao resto.
+function _mesaUpdatePedido(p, formaDe, extra) {
+  const upd = Object.assign({}, extra);
+  const f = formaDe.get(p.id);
+  if (f) { upd.pagamento = f; upd.pagamentoOrigem = 'fechamento-mesa'; }
+  return upd;
+}
+
 // Pedidos vinculados a uma mesa — casa tanto pelo id quanto pelo número (QRs antigos)
 function _pedidosDaMesa(mesaId) {
   const num = String(mesaId).replace(/^mesa-/, '');
@@ -10321,9 +10406,15 @@ async function contaFechar(mesaId, mesaNome) {
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
-    // 2) finaliza os pedidos ativos da mesa (saem do "ativo" -> a mesa volta a Livre)
+    // 2) finaliza os pedidos ativos da mesa (saem do "ativo" -> a mesa volta a Livre) E
+    //    grava a forma de pagamento de volta em cada um, para a venda de mesa entrar no
+    //    breakdown por meio de pagamento e na taxa de cartão da DRE.
     const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
-    await Promise.all(ativos.map(p => db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({ status: 'finalizado' }).catch(e => console.warn('[fechar conta] pedido', p.id, e))));
+    const formaDe = _mesaAlocarFormas(ativos, pagamentos, { fecharTudo: true });
+    await Promise.all(ativos.map(p => db.collection(`clientes/${slug}/pedidos`).doc(p.id)
+      .update(_mesaUpdatePedido(p, formaDe, { status: 'finalizado' }))
+      .then(() => { const f = formaDe.get(p.id); const l = pedidos.find(x => x.id === p.id); if (f && l) l.pagamento = f; })
+      .catch(e => console.warn('[fechar conta] pedido', p.id, e))));
     // 3) zera o estado da mesa -> volta pra Livre
     await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
       { status: 'livre', comandas: {}, pedidos: [], total: 0, conta: { pagamentos: [], itensPagos: [], divisao: null } },
@@ -10449,13 +10540,25 @@ async function confirmarFecharConta(mesaId, mesaNome, todosItens, total, pagamen
   fecharConfirmModal();
   try {
     const now = new Date();
+    // Grava SEMPRE a chave canônica minúscula sem acento: os botões deste modal são
+    // rotulados 'Pix'/'Crédito'/'Débito' e gravar assim quebrava o Fechamento de Caixa
+    // (renderCaixa procura 'credito'/'debito' e 'crédito' não bate).
+    const formaCanon = _mesaNormForma(pagamento) || pagamento;
     await db.collection(`clientes/${slug}/fechamentos`).add({
-      mesa: mesaId, mesaNome, itens: todosItens, total, pagamento,
+      mesa: mesaId, mesaNome, itens: todosItens, total, pagamento: formaCanon,
       data: now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       tipo: 'total',
       timestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // Forma de volta nos pedidos + finaliza (este fluxo não finalizava, o que deixava o
+    // pedido "ativo" para sempre e o exporia a receber a forma de uma sessão futura).
+    const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
+    const formaDe = _mesaAlocarFormas(ativos, [{ forma: formaCanon, valor: total }], { fecharTudo: true });
+    await Promise.all(ativos.map(p => db.collection(`clientes/${slug}/pedidos`).doc(p.id)
+      .update(_mesaUpdatePedido(p, formaDe, { status: 'finalizado' }))
+      .then(() => { const f = formaDe.get(p.id); const l = pedidos.find(x => x.id === p.id); if (f && l) l.pagamento = f; })
+      .catch(e => console.warn('[fechar conta] pedido', p.id, e))));
     await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'livre', pedidos: [], comandas: {}, total: 0 });
     fecharFecharContaModal();
     closeOrderModal();
@@ -10582,13 +10685,27 @@ async function confirmarPagamentoPessoa(mesaId, mesaNome, itensPagos, subtotal, 
   fecharConfirmModal();
   try {
     const now = new Date();
+    const formaCanon = _mesaNormForma(pagamento) || pagamento;   // botões são 'Pix'/'Crédito'/'Débito'
     await db.collection(`clientes/${slug}/fechamentos`).add({
-      mesa: mesaId, mesaNome, itens: itensPagos, total: subtotal, pagamento,
+      mesa: mesaId, mesaNome, itens: itensPagos, total: subtotal, pagamento: formaCanon,
       data: now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       tipo: 'parcial',
       timestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // Pagamento PARCIAL: preenche a forma só até o valor recebido agora (fecharTudo=false),
+    // então cada parcela vai preenchendo os pedidos ainda sem forma. Na parcela que ZERA a
+    // conta (novoStatus 'livre') preenche o que sobrou e finaliza os pedidos.
+    const encerra = novoStatus === 'livre';
+    const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
+    const formaDe = _mesaAlocarFormas(ativos, [{ forma: formaCanon, valor: subtotal }], { fecharTudo: encerra });
+    await Promise.all(ativos.map(p => {
+      const upd = _mesaUpdatePedido(p, formaDe, encerra ? { status: 'finalizado' } : {});
+      if (!Object.keys(upd).length) return Promise.resolve();
+      return db.collection(`clientes/${slug}/pedidos`).doc(p.id).update(upd)
+        .then(() => { const f = formaDe.get(p.id); const l = pedidos.find(x => x.id === p.id); if (f && l) l.pagamento = f; })
+        .catch(e => console.warn('[dividir conta] pedido', p.id, e));
+    }));
     await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ comandas: newComandas, total: novoTotal, status: novoStatus }, { merge: true });
     fecharDividirContaModal();
     if (novoStatus === 'livre') closeOrderModal();
