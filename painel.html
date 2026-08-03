@@ -9323,13 +9323,17 @@ function toggleRoboSection(id) {
 }
 
 // ── Joey IA (assistente de gestão) — consome a callable perguntarGestao ───────
-// Gate: config/features.JOEY_IA (revelado por iniciarIaListeners). Só joey por ora.
+// Gate: config/features.JOEY_IA + tenant. A Joey IA do painel é ferramenta INTERNA do dono
+// (a IA vendida ao cliente SaaS é só a do WhatsApp), então além da flag exige o slug estar em
+// _IA_PAINEL_SLUGS — espelho do IA_PAINEL_SLUGS das Cloud Functions, onde fica a trava real.
+const _IA_PAINEL_SLUGS = ['joey'];
 let _jiaBusy = false;
 let _jiaHist = [];   // histórico da conversa nesta sessão do modal (some ao fechar — não persiste)
 function _aplicarGateJoeyIA() {
   const fab = document.getElementById('jiaFab');
   if (!fab) return;
-  const liberado = (typeof _iaFeatures !== 'undefined' && _iaFeatures && _iaFeatures.JOEY_IA);
+  const liberado = _IA_PAINEL_SLUGS.includes(slug)
+                && (typeof _iaFeatures !== 'undefined' && _iaFeatures && _iaFeatures.JOEY_IA);
   // Esconde a bolha quando o atendimento WhatsApp está aberto — ela flutua por cima
   // do campo "Mensagem..." e atrapalha a digitação. Volta ao fechar o wpp-panel.
   const wppAberto = (typeof _wppOpen !== 'undefined' && _wppOpen);

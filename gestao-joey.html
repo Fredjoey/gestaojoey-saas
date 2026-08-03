@@ -1329,7 +1329,10 @@
             </style>
             <div style="background:#2c2c2c; padding:1.5rem; border-radius:8px; border:1px solid #3a3a3a; margin-bottom:1.5rem;">
                 <!-- LER NOTA POR IA — só preenche o formulário; salvar continua manual -->
-                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; padding-bottom:14px; border-bottom:1px dashed #444;">
+                <!-- Ferramenta interna do dono (roda em Opus 5, não é produto SaaS): nasce
+                     escondida e só é revelada para os slugs de _IA_PAINEL_SLUGS. A trava que
+                     vale é a do servidor (extrairNotaCompra) — isto aqui é só cosmético. -->
+                <div id="notaIaBloco" style="display:none; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; padding-bottom:14px; border-bottom:1px dashed #444;">
                     <input type="file" id="notaIaArquivo" accept="image/jpeg,image/png,image/webp,application/pdf" style="display:none" onchange="lerNotaPorIA(this)">
                     <button type="button" id="notaIaBtn" class="secondary" onclick="document.getElementById('notaIaArquivo').click()"
                             style="border-color:#E87722; color:#E87722; background:transparent;">📸 Ler nota (foto/PDF)</button>
@@ -1967,6 +1970,12 @@
             hostname === '127.0.0.1'
         ) ? 'joey' : hostname.split('.')[0];
 
+        // Tenants com acesso às ferramentas de IA do PAINEL (Joey IA + ler nota por foto).
+        // Espelha IA_PAINEL_SLUGS das Cloud Functions (gestaojoey-admin/functions/index.js).
+        // A IA VENDIDA ao cliente SaaS é só a do WhatsApp — estas duas são internas do dono.
+        // Declarado aqui (cedo) porque _calAplicarFeature roda no 1º snapshot de features.
+        const _IA_PAINEL_SLUGS = ['joey'];
+
         // Link do carrinho (painel de pedidos) — dinâmico por tenant
         const PEDIDOS_URL = slug === 'joey'
           ? 'https://pedidos.hamburgueriajoey.com.br'
@@ -2377,8 +2386,14 @@
         function _calAplicarFeature() {
             const btn = document.getElementById('tabBtnCalendario');
             if (btn) btn.style.display = _calFeatures.CALENDARIO ? '' : 'none';
+            // Ferramentas de IA do PAINEL (Joey IA + ler nota por foto) são internas do dono,
+            // não fazem parte do que se vende ao cliente SaaS — a IA vendida é só a do WhatsApp.
+            // Espelha IA_PAINEL_SLUGS das Cloud Functions; a trava real é lá no servidor.
+            const _donoIA = _IA_PAINEL_SLUGS.includes(slug);
             const fab = document.getElementById('jiaFab');
-            if (fab) fab.style.display = _calFeatures.JOEY_IA ? 'flex' : 'none';
+            if (fab) fab.style.display = (_donoIA && _calFeatures.JOEY_IA) ? 'flex' : 'none';
+            const notaBloco = document.getElementById('notaIaBloco');
+            if (notaBloco) notaBloco.style.display = _donoIA ? 'flex' : 'none';
         }
         function _calRenderSePrecisar() {
             const tab = document.getElementById('calendario');
