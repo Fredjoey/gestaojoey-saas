@@ -1970,12 +1970,6 @@
             hostname === '127.0.0.1'
         ) ? 'joey' : hostname.split('.')[0];
 
-        // Tenants com acesso às ferramentas de IA do PAINEL (Joey IA + ler nota por foto).
-        // Espelha IA_PAINEL_SLUGS das Cloud Functions (gestaojoey-admin/functions/index.js).
-        // A IA VENDIDA ao cliente SaaS é só a do WhatsApp — estas duas são internas do dono.
-        // Declarado aqui (cedo) porque _calAplicarFeature roda no 1º snapshot de features.
-        const _IA_PAINEL_SLUGS = ['joey'];
-
         // Link do carrinho (painel de pedidos) — dinâmico por tenant
         const PEDIDOS_URL = slug === 'joey'
           ? 'https://pedidos.hamburgueriajoey.com.br'
@@ -2020,9 +2014,13 @@
         onAuthStateChanged(auth, user => {
             _mostrarApp(!!user);
             if (!user) {
+                window._authEmail = '';
                 document.getElementById('loginScreen').style.display = 'flex';
                 return;
             }
+            // Exposto no window porque o script CLÁSSICO abaixo não enxerga nada declarado
+            // aqui (este bloco é <script type="module"> — const/let de módulo NÃO são globais).
+            window._authEmail = user.email ? String(user.email).toLowerCase() : '';
             // Iniciar listeners só após autenticação confirmada
             if (_listenersIniciados) return;
             _listenersIniciados = true;
@@ -2383,13 +2381,31 @@
                 .sort((a, b) => (CAL_TIPOS[a.tipo]?.label || '').localeCompare(CAL_TIPOS[b.tipo]?.label || '', 'pt'));
         }
 
+        // ===== FERRAMENTAS DE IA DO PAINEL (Joey IA + ler nota por foto) =====
+        // Internas do dono: a IA VENDIDA ao cliente SaaS é só a do WhatsApp. Espelha
+        // IA_PAINEL_SLUGS/ADMIN_EMAILS das Cloud Functions — a trava real é no servidor.
+        //
+        // ⚠️ Declarado NESTE bloco (script clássico) de propósito. A 1ª versão declarou no
+        // <script type="module"> junto do `const slug`, e const/let de módulo NÃO são globais:
+        // aqui dava ReferenceError, _calAplicarFeature abortava e o FAB (que nasce
+        // display:none) nunca aparecia — inclusive pro próprio joey.
+        const _IA_PAINEL_SLUGS  = ['joey'];
+        const _IA_PAINEL_ADMINS = ['fred@joey.app.br', 'isabela@joey.app.br'];
+        function _iaPainelLiberado() {
+            // O módulo publica o slug em window._fb; o fallback repete a MESMA regra de host
+            // para nunca depender da ordem de carga. Não lança em nenhum caminho.
+            const h = location.hostname;
+            const s = (window._fb && window._fb.slug) || (
+                (h === 'gestao.hamburgueriajoey.com.br' || h === 'sistema-joey.web.app' ||
+                 h === 'localhost' || h === '127.0.0.1') ? 'joey' : h.split('.')[0]);
+            if (_IA_PAINEL_SLUGS.includes(String(s || '').trim())) return true;
+            return _IA_PAINEL_ADMINS.includes(String(window._authEmail || '').toLowerCase());
+        }
+
         function _calAplicarFeature() {
             const btn = document.getElementById('tabBtnCalendario');
             if (btn) btn.style.display = _calFeatures.CALENDARIO ? '' : 'none';
-            // Ferramentas de IA do PAINEL (Joey IA + ler nota por foto) são internas do dono,
-            // não fazem parte do que se vende ao cliente SaaS — a IA vendida é só a do WhatsApp.
-            // Espelha IA_PAINEL_SLUGS das Cloud Functions; a trava real é lá no servidor.
-            const _donoIA = _IA_PAINEL_SLUGS.includes(slug);
+            const _donoIA = _iaPainelLiberado();
             const fab = document.getElementById('jiaFab');
             if (fab) fab.style.display = (_donoIA && _calFeatures.JOEY_IA) ? 'flex' : 'none';
             const notaBloco = document.getElementById('notaIaBloco');
