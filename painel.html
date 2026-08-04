@@ -2559,7 +2559,19 @@ const WAC_FB_APP_ID    = '1092362123966651';   // App ID público (client-side, 
 const WAC_FB_CONFIG_ID = '2010774560314805';   // Config do Embedded Signup
 const WAC_FB_VERSION   = 'v25.0';
 
-let _wacSignup    = { code: null, waba_id: null, phone_number_id: null, business_id: null };
+// ── COEXISTÊNCIA (Coex) ──────────────────────────────────────────────────────────────
+// Mantém o app do WhatsApp Business do celular funcionando JUNTO com a Cloud API, no MESMO
+// número. NÃO é propriedade salva na configuração de login da Meta — é parâmetro de RUNTIME
+// do diálogo, passado no `extras` do FB.login. Por isso não precisa de config_id novo.
+// Ligado POR TENANT via clientes/{slug}/config/features.WAC_COEX (mesmo doc das outras flags,
+// já lido em tempo real por iniciarIaListeners) → habilitar outro cliente é 1 write, sem deploy.
+const WAC_COEX_FEATURE_TYPE = 'whatsapp_business_app_onboarding';
+function _wacCoexAtivo() {
+  try { return !!(typeof _iaFeatures !== 'undefined' && _iaFeatures && _iaFeatures.WAC_COEX === true); }
+  catch (_) { return false; }
+}
+
+let _wacSignup    = { code: null, waba_id: null, phone_number_id: null, business_id: null, coex: false };
 let _wacSdkPromise = null;
 let _wacEnviando   = false;   // trava p/ não chamar a function 2x (o code só vale 1x, ~30s)
 let _wacInProgress = false;   // um signup está em andamento (liga o log de diagnóstico + watchdogs)
@@ -2601,7 +2613,7 @@ function _wacDiagnostico() {
 // Com o `code` já dá pra concluir: o servidor troca por token e DERIVA waba_id/phone_number_id
 // quando o postMessage (FINISH) não os trouxe. Passa waba/phone/business só como dica quando há.
 async function _wacTalvezConcluir() {
-  const { code, waba_id, phone_number_id, business_id } = _wacSignup;
+  const { code, waba_id, phone_number_id, business_id, coex } = _wacSignup;
   if (!code) return;                                    // sem o code não há o que concluir
   if (_wacEnviando) return;                              // evita disparo duplo
   _wacEnviando = true;
@@ -2609,7 +2621,7 @@ async function _wacTalvezConcluir() {
   _wacMsg(_wt('Conectando sua conta…', 'Connecting your account…'), '');
   try {
     const fn = firebase.app().functions('southamerica-east1').httpsCallable('trocarCodeWhatsApp');
-    const resp = await fn({ slug, code, waba_id, phone_number_id, business_id });
+    const resp = await fn({ slug, code, waba_id, phone_number_id, business_id, coex });
     const data = (resp && resp.data) || {};
     console.log('[WAC] trocarCodeWhatsApp:', data);
     if (data.ok) {
@@ -2623,7 +2635,7 @@ async function _wacTalvezConcluir() {
     _wacMsg((e && e.message) || _wt('Erro ao conectar. O código pode ter expirado — tente reconectar.', 'Error connecting. The code may have expired — try reconnecting.'), 'erro');
   } finally {
     _wacEnviando = false;
-    _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null };  // zera p/ próxima tentativa
+    _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null, coex: false };  // zera p/ próxima tentativa
     _wacEncerrar();
   }
 }
@@ -2639,6 +2651,11 @@ window.addEventListener('message', (ev) => {
   if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
   console.log('[WAC] Embedded Signup event:', data.event);   // sem despejar data.data (ids ficam no dump de debug)
   if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+    // ⚠️ Em COEXISTÊNCIA o evento é FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING e o payload traz
+    // waba_id mas NÃO traz phone_number_id (o número já existe no app do celular, não é criado
+    // aqui). Quem resolve é o Plano B do servidor: debug_token → WABA → /{waba}/phone_numbers.
+    // Por isso os campos abaixo continuam OPCIONAIS — nada aqui pode virar obrigatório.
+    if (data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') _wacSignup.coex = true;
     _wacSignup.waba_id         = (data.data && data.data.waba_id) || _wacSignup.waba_id || null;
     _wacSignup.phone_number_id = (data.data && data.data.phone_number_id) || _wacSignup.phone_number_id || null;
     _wacSignup.business_id      = (data.data && data.data.business_id) || _wacSignup.business_id || null;   // nem sempre vem no FINISH
@@ -2672,10 +2689,14 @@ function _wacCarregarSdk() {
 
 async function wacIniciarSignup() {
   const btn = document.getElementById('btnCloudSignup');
-  _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null }; // zera a cada tentativa
+  const _coex = _wacCoexAtivo();
+  _wacSignup = { code: null, waba_id: null, phone_number_id: null, business_id: null, coex: _coex }; // zera a cada tentativa
   _wacInProgress = true;
   _wacLimparTimers();
-  _wacMsg(_wt('Abrindo o cadastro oficial da Meta…', "Opening Meta's official signup…"), '');
+  console.log('[WAC] signup iniciado — coexistência:', _coex ? 'SIM (featureType=' + WAC_COEX_FEATURE_TYPE + ')' : 'não (fluxo padrão)');
+  _wacMsg(_coex
+    ? _wt('Abrindo o cadastro oficial da Meta (modo coexistência)…', "Opening Meta's official signup (coexistence mode)…")
+    : _wt('Abrindo o cadastro oficial da Meta…', "Opening Meta's official signup…"), '');
   if (btn) btn.disabled = true;
   // Backstop: se NADA voltar em 60s (ex.: popup sem window.opener), não trava — diagnostica.
   _wacWatchdog = setTimeout(_wacDiagnostico, 60000);
@@ -2688,8 +2709,11 @@ async function wacIniciarSignup() {
       if (code) {
         _wacSignup.code = code;
         console.log('[WAC] FB.login: code recebido (expira em ~30s).');
-        if (_wacSignup.waba_id && _wacSignup.phone_number_id) {
-          _wacTalvezConcluir();                          // a mensagem já trouxe tudo → conclui já
+        // Em coexistência o phone_number_id NUNCA chega pelo postMessage — esperar por ele só
+        // gastaria a janela de ~30s do code. Com waba_id já dá pra concluir (servidor deriva).
+        const _prontoCoex = _wacSignup.coex && _wacSignup.waba_id;
+        if ((_wacSignup.waba_id && _wacSignup.phone_number_id) || _prontoCoex) {
+          _wacTalvezConcluir();                          // a mensagem já trouxe o suficiente → conclui já
         } else {
           _wacMsg(_wt('Login recebido ✓ — finalizando no servidor…', 'Login received ✓ — finishing on the server…'), '');
           // dá um instante pro postMessage (quando o SDK o emite); senão o servidor deriva do token
@@ -2714,7 +2738,10 @@ async function wacIniciarSignup() {
       // sessionInfoVersion faz o SDK EMITIR o postMessage WA_EMBEDDED_SIGNUP (FINISH). Sem ele,
       // só o `code` voltava e waba_id/phone_number_id nunca chegavam pelo front (era o bug).
       // O servidor deriva de qualquer jeito (Plano B), então isto é robustez extra, não dependência.
-      extras: { feature: 'whatsapp_embedded_signup', setup: {}, featureType: '', sessionInfoVersion: '3' },
+      // featureType: '' = fluxo padrão (número novo/migrado). WAC_COEX_FEATURE_TYPE = coexistência
+      // (o número já existe no app do WhatsApp Business do celular e continua funcionando lá).
+      // É runtime, não fica salvo na config de login — o mesmo config_id serve aos dois fluxos.
+      extras: { feature: 'whatsapp_embedded_signup', setup: {}, featureType: _coex ? WAC_COEX_FEATURE_TYPE : '', sessionInfoVersion: '3' },
       version: WAC_FB_VERSION,
     });
   } catch (e) {
@@ -2756,8 +2783,22 @@ function renderCloudApiCard() {
                      "Fetch this number's details from Meta's Graph API (uses whatsapp_business_management).");
   const tOff   = _wt('Desconectar esta conta do WhatsApp e parar o robô de usá-la.',
                      'Disconnect this WhatsApp Business account and stop the bot from using it.');
+  // Coexistência: o app do WhatsApp Business do celular continua funcionando no MESMO número.
+  // Vale tanto o que o servidor gravou quanto a flag do tenant (caso a conexão seja anterior).
+  const ehCoex = !!(c.coexistencia === true || (c.coexistencia !== false && _wacCoexAtivo()));
+  const badgeCoex = ehCoex
+    ? '<span class="wac-tag" style="background:#33270c;color:#E89A55;margin-left:8px">' + _wt('Coexistência', 'Coexistence') + '</span>'
+    : '';
+  const notaCoex = ehCoex
+    ? '<div style="margin-top:10px;padding:9px 12px;border-radius:8px;background:rgba(232,119,34,.10);border-left:3px solid #E87722;font-size:11.5px;line-height:1.55;color:#E89A55">' +
+      _wt('📱 <b>Coexistência ativa</b> — o app do WhatsApp Business no celular continua funcionando normalmente neste mesmo número, em paralelo com a Cloud API. O histórico fica sincronizado entre os dois.',
+          '📱 <b>Coexistence active</b> — the WhatsApp Business app on the phone keeps working normally on this same number, alongside the Cloud API. Chat history stays in sync between them.') +
+      '</div>'
+    : '';
   conn.innerHTML =
-    '<div class="wac-conn-status">● ' + _wt('Conectado', 'Connected') + '</div>' +
+    '<div style="display:flex;align-items:center;flex-wrap:wrap">' +
+      '<div class="wac-conn-status">● ' + _wt('Conectado', 'Connected') + '</div>' + badgeCoex +
+    '</div>' + notaCoex +
     '<div style="margin-top:10px">' +
       row(_wt('Número', 'Number'), c.displayPhoneNumber) +
       row(_wt('Nome de exibição', 'Display name'), c.verifiedName) +
