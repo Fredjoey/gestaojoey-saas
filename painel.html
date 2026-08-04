@@ -575,6 +575,43 @@ body.suporte-on #botAlertBanner{top:36px}
 .wac-mini-info{background:rgba(232,119,34,.14);color:#E87722;border-color:rgba(232,119,34,.35)!important}
 .wac-mini-off{background:rgba(239,68,68,.12);color:#f87171;border-color:rgba(239,68,68,.3)!important}
 .wac-mini button:disabled{opacity:.6;cursor:default}
+/* ── TEMPLATES (Cloud API) ── */
+.wtpl-tabs{display:flex;gap:4px;border-bottom:1px solid #262626;margin-bottom:18px}
+.wtpl-tab{background:none;border:none;border-bottom:2px solid transparent;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s,border-color .15s}
+.wtpl-tab:hover{color:var(--text)}
+.wtpl-tab.active{color:#E87722;border-bottom-color:#E87722}
+.wtpl-aviso{display:flex;gap:11px;background:rgba(232,119,34,.09);border:1px solid rgba(232,119,34,.28);border-left:3px solid #E87722;border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.55;color:var(--text2)}
+.wtpl-btn-pri{background:#E87722;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.wtpl-btn-pri:hover{filter:brightness(1.08)}
+.wtpl-btn-pri:disabled{opacity:.6;cursor:default;filter:none}
+.wtpl-btn-sec{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.wtpl-btn-sec:hover{border-color:#E87722;color:#E87722}
+.wtpl-row{background:#141414;border:1px solid #262626;border-radius:11px;padding:13px 16px;margin-bottom:9px;display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.wtpl-row-main{flex:1;min-width:200px}
+.wtpl-name{font-size:13.5px;font-weight:700;color:var(--text);word-break:break-all}
+.wtpl-meta{font-size:11px;color:var(--text3);margin-top:3px}
+.wtpl-body{font-size:12px;color:var(--text2);margin-top:6px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.wtpl-st{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.wtpl-st-ok{background:#13332a;color:#7BC47F}
+.wtpl-st-pend{background:#33270c;color:#E89A55}
+.wtpl-st-rej{background:#3a1414;color:#f87171}
+.wtpl-st-out{background:#232323;color:var(--text3)}
+.wtpl-del{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.wtpl-del:disabled{opacity:.5;cursor:default}
+.wtpl-form{display:grid;grid-template-columns:1fr 300px;gap:22px}
+@media(max-width:780px){.wtpl-form{grid-template-columns:1fr}}
+.wtpl-lbl{display:block;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.wtpl-in{width:100%;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;padding:9px 11px;font-size:13px;color:var(--text);outline:none;box-sizing:border-box}
+.wtpl-in:focus{border-color:#E87722}
+.wtpl-hint{font-size:10.5px;color:var(--text3);margin-top:4px;line-height:1.45}
+.wtpl-vars{display:flex;gap:7px;flex-wrap:wrap}
+.wtpl-var{background:rgba(232,119,34,.12);color:#E89A55;border:1px solid rgba(232,119,34,.32);border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.wtpl-var:hover{background:rgba(232,119,34,.2)}
+.wtpl-erro{margin-top:12px;background:#3a1414;border:1px solid #5a1a1a;border-radius:8px;padding:10px 13px;font-size:12px;color:#f87171;line-height:1.5}
+.wtpl-phone{background:#0b141a;border:1px solid #1f2c33;border-radius:12px;padding:16px 14px 10px;min-height:120px}
+.wtpl-bubble{background:#005c4b;color:#e9edef;border-radius:8px 0 8px 8px;padding:8px 11px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;margin-left:auto;max-width:100%;min-height:20px}
+.wtpl-bubble-time{font-size:10px;color:#8696a0;text-align:right;margin-top:3px}
+.wtpl-bubble b{font-weight:700}
 /* ====== ANIVERSARIANTES ====== */
 #aniversariantesBar{display:none;background:linear-gradient(135deg,rgba(236,72,153,.1),rgba(249,115,22,.08));border-bottom:1px solid rgba(236,72,153,.22);padding:7px 14px;flex-shrink:0}
 .aniv-nome{font-size:12px;font-weight:600;color:var(--text)}
@@ -1619,6 +1656,13 @@ body.suporte-on #botAlertBanner{top:36px}
       <div class="panel-inner">
         <div class="panel-head"><h2 data-en="📱 WhatsApp Connection">📱 Conexão WhatsApp</h2></div>
 
+        <!-- ABAS: Conexão (conteúdo atual, intocado) | Templates -->
+        <div class="wtpl-tabs">
+          <button class="wtpl-tab active" id="wtplTabConexao" onclick="wtplAba('conexao')" data-en="Connection">Conexão</button>
+          <button class="wtpl-tab" id="wtplTabTemplates" onclick="wtplAba('templates')" data-en="Templates">Templates</button>
+        </div>
+
+        <div id="wtplPaneConexao">
         <p style="font-size:12.5px;color:var(--text2);margin:0 0 16px;line-height:1.5" data-en="Choose how the bot connects to this store's WhatsApp.">Escolha como o robô conecta ao WhatsApp desta loja.</p>
 
         <div class="wac-grid">
@@ -1665,10 +1709,99 @@ body.suporte-on #botAlertBanner{top:36px}
           </div>
           <p id="waQRMsg" style="font-size:11px;color:var(--text2);text-align:center;margin-top:10px"></p>
         </div>
+        </div><!-- /wtplPaneConexao -->
+
+        <!-- ══ ABA TEMPLATES ══ Templates da WABA DO CLIENTE (Cloud API). Só faz sentido
+             com o Cloud API conectado — sem isso mostra o aviso e nada mais. -->
+        <div id="wtplPaneTemplates" style="display:none">
+          <div id="wtplAviso" class="wtpl-aviso" style="display:none">
+            <span style="font-size:17px;flex-shrink:0">☁️</span>
+            <div>
+              <div style="font-weight:700;color:var(--text);margin-bottom:3px" data-en="Connect WhatsApp Cloud API to use templates">Conecte o WhatsApp Cloud API para usar templates</div>
+              <div data-en="Templates belong to your official WhatsApp Business account. Go to the Connection tab and connect via Cloud API — the QR code (Baileys) method doesn't support them.">Templates pertencem à sua conta oficial do WhatsApp Business. Vá na aba Conexão e conecte pela Cloud API — o método por QR Code (Baileys) não os suporta.</div>
+            </div>
+          </div>
+
+          <div id="wtplConteudo" style="display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+              <p style="font-size:12.5px;color:var(--text2);margin:0;line-height:1.5;flex:1;min-width:240px" data-en="Templates are pre-approved messages you can send outside the 24-hour window (order updates, confirmations). Meta reviews each one.">Templates são mensagens pré-aprovadas que você pode enviar fora da janela de 24h (status de pedido, confirmações). A Meta revisa cada um.</p>
+              <div style="display:flex;gap:8px">
+                <button class="wtpl-btn-sec" onclick="wtplCarregar()" data-en="↻ Refresh">↻ Atualizar</button>
+                <button class="wtpl-btn-pri" onclick="wtplAbrirNovo()" data-en="+ New template">+ Novo template</button>
+              </div>
+            </div>
+            <div id="wtplLista"></div>
+          </div>
+        </div>
 
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ══ MODAL: NOVO TEMPLATE ══ -->
+<div class="modal-overlay" id="wtplModal" onclick="if(event.target===this)wtplFecharNovo()">
+  <div class="modal-box" style="max-width:880px">
+    <div class="modal-header">
+      <div class="modal-title" data-en="New template">Novo template</div>
+      <button class="modal-close" onclick="wtplFecharNovo()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="wtpl-form">
+        <div>
+          <label class="wtpl-lbl" data-en="Name">Nome</label>
+          <input id="wtplNome" type="text" class="wtpl-in" placeholder="pedido_a_caminho" oninput="wtplNomeSanear(this)" maxlength="60">
+          <div class="wtpl-hint" data-en="Lowercase letters, numbers and underscore only.">Só letras minúsculas, números e underscore (_).</div>
+
+          <div style="display:flex;gap:10px;margin-top:12px">
+            <div style="flex:1">
+              <label class="wtpl-lbl" data-en="Category">Categoria</label>
+              <select id="wtplCategoria" class="wtpl-in">
+                <option value="UTILITY" data-en="Utility (order updates)">Utilidade (status de pedido)</option>
+                <option value="MARKETING" data-en="Marketing (promos)">Marketing (promoções)</option>
+                <option value="AUTHENTICATION" data-en="Authentication (codes)">Autenticação (códigos)</option>
+              </select>
+            </div>
+            <div style="flex:1">
+              <label class="wtpl-lbl" data-en="Language">Idioma</label>
+              <select id="wtplIdioma" class="wtpl-in">
+                <option value="pt_BR">Português (BR)</option>
+                <option value="en_US">English (US)</option>
+                <option value="es_ES">Español</option>
+              </select>
+            </div>
+          </div>
+
+          <label class="wtpl-lbl" style="margin-top:12px" data-en="Message body">Corpo da mensagem</label>
+          <textarea id="wtplCorpo" class="wtpl-in" rows="6" style="resize:vertical;font-family:inherit"
+                    placeholder="Oi {{1}}! Seu pedido nº {{2}} saiu para entrega 🛵" oninput="wtplPreview()" maxlength="1024"></textarea>
+          <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px">
+            <div class="wtpl-hint" data-en="Variables must be sequential from {{1}}.">Variáveis precisam ser sequenciais a partir de {{1}}.</div>
+            <div class="wtpl-hint"><span id="wtplChars">0</span>/1024</div>
+          </div>
+
+          <label class="wtpl-lbl" style="margin-top:12px" data-en="Insert variable">Inserir variável</label>
+          <div class="wtpl-vars" id="wtplVars"></div>
+          <div id="wtplExemplos"></div>
+
+          <div id="wtplErro" class="wtpl-erro" style="display:none"></div>
+        </div>
+
+        <div>
+          <label class="wtpl-lbl" data-en="Preview">Pré-visualização</label>
+          <div class="wtpl-phone">
+            <div class="wtpl-bubble" id="wtplBubble"></div>
+            <div class="wtpl-bubble-time">12:34 ✓✓</div>
+          </div>
+          <div class="wtpl-hint" style="margin-top:10px;line-height:1.5" data-en="Meta reviews every template. Approval usually takes a few minutes, but can take up to 24h.">A Meta revisa todo template. A aprovação costuma levar alguns minutos, mas pode ir até 24h.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="wtpl-btn-sec" onclick="wtplFecharNovo()" data-en="Cancel">Cancelar</button>
+      <button class="wtpl-btn-pri" id="wtplBtnEnviar" onclick="wtplCriar()" data-en="Submit for review">Enviar para aprovação</button>
+    </div>
   </div>
 </div>
 
@@ -2751,12 +2884,245 @@ async function wacIniciarSignup() {
   }
 }
 
+// ═══ TEMPLATES DE MENSAGEM (Cloud API) ═══════════════════════════════════════════════
+// Templates vivem na WABA DO CLIENTE. O painel nunca fala com a Graph API direto: chama as
+// callables (listar/criar/excluir), que usam o accessToken do tenant no servidor.
+// A LISTA é a fonte de verdade e vem da Meta a cada abertura da aba — por isso a tela já
+// mostra o status certo mesmo sem o webhook. O webhook (Fase 4) só empurra a mudança em
+// tempo real. NADA aqui toca Baileys nem o fluxo de pedidos.
+let _wtplAbaAtual = 'conexao';
+let _wtplCarregando = false;
+let _wtplUnsub = null;      // listener do espelho de status vindo do webhook
+
+// Atalhos de variável: rótulo + o que a Meta vai substituir. A ordem de INSERÇÃO define o
+// número ({{1}}, {{2}}…) — a Meta exige sequência a partir de 1, então numeramos na hora.
+const WTPL_VARS = [
+  { pt: 'Nome do cliente', en: 'Customer name', ex: 'João' },
+  { pt: 'Nº do pedido',    en: 'Order number',  ex: '1234' },
+  { pt: 'Valor',           en: 'Amount',        ex: 'R$ 49,90' },
+  { pt: 'Tempo estimado',  en: 'ETA',           ex: '40 min' },
+];
+
+function wtplAba(qual) {
+  _wtplAbaAtual = qual;
+  const ehTpl = qual === 'templates';
+  document.getElementById('wtplPaneConexao').style.display  = ehTpl ? 'none' : '';
+  document.getElementById('wtplPaneTemplates').style.display = ehTpl ? '' : 'none';
+  document.getElementById('wtplTabConexao').classList.toggle('active', !ehTpl);
+  document.getElementById('wtplTabTemplates').classList.toggle('active', ehTpl);
+  if (ehTpl) wtplAplicarGate();
+}
+
+// Cloud API conectado? Usa o MESMO estado que o card já mantém (_wacConfig) — sem 2ª fonte.
+function wtplConectado() { return !!(_wacConfig && _wacConfig.ativo && _wacConfig.wabaId); }
+
+function wtplAplicarGate() {
+  const aviso = document.getElementById('wtplAviso');
+  const cont  = document.getElementById('wtplConteudo');
+  if (!aviso || !cont) return;
+  const ok = wtplConectado();
+  aviso.style.display = ok ? 'none' : 'flex';
+  cont.style.display  = ok ? '' : 'none';
+  if (ok) { wtplCarregar(); wtplListenerStatus(); }
+}
+
+function _wtplStClasse(st) {
+  const s = String(st || '').toUpperCase();
+  if (s === 'APPROVED') return 'wtpl-st-ok';
+  if (s === 'PENDING' || s === 'IN_APPEAL' || s === 'PENDING_DELETION') return 'wtpl-st-pend';
+  if (s === 'REJECTED' || s === 'DISABLED' || s === 'PAUSED') return 'wtpl-st-rej';
+  return 'wtpl-st-out';
+}
+function _wtplStRotulo(st) {
+  const s = String(st || '—').toUpperCase();
+  const m = { APPROVED: ['Aprovado','Approved'], PENDING: ['Em análise','Pending'],
+              REJECTED: ['Rejeitado','Rejected'], PAUSED: ['Pausado','Paused'],
+              DISABLED: ['Desativado','Disabled'] };
+  return m[s] ? _wt(m[s][0], m[s][1]) : s;
+}
+
+async function wtplCarregar() {
+  const box = document.getElementById('wtplLista');
+  if (!box || _wtplCarregando) return;
+  _wtplCarregando = true;
+  box.innerHTML = '<div style="color:var(--text3);font-size:12.5px;padding:18px;text-align:center">' + _wt('Carregando templates…', 'Loading templates…') + '</div>';
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('listarTemplatesWhatsApp');
+    const r = await fn({ slug });
+    const d = (r && r.data) || {};
+    wtplRenderLista(d.templates || []);
+  } catch (e) {
+    console.error('[WTPL] listar:', e);
+    box.innerHTML = '<div class="wtpl-erro" style="display:block">' + _esc((e && e.message) || _wt('Falha ao listar.', 'Failed to list.')) + '</div>';
+  } finally { _wtplCarregando = false; }
+}
+
+function wtplRenderLista(lista) {
+  const box = document.getElementById('wtplLista');
+  if (!box) return;
+  if (!lista.length) {
+    box.innerHTML = '<div style="background:#141414;border:1px solid #262626;border-radius:11px;padding:26px;text-align:center;color:var(--text3);font-size:12.5px;line-height:1.6">'
+      + _wt('Nenhum template ainda.<br>Crie o primeiro em <b>+ Novo template</b> — a Meta aprova em alguns minutos.',
+            'No templates yet.<br>Create the first one with <b>+ New template</b> — Meta approves within minutes.') + '</div>';
+    return;
+  }
+  box.innerHTML = lista.map(t => {
+    const nome = _esc(t.name || '—');
+    const motivo = (String(t.status).toUpperCase() === 'REJECTED' && t.rejectedReason)
+      ? '<div class="wtpl-meta" style="color:#f87171;margin-top:5px">' + _wt('Motivo: ', 'Reason: ') + _esc(t.rejectedReason) + '</div>' : '';
+    return '<div class="wtpl-row" data-nome="' + nome + '">'
+      + '<div class="wtpl-row-main">'
+        + '<div class="wtpl-name">' + nome + '</div>'
+        + '<div class="wtpl-meta">' + _esc(t.category || '—') + ' · ' + _esc(t.language || '—') + '</div>'
+        + (t.body ? '<div class="wtpl-body">' + _esc(t.body) + '</div>' : '')
+        + motivo
+      + '</div>'
+      + '<span class="wtpl-st ' + _wtplStClasse(t.status) + '" data-st>' + _esc(_wtplStRotulo(t.status)) + '</span>'
+      + '<button class="wtpl-del" onclick="wtplExcluir(\'' + nome.replace(/'/g, "\\'") + '\', this)" title="'
+        + _wt('Excluir este template na Meta', 'Delete this template at Meta') + '">' + _wt('Excluir', 'Delete') + '</button>'
+    + '</div>';
+  }).join('');
+}
+
+async function wtplExcluir(nome, btn) {
+  if (!confirm(_wt('Excluir o template "' + nome + '"? Isso apaga na Meta e não dá pra desfazer.',
+                   'Delete template "' + nome + '"? This removes it at Meta and cannot be undone.'))) return;
+  if (btn) btn.disabled = true;
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('excluirTemplateWhatsApp');
+    await fn({ slug, nome });
+    notify(_wt('Template excluído.', 'Template deleted.'));
+    wtplCarregar();
+  } catch (e) {
+    console.error('[WTPL] excluir:', e);
+    notify((e && e.message) || _wt('Falha ao excluir.', 'Failed to delete.'), 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── Modal "Novo template" ──
+function wtplAbrirNovo() {
+  ['wtplNome','wtplCorpo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('wtplCategoria').value = 'UTILITY';
+  document.getElementById('wtplIdioma').value = 'pt_BR';
+  document.getElementById('wtplErro').style.display = 'none';
+  document.getElementById('wtplVars').innerHTML = WTPL_VARS.map((v, i) =>
+    '<button type="button" class="wtpl-var" onclick="wtplInserirVar(' + i + ')">+ ' + _esc(_wt(v.pt, v.en)) + '</button>').join('');
+  wtplPreview();
+  document.getElementById('wtplModal').classList.add('show');
+}
+function wtplFecharNovo() { document.getElementById('wtplModal').classList.remove('show'); }
+
+// Nome: a Meta só aceita [a-z0-9_]. Saneia enquanto digita em vez de reprovar depois.
+function wtplNomeSanear(el) {
+  const antes = el.value;
+  const depois = antes.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_{2,}/g, '_');
+  if (antes !== depois) { const p = el.selectionStart; el.value = depois; try { el.setSelectionRange(p, p); } catch (_) {} }
+}
+
+// Insere a PRÓXIMA variável livre ({{1}}, {{2}}…) na posição do cursor. Numerar aqui garante
+// a sequência que a Meta exige, mesmo que o usuário clique os atalhos fora de ordem.
+function wtplInserirVar(idx) {
+  const ta = document.getElementById('wtplCorpo');
+  if (!ta) return;
+  const usadas = (ta.value.match(/\{\{\s*\d+\s*\}\}/g) || []).map(m => parseInt(m.replace(/\D/g, ''), 10));
+  const n = usadas.length ? Math.max(...usadas) + 1 : 1;
+  const tok = '{{' + n + '}}';
+  const ini = ta.selectionStart || 0, fim = ta.selectionEnd || 0;
+  ta.value = ta.value.slice(0, ini) + tok + ta.value.slice(fim);
+  ta.focus(); try { ta.setSelectionRange(ini + tok.length, ini + tok.length); } catch (_) {}
+  _wtplExemploDe[n] = WTPL_VARS[idx] ? WTPL_VARS[idx].ex : ('exemplo' + n);
+  wtplPreview();
+}
+let _wtplExemploDe = {};   // {{n}} → exemplo (alimenta a preview e o example exigido pela Meta)
+
+function wtplPreview() {
+  const ta = document.getElementById('wtplCorpo');
+  const bolha = document.getElementById('wtplBubble');
+  const chars = document.getElementById('wtplChars');
+  if (!ta || !bolha) return;
+  const txt = ta.value || '';
+  if (chars) chars.textContent = String(txt.length);
+  // Troca {{n}} pelo exemplo e aplica *negrito* do WhatsApp — só pra visualização.
+  const comEx = txt.replace(/\{\{\s*(\d+)\s*\}\}/g, (m, n) => _wtplExemploDe[n] || ('exemplo' + n));
+  bolha.innerHTML = comEx
+    ? _esc(comEx).replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+    : '<span style="color:#8696a0">' + _wt('Sua mensagem aparece aqui…', 'Your message shows up here…') + '</span>';
+  // Lista de exemplos por variável (a Meta exige example.body_text quando há {{n}})
+  const usadas = [...new Set((txt.match(/\{\{\s*(\d+)\s*\}\}/g) || []).map(m => parseInt(m.replace(/\D/g, ''), 10)))].sort((a, b) => a - b);
+  const box = document.getElementById('wtplExemplos');
+  if (box) {
+    box.innerHTML = usadas.length
+      ? '<label class="wtpl-lbl" style="margin-top:12px">' + _wt('Exemplo de cada variável', 'Example for each variable')
+        + '</label><div class="wtpl-hint" style="margin:-2px 0 6px">' + _wt('A Meta exige um exemplo para revisar.', 'Meta requires an example to review.') + '</div>'
+        + usadas.map(n => '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+          + '<span style="font-size:11.5px;color:#E89A55;font-weight:700;min-width:38px">{{' + n + '}}</span>'
+          + '<input class="wtpl-in wtpl-ex" data-n="' + n + '" value="' + _esc(_wtplExemploDe[n] || '') + '" '
+          + 'oninput="_wtplExemploDe[' + n + ']=this.value; wtplPreview()" placeholder="' + _wt('exemplo', 'example') + '"></div>').join('')
+      : '';
+  }
+}
+
+async function wtplCriar() {
+  const btn  = document.getElementById('wtplBtnEnviar');
+  const erro = document.getElementById('wtplErro');
+  const nome = (document.getElementById('wtplNome').value || '').trim().toLowerCase();
+  const corpo = (document.getElementById('wtplCorpo').value || '').trim();
+  const mostrarErro = (m) => { erro.textContent = m; erro.style.display = 'block'; };
+  erro.style.display = 'none';
+
+  // Validação local espelha a da Meta — erra rápido, sem gastar uma chamada.
+  if (!/^[a-z0-9_]{1,60}$/.test(nome)) return mostrarErro(_wt('O nome só pode ter letras minúsculas, números e underscore.', 'Name may only contain lowercase letters, numbers and underscore.'));
+  if (!corpo) return mostrarErro(_wt('Escreva o corpo da mensagem.', 'Write the message body.'));
+  const usadas = [...new Set((corpo.match(/\{\{\s*(\d+)\s*\}\}/g) || []).map(m => parseInt(m.replace(/\D/g, ''), 10)))].sort((a, b) => a - b);
+  if (usadas.length && (usadas[0] !== 1 || usadas[usadas.length - 1] !== usadas.length)) {
+    return mostrarErro(_wt('As variáveis precisam ser sequenciais começando em {{1}}. Você usou: ', 'Variables must be sequential starting at {{1}}. You used: ') + usadas.map(n => '{{' + n + '}}').join(', '));
+  }
+  const exemplos = usadas.map(n => (document.querySelector('.wtpl-ex[data-n="' + n + '"]') || {}).value || _wtplExemploDe[n] || '');
+  if (usadas.length && exemplos.some(x => !String(x).trim())) return mostrarErro(_wt('Preencha um exemplo para cada variável.', 'Fill in an example for each variable.'));
+
+  if (btn) { btn.disabled = true; btn.textContent = _wt('Enviando…', 'Submitting…'); }
+  try {
+    const fn = firebase.app().functions('southamerica-east1').httpsCallable('criarTemplateWhatsApp');
+    const r = await fn({ slug, nome, categoria: document.getElementById('wtplCategoria').value,
+                         idioma: document.getElementById('wtplIdioma').value, corpo, exemplos });
+    const d = (r && r.data) || {};
+    notify(_wt('Template enviado para aprovação! Status: ', 'Template submitted! Status: ') + (d.status || 'PENDING'));
+    wtplFecharNovo();
+    wtplCarregar();
+  } catch (e) {
+    console.error('[WTPL] criar:', e);
+    mostrarErro((e && e.message) || _wt('A Meta recusou o template.', 'Meta rejected the template.'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = _wt('Enviar para aprovação', 'Submit for review'); }
+  }
+}
+
+// Espelho de status do webhook (message_template_status_update). A lista já vem certa da Meta;
+// isto só atualiza a linha em tempo real quando a Meta avisa, sem o usuário clicar em Atualizar.
+function wtplListenerStatus() {
+  if (_wtplUnsub || !slug) return;
+  _wtplUnsub = db.collection('clientes/' + slug + '/whatsappTemplates').onSnapshot(snap => {
+    snap.docChanges().forEach(ch => {
+      const d = ch.doc.data() || {};
+      const linha = document.querySelector('.wtpl-row[data-nome="' + CSS.escape(String(d.name || ch.doc.id)) + '"]');
+      if (!linha) return;
+      const badge = linha.querySelector('[data-st]');
+      if (!badge) return;
+      badge.className = 'wtpl-st ' + _wtplStClasse(d.status);
+      badge.textContent = _wtplStRotulo(d.status);
+    });
+  }, err => console.warn('[WTPL] listener status:', err && err.message));
+}
+
 // ── Estado conectado: listener + render + ações (desconectar / ver dados na Meta) ──
 function _wacListenerConfig() {
   if (_wacUnsub || !slug) return;
   _wacUnsub = db.doc('clientes/' + slug + '/config/whatsappCloud').onSnapshot(snap => {
     _wacConfig = snap.exists ? snap.data() : null;
     renderCloudApiCard();
+    // conectou/desconectou com a aba Templates aberta → reavalia o gate na hora
+    if (_wtplAbaAtual === 'templates') wtplAplicarGate();
   }, err => console.warn('[WAC] listener config:', err && err.message));
 }
 
