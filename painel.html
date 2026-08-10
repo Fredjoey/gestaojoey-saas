@@ -347,11 +347,6 @@ textarea.fi{resize:vertical;min-height:60px}
 .toggle-slider:before{position:absolute;content:"";height:14px;width:14px;left:2px;bottom:2px;background:var(--text3);border-radius:50%;transition:.2s}
 .toggle-switch input:checked+.toggle-slider{background:var(--orange);border-color:var(--orange)}
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px);background:#fff}
-/* Sub-abas do Gestor de Cardápio (Produtos | Adicionais) */
-.sub-aba{padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text2);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:color .15s,border-color .15s;margin-bottom:-1px}
-.sub-aba:hover{color:var(--text)}
-.sub-aba-on{color:var(--orange);border-bottom-color:var(--orange)}
-.sub-aba:focus-visible{outline:2px solid var(--orange);outline-offset:2px;border-radius:6px 6px 0 0}
 .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:2.5rem;width:90%;max-width:380px;}
 .login-logo{font-family:'Abstante',sans-serif;font-size:3rem;font-weight:700;color:var(--orange);text-align:center;margin-bottom:6px;letter-spacing:2px;}
 .login-sub{text-align:center;font-size:11px;color:var(--text2);margin-bottom:2rem;text-transform:uppercase;letter-spacing:2px;}
@@ -789,33 +784,24 @@ body.suporte-on #botAlertBanner{top:36px}
             <button class="link-copy" onclick="copiarLink()">📋 Copiar link</button>
           </div>
         </div>
-        <!-- Sub-abas: produtos x adicionais. Os dois são "o que o cliente vê no
-             cardápio", mas os adicionais são registros ÚNICOS reusados por
-             vários lanches — desligar um tira de todos de uma vez. -->
-        <div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border)">
-          <button id="subCardProdutos" class="sub-aba sub-aba-on" onclick="mostrarSubCardapio('produtos')">Produtos</button>
-          <button id="subCardAdicionais" class="sub-aba" onclick="mostrarSubCardapio('adicionais')">Adicionais</button>
+        <!-- Adicionais é o ÚLTIMO botão da linha de filtros (não uma sub-aba):
+             o operador acha no mesmo lugar em que já escolhe categoria.
+             A linha de filtros e as caixas de aviso ficam FORA das listas, para
+             a linha continuar visível nos dois modos — é por ela que se volta. -->
+        <div id="boxInfoProdutos" class="card-box" style="background:var(--orange-dim);border-color:rgba(255,107,53,.3);padding:12px 16px;margin-bottom:16px">
+          <div style="font-size:12px;color:var(--orange)">📋 Produtos gerenciados no <strong>Sistema Joey</strong>. Ative ou desative cada item para exibi-lo no cardápio do cliente.</div>
         </div>
-
-        <div id="subPainelProdutos">
-          <div class="card-box" style="background:var(--orange-dim);border-color:rgba(255,107,53,.3);padding:12px 16px;margin-bottom:16px">
-            <div style="font-size:12px;color:var(--orange)">📋 Produtos gerenciados no <strong>Sistema Joey</strong>. Ative ou desative cada item para exibi-lo no cardápio do cliente.</div>
-          </div>
-          <div style="position:relative;margin-bottom:10px">
-            <input type="text" id="cardapioSearch" placeholder="🔍 Buscar produto..." oninput="renderCardapioEditor()"
-              style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s"
-              onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
-          </div>
-          <div id="catFilterRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
-          <div id="cardapioEditor"></div>
+        <div id="boxInfoAdicionais" class="card-box" style="display:none;background:var(--orange-dim);border-color:rgba(255,107,53,.3);padding:12px 16px;margin-bottom:16px">
+          <div style="font-size:12px;color:var(--orange)">➕ Cada adicional é um registro <strong>único</strong>, reusado pelos lanches. Desligar um tira do cardápio em <strong>todos</strong> de uma vez.</div>
         </div>
-
-        <div id="subPainelAdicionais" style="display:none">
-          <div class="card-box" style="background:var(--orange-dim);border-color:rgba(255,107,53,.3);padding:12px 16px;margin-bottom:16px">
-            <div style="font-size:12px;color:var(--orange)">➕ Cada adicional é um registro <strong>único</strong>, reusado pelos lanches. Desligar um tira do cardápio em <strong>todos</strong> de uma vez.</div>
-          </div>
-          <div id="adicionaisEditor"></div>
+        <div id="cardapioSearchWrap" style="position:relative;margin-bottom:10px">
+          <input type="text" id="cardapioSearch" placeholder="🔍 Buscar produto..." oninput="renderCardapioEditor()"
+            style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s"
+            onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
         </div>
+        <div id="catFilterRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
+        <div id="cardapioEditor"></div>
+        <div id="adicionaisEditor" style="display:none"></div>
       </div>
     </div>
 
@@ -2577,7 +2563,7 @@ function showPanel(panel, navEl) {
   document.getElementById('topbarTitle').textContent = titulos[panel]||'';
   if (LANG_EN && panel === 'whatsapp') document.getElementById('topbarTitle').textContent = '📱 WhatsApp Connection';   // só o screencast
   if (panel==='pedidos')    _pararTitleFlash();
-  if (panel==='cardapio')   { renderCatFilters(); renderCardapioEditor(); }
+  if (panel==='cardapio')   renderCardapioPainel();
   if (panel==='config')     carregarConfig();
   if (panel==='relatorios') renderRelatorios();
   if (panel==='clientes')   renderRelatorioClientes();
@@ -4819,8 +4805,7 @@ function moverCategoria(cat, dir) {
   if (swapIdx < 0 || swapIdx >= sorted.length) return;
   [sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]];
   catOrdem = sorted;
-  renderCatFilters();
-  renderCardapioEditor();
+  renderCardapioPainel();
   db.doc(`clientes/${slug}/config/catOrdem`).set({ ordem: sorted }, { merge: true })
     .catch(e => notify('Erro ao salvar ordem: ' + e.message, 'error'));
 }
@@ -4841,27 +4826,62 @@ function moverProduto(id, cat, dir) {
     .catch(e => notify('Erro ao salvar ordem: ' + e.message, 'error'));
 }
 
+// Adicionais entra como ÚLTIMO botão da linha de filtros, mas NÃO é categoria de
+// produto — por isso um valor sentinela, e não a string "Adicionais": se um dia
+// existir uma categoria com esse nome, os dois não se confundem.
+const CAT_ADICIONAIS = '__adicionais__';
+const _modoAdicionais = () => cardapioFiltroCategoria === CAT_ADICIONAIS;
+
 function renderCatFilters() {
   const row = document.getElementById('catFilterRow');
   if (!row) return;
   const cats = _sortCats([...new Set(recipes.map(r => r.categoria || 'Outros'))]);
   const todos = ['Todos', ...cats];
-  row.innerHTML = todos.map(c => {
+  let html = todos.map(c => {
     const active = cardapioFiltroCategoria === c;
     const label  = c === 'Todos' ? 'Todos' : `${EMOJI_CAT_PAINEL[c]||'🍽️'} ${c}`;
     return `<button class="filter-btn${active?' active':''}" onclick="setCatFilter('${c}')">${label}</button>`;
   }).join('');
+  html += `<button class="filter-btn${_modoAdicionais()?' active':''}" onclick="setCatFilter('${CAT_ADICIONAIS}')" title="Adicionais — registros únicos usados por vários lanches">➕ Adicionais</button>`;
+  row.innerHTML = html;
+}
+
+// Mostra a lista certa e ESCONDE o que não se aplica a adicionais. Esconder em
+// vez de deixar inerte: uma busca de produto que não filtra nada, ou um contador
+// de categoria parado, é pior que não estar ali.
+function aplicarModoCardapio() {
+  const adic = _modoAdicionais();
+  const mostra = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  mostra('boxInfoProdutos', !adic);
+  mostra('boxInfoAdicionais', adic);
+  mostra('cardapioSearchWrap', !adic);   // busca é de PRODUTO
+  mostra('cardapioEditor', !adic);
+  mostra('adicionaisEditor', adic);
+}
+
+// Ponto ÚNICO de redesenho do Gestor de Cardápio: filtros + modo + a lista que
+// vale. Existe porque o painel é redesenhado de 4 lugares (abrir a aba, dois
+// snapshots e o reordenar de categoria) — e cada um lembrar de checar o modo é
+// como o "Adicionais" ficaria em branco ao voltar de outra aba.
+function renderCardapioPainel() {
+  renderCatFilters();
+  aplicarModoCardapio();
+  if (_modoAdicionais()) renderAdicionaisEditor(); else renderCardapioEditor();
 }
 
 function setCatFilter(cat) {
   cardapioFiltroCategoria = cat;
-  renderCatFilters();
-  renderCardapioEditor();
+  // Voltar para qualquer categoria restaura a lista de produtos normal.
+  renderCardapioPainel();
 }
 
 const _btnMover = 'background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;display:block;width:100%;text-align:center;';
 
 function renderCardapioEditor() {
+  // Com Adicionais selecionado a lista de produtos está escondida — os
+  // snapshots de recipes/catalogoStatus continuam chegando, e sem esta saída
+  // eles montariam "Nenhum produto encontrado" atrás da lista de adicionais.
+  if (_modoAdicionais()) return;
   const el = document.getElementById('cardapioEditor');
   if (!recipes.length) {
     el.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text3)">Carregando produtos do Sistema Joey...</div>`;
@@ -4958,15 +4978,6 @@ function toggleReceita(id, ativo) {
 // justamente porque entidade e estado moram separados. O adicional não tem essa
 // separação: o doc dele JÁ é a cara do cardápio (nome e preço são o que o
 // cliente lê), então o estado mora junto e morre junto.
-function mostrarSubCardapio(qual) {
-  const ehAdic = qual === 'adicionais';
-  document.getElementById('subPainelProdutos').style.display = ehAdic ? 'none' : '';
-  document.getElementById('subPainelAdicionais').style.display = ehAdic ? '' : 'none';
-  document.getElementById('subCardProdutos').classList.toggle('sub-aba-on', !ehAdic);
-  document.getElementById('subCardAdicionais').classList.toggle('sub-aba-on', ehAdic);
-  if (ehAdic) renderAdicionaisEditor();
-}
-
 // Adicional que pode ser OFERECIDO agora: existe e não está esgotado.
 // `ativo !== false` mantém disponível todo doc antigo, que não tem o campo.
 // ⚠️ Vale só para as listas de "o que dá para adicionar". Adicional que já está
@@ -8372,7 +8383,7 @@ function iniciarListenersFirestore() {
   // Receitas do Sistema Joey (segundo Firebase — leitura apenas)
   db.collection(`clientes/${slug}/recipes`).onSnapshot(snap => {
     recipes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
+    if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioPainel();
     if (document.getElementById('panel-config').style.display !== 'none') renderDestaqueOpts();
     if (document.getElementById('panel-fiscal').style.display !== 'none' && fiscalAba === 'categorias') renderFiscalCategorias();
   }, err => console.warn('[sistema-joey] recipes:', err));
@@ -8381,10 +8392,9 @@ function iniciarListenersFirestore() {
   db.collection(`clientes/${slug}/adicionais`).onSnapshot(snap => {
     adicionaisBiblioteca = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
-    // Redesenha a sub-aba se ela estiver aberta: o toggle de outro aparelho (ou
+    // Redesenha a lista se ela estiver à vista: o toggle de outro aparelho (ou
     // a criação de um adicional no Sistema Joey) aparece aqui na hora.
-    if (document.getElementById('panel-cardapio').style.display !== 'none'
-      && document.getElementById('subPainelAdicionais')?.style.display !== 'none') renderAdicionaisEditor();
+    if (document.getElementById('panel-cardapio').style.display !== 'none' && _modoAdicionais()) renderAdicionaisEditor();
   }, err => console.warn('[sistema-joey] adicionais:', err));
 
   // Status de ativação por receita (pedidos-joey)
@@ -8400,7 +8410,7 @@ function iniciarListenersFirestore() {
   db.doc(`clientes/${slug}/config/catOrdem`).onSnapshot(snap => {
     catOrdem    = snap.exists ? (snap.data().ordem || []) : [];
     catsOcultas = snap.exists ? (snap.data().ocultas || []) : [];
-    if (document.getElementById('panel-cardapio').style.display !== 'none') { renderCatFilters(); renderCardapioEditor(); }
+    if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioPainel();
   });
   db.doc(`clientes/${slug}/config/prodOrdem`).onSnapshot(snap => {
     prodOrdem = snap.exists ? snap.data() : {};
