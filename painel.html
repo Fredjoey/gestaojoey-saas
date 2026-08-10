@@ -347,6 +347,11 @@ textarea.fi{resize:vertical;min-height:60px}
 .toggle-slider:before{position:absolute;content:"";height:14px;width:14px;left:2px;bottom:2px;background:var(--text3);border-radius:50%;transition:.2s}
 .toggle-switch input:checked+.toggle-slider{background:var(--orange);border-color:var(--orange)}
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px);background:#fff}
+/* Sub-abas do Gestor de Cardápio (Produtos | Adicionais) */
+.sub-aba{padding:8px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text2);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:color .15s,border-color .15s;margin-bottom:-1px}
+.sub-aba:hover{color:var(--text)}
+.sub-aba-on{color:var(--orange);border-bottom-color:var(--orange)}
+.sub-aba:focus-visible{outline:2px solid var(--orange);outline-offset:2px;border-radius:6px 6px 0 0}
 .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:2.5rem;width:90%;max-width:380px;}
 .login-logo{font-family:'Abstante',sans-serif;font-size:3rem;font-weight:700;color:var(--orange);text-align:center;margin-bottom:6px;letter-spacing:2px;}
 .login-sub{text-align:center;font-size:11px;color:var(--text2);margin-bottom:2rem;text-transform:uppercase;letter-spacing:2px;}
@@ -784,16 +789,33 @@ body.suporte-on #botAlertBanner{top:36px}
             <button class="link-copy" onclick="copiarLink()">📋 Copiar link</button>
           </div>
         </div>
-        <div class="card-box" style="background:var(--orange-dim);border-color:rgba(255,107,53,.3);padding:12px 16px;margin-bottom:16px">
-          <div style="font-size:12px;color:var(--orange)">📋 Produtos gerenciados no <strong>Sistema Joey</strong>. Ative ou desative cada item para exibi-lo no cardápio do cliente.</div>
+        <!-- Sub-abas: produtos x adicionais. Os dois são "o que o cliente vê no
+             cardápio", mas os adicionais são registros ÚNICOS reusados por
+             vários lanches — desligar um tira de todos de uma vez. -->
+        <div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border)">
+          <button id="subCardProdutos" class="sub-aba sub-aba-on" onclick="mostrarSubCardapio('produtos')">Produtos</button>
+          <button id="subCardAdicionais" class="sub-aba" onclick="mostrarSubCardapio('adicionais')">Adicionais</button>
         </div>
-        <div style="position:relative;margin-bottom:10px">
-          <input type="text" id="cardapioSearch" placeholder="🔍 Buscar produto..." oninput="renderCardapioEditor()"
-            style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s"
-            onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
+
+        <div id="subPainelProdutos">
+          <div class="card-box" style="background:var(--orange-dim);border-color:rgba(255,107,53,.3);padding:12px 16px;margin-bottom:16px">
+            <div style="font-size:12px;color:var(--orange)">📋 Produtos gerenciados no <strong>Sistema Joey</strong>. Ative ou desative cada item para exibi-lo no cardápio do cliente.</div>
+          </div>
+          <div style="position:relative;margin-bottom:10px">
+            <input type="text" id="cardapioSearch" placeholder="🔍 Buscar produto..." oninput="renderCardapioEditor()"
+              style="width:100%;padding:9px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s"
+              onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
+          </div>
+          <div id="catFilterRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
+          <div id="cardapioEditor"></div>
         </div>
-        <div id="catFilterRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
-        <div id="cardapioEditor"></div>
+
+        <div id="subPainelAdicionais" style="display:none">
+          <div class="card-box" style="background:var(--orange-dim);border-color:rgba(255,107,53,.3);padding:12px 16px;margin-bottom:16px">
+            <div style="font-size:12px;color:var(--orange)">➕ Cada adicional é um registro <strong>único</strong>, reusado pelos lanches. Desligar um tira do cardápio em <strong>todos</strong> de uma vez.</div>
+          </div>
+          <div id="adicionaisEditor"></div>
+        </div>
       </div>
     </div>
 
@@ -4925,6 +4947,101 @@ function toggleReceita(id, ativo) {
   db.collection(`clientes/${slug}/catalogoStatus`).doc(id).set({ ativo }, { merge: true });
 }
 
+// ── Adicionais: esgotar sem apagar da biblioteca ────────────────────────────
+// Antes só dava para tirar um adicional do ar apagando o doc — o que o removia
+// dos 15 lanches e perdia preço e qtdMax. Agora é um campo no PRÓPRIO doc.
+//
+// ⚠️ Por que no doc do adicional e não no catalogoStatus (onde as receitas
+// guardam o `ativo`): o catalogoStatus é o estado de ITEM DE CARDÁPIO, com
+// foto/descrição/estoque, e é lido por código que assume "isto é uma receita".
+// Além disso ele já acumula 3 documentos órfãos de receitas apagadas —
+// justamente porque entidade e estado moram separados. O adicional não tem essa
+// separação: o doc dele JÁ é a cara do cardápio (nome e preço são o que o
+// cliente lê), então o estado mora junto e morre junto.
+function mostrarSubCardapio(qual) {
+  const ehAdic = qual === 'adicionais';
+  document.getElementById('subPainelProdutos').style.display = ehAdic ? 'none' : '';
+  document.getElementById('subPainelAdicionais').style.display = ehAdic ? '' : 'none';
+  document.getElementById('subCardProdutos').classList.toggle('sub-aba-on', !ehAdic);
+  document.getElementById('subCardAdicionais').classList.toggle('sub-aba-on', ehAdic);
+  if (ehAdic) renderAdicionaisEditor();
+}
+
+// Adicional que pode ser OFERECIDO agora: existe e não está esgotado.
+// `ativo !== false` mantém disponível todo doc antigo, que não tem o campo.
+// ⚠️ Vale só para as listas de "o que dá para adicionar". Adicional que já está
+// num pedido vem da cópia do próprio pedido e continua aparecendo — esgotar não
+// pode reescrever o que já foi vendido.
+function _adicDisponivel(a) { return !!a && a.ativo !== false; }
+
+// Em quantas receitas este adicional é referenciado. É o número que responde
+// "o que eu quebro se desligar isto" — por isso a coluna existe.
+function _lanchesComAdicional(idAdic) {
+  const alvo = String(idAdic);
+  return recipes.filter(r => (Array.isArray(r.adicionais) ? r.adicionais : []).some(x => String(x) === alvo)).length;
+}
+
+function renderAdicionaisEditor() {
+  const el = document.getElementById('adicionaisEditor');
+  if (!el) return;
+  if (!adicionaisBiblioteca.length) {
+    el.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--text3)">Nenhum adicional cadastrado. Eles são criados no Sistema Joey, na aba Receitas.</div>`;
+    return;
+  }
+  const lista = [...adicionaisBiblioteca].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  // `ativo !== false`: doc sem o campo (todos, antes desta tela) conta como
+  // disponível — retrocompatível, sem migração.
+  const ativos = lista.filter(a => a.ativo !== false).length;
+  const esgotados = lista.length - ativos;
+
+  let html = `<div class="section-lbl" style="display:flex;align-items:center">
+      Biblioteca de adicionais
+      <span style="font-weight:400;color:var(--text3);margin-left:6px">(${ativos}/${lista.length} no cardápio${esgotados ? ` · ${esgotados} esgotado${esgotados > 1 ? 's' : ''}` : ''})</span>
+    </div>`;
+
+  lista.forEach(a => {
+    const disponivel = a.ativo !== false;
+    const usos = _lanchesComAdicional(a.id);
+    const preco = Number(a.preco || 0) > 0
+      ? `<span style="color:#2ecc71;font-weight:600">+R$ ${Number(a.preco).toFixed(2).replace('.', ',')}</span>`
+      : `<span style="color:var(--text3)">Incluso</span>`;
+    const usosTxt = usos
+      ? `<span style="color:var(--text2)"><strong style="color:var(--text)">${usos}</strong> lanche${usos > 1 ? 's' : ''}</span>`
+      : `<span style="color:var(--text3);font-size:11px">nenhum lanche</span>`;
+    const tag = disponivel ? '' :
+      `<span style="font-size:9px;font-weight:700;color:#ff8a7a;background:rgba(231,76,60,.14);border:1px solid rgba(231,76,60,.35);border-radius:5px;padding:2px 6px;margin-left:8px;text-transform:uppercase;letter-spacing:.5px">esgotado</span>`;
+    const idEsc = String(a.id).replace(/'/g, "\\'");
+    html += `
+      <div class="card-box" style="padding:11px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;${disponivel ? '' : 'background:#2a1e1a;border-color:rgba(231,76,60,.25);'}">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13.5px;font-weight:600;${disponivel ? '' : 'color:var(--text2);text-decoration:line-through;text-decoration-color:#e74c3c;'}">${_esc(a.nome || '(sem nome)')}${tag}</div>
+          <div style="font-size:11.5px;color:var(--text3);margin-top:2px">máx ${Number(a.qtdMax) || 1} por pedido</div>
+        </div>
+        <div style="font-size:13px;text-align:right;white-space:nowrap">${preco}</div>
+        <div style="font-size:12.5px;text-align:right;white-space:nowrap;min-width:86px">${usosTxt}</div>
+        <label class="toggle-switch" title="${disponivel ? 'Tirar do cardápio (esgotado)' : 'Voltar ao cardápio'} em ${usos} lanche(s)">
+          <input type="checkbox" ${disponivel ? 'checked' : ''} onchange="toggleAdicionalAtivo('${idEsc}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`;
+  });
+  el.innerHTML = html;
+}
+
+// Grava no PRÓPRIO doc do adicional, com merge (não toca nome/preco/qtdMax).
+function toggleAdicionalAtivo(id, ativo) {
+  const a = adicionaisBiblioteca.find(x => String(x.id) === String(id));
+  const usos = _lanchesComAdicional(id);
+  db.collection(`clientes/${slug}/adicionais`).doc(String(id)).set({ ativo }, { merge: true })
+    .then(() => notify(ativo
+      ? `✓ ${a?.nome || 'Adicional'} voltou ao cardápio.`
+      : `✓ ${a?.nome || 'Adicional'} esgotado — saiu de ${usos} lanche(s).`))
+    .catch(e => {
+      notify('Erro ao salvar: ' + (e.message || ''), 'error');
+      renderAdicionaisEditor(); // desfaz o toggle na tela: o banco não mudou
+    });
+}
+
 // Descrição de marketing do produto (aparece no cardápio do cliente). Grava em
 // catalogoStatus/{id}.descricaoCliente (merge — não toca ativo/foto nem a ficha técnica do recipe).
 function salvarDescricaoProduto(id, valor) {
@@ -7095,10 +7212,12 @@ function npAbrirDetalhe(el) {
 
   const preco = prod.price || prod.preco || 0;
   const nome  = prod.name  || prod.nome  || '—';
+  // Novo Pedido: o esgotado também não é oferecido ao atendente. Sem isto, a
+  // trava valeria só para o cliente e o painel venderia o que acabou.
   const adics = (prod.adicionais || []).map(x => {
     if (x && typeof x === 'object') return x;
     return adicionaisBiblioteca.find(a => String(a.id) === String(x));
-  }).filter(Boolean);
+  }).filter(_adicDisponivel);
   _npAdics = adics;
 
   const _npBtnSm = 'width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;line-height:1';
@@ -7805,12 +7924,14 @@ function epRenderCart() {
     const unit = precoUnitario(item);
     const sub  = unit * item.qty;
 
-    // Adicionais disponíveis para este produto
+    // Adicionais disponíveis para ACRESCENTAR a este item — o esgotado sai da
+    // lista. Os que já estão no pedido vêm de item.adicionais e não passam por
+    // aqui: esgotar não apaga o que já foi vendido.
     const recipe = recipes.find(r => String(r.id) === String(item.id));
     const adicsDisp = recipe ? (recipe.adicionais || []).map(x => {
       if (x && typeof x === 'object') return x;
       return adicionaisBiblioteca.find(a => String(a.id) === String(x));
-    }).filter(Boolean) : [];
+    }).filter(_adicDisponivel) : [];
     _epAdicsDispCache[idx] = adicsDisp;
     const _btnAd = 'width:22px;height:22px;border-radius:5px;border:1px solid var(--border);background:var(--bg4);color:var(--text);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;font-family:inherit';
 
@@ -8260,6 +8381,10 @@ function iniciarListenersFirestore() {
   db.collection(`clientes/${slug}/adicionais`).onSnapshot(snap => {
     adicionaisBiblioteca = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+    // Redesenha a sub-aba se ela estiver aberta: o toggle de outro aparelho (ou
+    // a criação de um adicional no Sistema Joey) aparece aqui na hora.
+    if (document.getElementById('panel-cardapio').style.display !== 'none'
+      && document.getElementById('subPainelAdicionais')?.style.display !== 'none') renderAdicionaisEditor();
   }, err => console.warn('[sistema-joey] adicionais:', err));
 
   // Status de ativação por receita (pedidos-joey)

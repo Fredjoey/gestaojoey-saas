@@ -1075,6 +1075,7 @@ function carregarDadosPainel() {
   db.collection(`clientes/${slug}/adicionais`).onSnapshot(snap => {
     _adicionaisCatalogo = {};
     snap.docs.forEach(d => { _adicionaisCatalogo[d.id] = { id: d.id, ...d.data() }; });
+    renderProducts(); // esgotar um adicional no painel some da tela do cliente na hora
   }, () => {});
 
   db.collection(`clientes/${slug}/categorias`).onSnapshot(snap => {
@@ -1411,6 +1412,11 @@ function openProduct(id, editIdx) {
   renderProductModal();
 }
 
+// Adicional que o cliente pode escolher agora: existe na biblioteca E não está
+// esgotado. `ativo !== false` mantém disponível todo doc antigo, que não tem o
+// campo — o padrão continua sendo "está no cardápio".
+function _adicDisponivel(a) { return !!a && a.ativo !== false; }
+
 function renderProductModal() {
   const p = produtorModal;
   const imgHtml = p.foto
@@ -1454,7 +1460,9 @@ function renderProductModal() {
 
   // Adicionais avulsos (legado) — exclui os que já estão em grupos
   const idsAdicionais = (Array.isArray(p.adicionais) ? p.adicionais : []).filter(id => !idsEmGrupos.has(String(id)));
-  const adicionaisDisponiveis = idsAdicionais.map(id => _adicionaisCatalogo[id]).filter(Boolean);
+  // Antes `filter(Boolean)` descartava só o inexistente. Agora o ESGOTADO
+  // também sai: o painel desliga um e ele some de todos os lanches de uma vez.
+  const adicionaisDisponiveis = idsAdicionais.map(id => _adicionaisCatalogo[id]).filter(_adicDisponivel);
 
   const adicionaisHtml = adicionaisDisponiveis.length ? `
     <div class="adicionais-section">
