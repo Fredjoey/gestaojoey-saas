@@ -3347,13 +3347,43 @@ function renderKanban() {
   startEntregaTimers();
 }
 
-function contarPedidosCliente(tel) {
-  const t = (tel || '').replace(/\D/g, '');
-  if (!t) return 0;
-  return pedidos.filter(x =>
-    x.status !== 'cancelado' &&
-    (x.cliente?.tel || '').replace(/\D/g, '') === t
-  ).length;
+// Mesmo número gravado de jeitos diferentes: "5521999884477", "21999884477",
+// "999884477". Comparar os 8 ÚLTIMOS dígitos atravessa DDI, DDD e o 9º dígito —
+// a mesma régua do rankingClientes do assessor.
+const _SUFIXO_TEL = 8;
+function _mesmoTelefone(a, b) {
+  const x = String(a || '').replace(/\D/g, ''), y = String(b || '').replace(/\D/g, '');
+  if (x.length < _SUFIXO_TEL || y.length < _SUFIXO_TEL) return false;
+  return x.slice(-_SUFIXO_TEL) === y.slice(-_SUFIXO_TEL);
+}
+
+// O ORDINAL deste pedido na história do cliente: 1 = primeiro, 3 = "3º pedido".
+// 0 = não dá para dizer (sem telefone, ou falha) — e aí a linha não é impressa.
+//
+// ⚠️ Antes casava por igualdade exata da string de dígitos: o mesmo cliente
+// gravado com e sem o 55 virava duas pessoas, e a conta SUBCONTAVA justamente o
+// cliente fiel, que é quem mais troca de canal.
+//
+// ⚠️ Conta os ANTERIORES e soma 1, em vez de contar a lista inteira. O pedido
+// atual às vezes já está em `pedidos` (impressão disparada pelo snapshot) e às
+// vezes não (impressão logo depois de criar no painel) — contar a lista deixava
+// o número dependendo do milissegundo em que o snapshot chegou, e o mesmo pedido
+// saía como 2º ou 3º.
+function ordinalPedidoDoCliente(p) {
+  try {
+    const tel = String(p?.cliente?.tel || '').replace(/\D/g, '');
+    if (tel.length < _SUFIXO_TEL) return 0;
+    const anteriores = pedidos.filter(x =>
+      x.status !== 'cancelado' &&
+      String(x.id) !== String(p?.id) &&
+      _mesmoTelefone(x.cliente?.tel, tel)
+    ).length;
+    return anteriores + 1;
+  } catch (e) {
+    // A comanda NUNCA segura por causa desta linha: sem número, sai sem ela.
+    console.warn('[comanda] ordinal do cliente falhou:', e?.message);
+    return 0;
+  }
 }
 
 // Estado de bloqueio de um pedido PIX: confirmável APENAS quando pago.
@@ -3562,7 +3592,9 @@ function orderCardHtml(p) {
     </div>`;
   }
 
-  const _nPed = contarPedidosCliente(p.cliente?.tel);
+  // Mesma contagem da comanda: card e papel não podem discordar sobre de que
+  // número é este pedido.
+  const _nPed = ordinalPedidoDoCliente(p);
   const _pedCounter = _nPed > 0
     ? (_nPed === 1
         ? `<div style="font-size:11px;color:#2ecc71;margin:2px 0 4px">🆕 Primeiro pedido</div>`
@@ -4096,9 +4128,10 @@ function gerarHtmlComanda(p) {
   const taxaStr  = 'R$ ' + taxaVal.toFixed(2).replace('.', ',');
   const total    = (p.total || 0).toFixed(2).replace('.', ',');
 
-  const qtdPedidos = (typeof contarPedidosCliente === 'function')
-    ? contarPedidosCliente(p.cliente?.tel)
-    : 0;
+  // 0 = sem telefone ou falha na contagem: a linha simplesmente não sai. É
+  // síncrono sobre a lista já em memória, então não há espera que possa
+  // atrasar a impressão.
+  const ordinalCliente = ordinalPedidoDoCliente(p);
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
@@ -4119,6 +4152,10 @@ body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;paddi
 .adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
 .obs-box{font-family:'Arial Narrow',Arial,sans-serif;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
 .cli{font-size:13px;font-weight:700;margin:1px 0}
+/* Ordinal do cliente ("3º pedido"): sozinho na linha e mais forte que o resto
+   do bloco. Só PESO, sem cor — a térmica é monocromática e cor vira cinza
+   chapado (ou some) no papel. 900 é o mesmo peso do TOTAL e do nº do pedido. */
+.ord-cliente{font-size:14px;font-weight:900;margin:2px 0}
 .row-val{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin:1px 0}
 .row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;margin-top:4px}
 .pag-label{font-size:14px;font-weight:700;margin-bottom:2px}
@@ -4147,7 +4184,7 @@ ${itensHtml}
 
 <div class="cli">Nome: ${p.cliente?.nome || '-'}</div>
 <div class="cli">Tel: ${p.cliente?.tel || '-'}</div>
-<div class="cli">Pedidos do cliente: ${qtdPedidos}</div>
+${ordinalCliente ? `<div class="ord-cliente">${ordinalCliente}º pedido</div>` : ''}
 ${enderecoHtml}
 <div class="line">${dash}</div>
 
