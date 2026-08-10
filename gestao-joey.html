@@ -10642,7 +10642,11 @@
           _jiaHist.push({ role: 'assistant', content: resposta });
         } catch (e) {
           clearInterval(tick);
-          bolha.style.color = '#ff8a8a'; bolha.textContent = '⚠️ IA indisponível no momento. Tente de novo em instantes.';
+          // A callable já classifica a falha (conta/saldo x instabilidade x erro
+          // interno) e manda a mensagem certa. Este texto fixo cobria os três e
+          // mandava "tente de novo" mesmo quando repetir nunca ia funcionar.
+          const msg = (e && e.message) ? e.message : 'IA indisponível no momento. Tente de novo em instantes.';
+          bolha.style.color = '#ff8a8a'; bolha.textContent = '⚠️ ' + msg;
           _jiaHist.pop(); // remove a pergunta sem resposta — mantém o histórico alternado
         } finally {
           _jiaBusy = false; if (btn){ btn.disabled = false; btn.style.opacity = '1'; }
