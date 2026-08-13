@@ -566,8 +566,19 @@ exports.verificarCarrinhosAbandonados = onSchedule(
               .replace(/\{link\}/gi, cardapioUrl)
           : `Oi ${nome}! 👋 Você montou um pedido aqui na ${nomeLoja} mas não finalizou. Ainda quer? 🛒 Acesse: ${cardapioUrl}`;
 
+        // Template p/ fora da janela de 24h. É o caso MAIS exposto da lista: o carrinho nasce
+        // no site, que não abre janela nenhuma, e o disparo é proativo puro — o cliente pode
+        // nunca ter falado no WhatsApp. Categoria MARKETING (recuperação de carrinho é
+        // promocional), ao contrário dos avisos de pedido, que são UTILITY.
+        // Nome por tenant: o botão do template leva a URL fixa do cardápio daquele cliente,
+        // então cada um precisa do seu (hífen não é válido em nome de template).
+        const templateCarrinho = {
+          name: `${slug.replace(/-/g, '_')}_carrinho_abandonado`,
+          params: [nome, nomeLoja].map(v => String(v == null ? '' : v)
+            .replace(/[#$%]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300)),
+        };
         try {
-          await axios.post(`${apiBase}/send`, { numero: tel, mensagem }, { timeout: 10000 });
+          await axios.post(`${apiBase}/send`, { numero: tel, mensagem, template: templateCarrinho }, { timeout: 10000 });
           await carrinhoDoc.ref.update({
             status: 'mensagem_enviada',
             mensagemEnviadaEm: admin.firestore.FieldValue.serverTimestamp(),

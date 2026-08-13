@@ -2414,7 +2414,17 @@ async function notificarMotoboyEntrega(p) {
       + `📍 ${end || '—'}\n`
       + `${pag}\n`
       + `Abra suas entregas: ${link}`;
-    enviarWhatsAppBot(tel, msg);  // helper já é failure-safe (try/catch interno; não lança)
+    // Template p/ fora da janela: o motoboy quase nunca manda mensagem pro bot, então este é
+    // o caso que MAIS depende de template. O `R$` sai do parâmetro (a Meta rejeita # $ % em
+    // parâmetro) e o link vira botão de URL com o slug do entregador como variável.
+    const pagTpl = p.pagamento === 'pix' ? 'Pix (já pago)'
+      : p.pagamento === 'cartao' ? `Cartão na entrega, receber ${Number(p.total || 0).toFixed(2).replace('.', ',')}`
+      : `Dinheiro, receber ${Number(p.total || 0).toFixed(2).replace('.', ',')}`;
+    enviarWhatsAppBot(tel, msg, {
+      name: 'joey_entrega_motoboy',
+      params: [primeiro, p.id, c.nome || 'cliente', end || 'endereço não informado', pagTpl].map(_tplParam),
+      urlParam: m.slug,
+    });  // helper já é failure-safe (try/catch interno; não lança)
   } catch (e) {
     console.error('[entrega] aviso ao motoboy falhou (pedido avança normalmente):', e && e.message ? e.message : e);
   }
@@ -2614,12 +2624,15 @@ if (slug) definirUrlsDoSlug(); // subdomínio: slug já conhecido no load (inalt
   else apply();
 })();
 
-async function enviarWhatsAppBot(numero, mensagem) {
+// `template` (opcional) = { name, params[], urlParam? }. Só é USADO se a flag WAC_TEMPLATES
+// estiver ligada no tenant E a janela de 24h estiver fechada — quem decide isso é o /send do
+// joeyapi, que tem o carimbo da última mensagem recebida. Com a flag off, ignorado.
+async function enviarWhatsAppBot(numero, mensagem, template) {
   let tel = (numero || '').replace(/\D/g, '');
   if (!tel.startsWith('55')) tel = '55' + tel;
   console.log('[BOT] Enviando para:', tel, '| Mensagem:', mensagem);
   try {
-    const resp = await _botSend({ numero: tel, mensagem });
+    const resp = await _botSend({ numero: tel, mensagem, ...(template ? { template } : {}) });
     const data = await resp.json();
     console.log('[BOT] Resposta:', data);
     if (!data.ok) throw new Error(data.erro);
@@ -3874,7 +3887,10 @@ async function _enviarWppConfirmadoAuto(p) {
   let tel = p.cliente.tel.replace(/\D/g, '');
   if (!tel.startsWith('55')) tel = '55' + tel;
   const msg = _buildNotifMsg(cfg.template, p, 'confirmado');
-  const resp = await _botSend({ numero: tel, mensagem: msg });
+  // Fora da janela de 24h o /send troca por template. Note que o template NÃO leva o resumo
+  // do pedido que o _buildNotifMsg anexa aqui — resumo multilinha não cabe em parâmetro da
+  // Meta (quebra de linha e proporção parâmetro/texto). Dentro da janela o resumo segue indo.
+  const resp = await _botSend({ numero: tel, mensagem: msg, template: _notifTemplate('confirmado', p) });
   const data = await resp.json().catch(() => ({ ok: false, erro: 'resposta inválida da API' }));
   if (!data.ok) throw new Error(data.erro || 'Falha no envio');
 }
@@ -9471,10 +9487,20 @@ async function _executarRegerarPix(id, ov) {
     + `Use o novo Pix abaixo, válido por 10 minutos. `
     + `Assim que o pagamento cair, seu pedido entra na produção.`;
 
+  // semTemplate: o Pix cru NÃO PODE virar template. Um corpo que é só {{1}} começa e termina
+  // com parâmetro, e a Meta nem deixa criar ("dangling parameters are not allowed"); e pôr
+  // texto em volta quebra o copia-e-cola, que é justamente o motivo de a 2ª mensagem ser crua.
+  // Fora da janela o /send devolve 409 'fora_da_janela' e caímos no envio manual — o MESMO
+  // modal que o operador já usa quando o bot está offline. A auditoria mostrou que isso quase
+  // nunca vai disparar: nos 4 regerados da história, 4/4 tinham o cliente falando havia <20min.
   const enviar = async (mensagem) => {
-    const r    = await _botSend({ numero: full, mensagem });
+    const r    = await _botSend({ numero: full, mensagem, semTemplate: true });
     const data = await r.json().catch(() => ({}));
-    if (!data.ok) throw new Error(data.erro || `bot retornou ${r.status}`);
+    if (!data.ok) {
+      const err = new Error(data.erro || `bot retornou ${r.status}`);
+      err.foraDaJanela = data.erro === 'fora_da_janela';
+      throw err;
+    }
   };
 
   // Sequencial de propósito: só manda o código depois que a explicação foi aceita,
@@ -9489,9 +9515,12 @@ async function _executarRegerarPix(id, ov) {
     // Falha SÓ no envio — o Pix continua válido, nada é revertido.
     // Se a explicação já foi e o CÓDIGO não, o operador precisa mandar só o código
     // (mandar tudo de novo duplicaria a mensagem que o cliente já recebeu).
-    _mostrarPixManual(id, codigo, textoEnviado
-      ? 'A explicação foi enviada, mas o código não. Mande só o código abaixo:'
-      : 'O Pix foi gerado, mas o envio no WhatsApp falhou: ' + (e.message || 'bot offline'));
+    _mostrarPixManual(id, codigo,
+      e.foraDaJanela
+        ? 'O cliente não fala com o bot há mais de 24h. O WhatsApp só aceita template nessa situação, e o código Pix não pode virar template — mande na mão:'
+        : textoEnviado
+          ? 'A explicação foi enviada, mas o código não. Mande só o código abaixo:'
+          : 'O Pix foi gerado, mas o envio no WhatsApp falhou: ' + (e.message || 'bot offline'));
   }
 }
 
@@ -9883,13 +9912,44 @@ function _buildNotifMsg(template, p, key) {
   return msg;
 }
 
+// ── Templates da Meta (fora da janela de 24h) ────────────────────────────────
+// Espelho dos templates submetidos em scripts/templates-whatsapp.json. O NOME e a ORDEM dos
+// parâmetros têm que casar com o que foi aprovado, senão a Meta recusa o envio.
+const NOTIF_TEMPLATES = {
+  confirmado:      'joey_pedido_confirmado',      // {{1}} nome, {{2}} id, {{3}} loja
+  prontoDelivery:  'joey_pedido_saiu_entrega',    // {{1}} nome, {{2}} id
+  prontoRetirada:  'joey_pedido_pronto_retirada', // {{1}} nome, {{2}} id, {{3}} loja
+  cancelado:       'joey_pedido_cancelado',       // {{1}} nome, {{2}} id, {{3}} motivo
+};
+
+// A Meta rejeita parâmetro com # $ % e não aceita quebra de linha/tab dentro do valor.
+// O motivo do cancelamento é texto livre digitado pelo operador — passa por aqui sempre.
+function _tplParam(v) {
+  return String(v == null ? '' : v)
+    .replace(/[#$%]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300);
+}
+
+function _notifTemplate(key, p) {
+  const name = NOTIF_TEMPLATES[key];
+  if (!name) return null;
+  const nome = p.cliente?.nome?.split(' ')[0] || 'cliente';
+  const loja = config.nome || 'Joey';
+  const base = { confirmado: [nome, p.id, loja], prontoDelivery: [nome, p.id],
+                 prontoRetirada: [nome, p.id, loja],
+                 cancelado: [nome, p.id, p.motivoCancelamento || 'não informado'] }[key];
+  return { name, params: (base || []).map(_tplParam) };
+}
+
 function _dispararNotif(key, p) {
   const cfg = _notifCfg(key);
   if (!cfg.ativo || !cfg.template) return;
   if (!p?.cliente?.tel) return;
   const tel = p.cliente.tel.replace(/\D/g, '');
   const msg = _buildNotifMsg(cfg.template, p, key);
-  enviarWhatsAppBot(tel, msg);
+  enviarWhatsAppBot(tel, msg, _notifTemplate(key, p));
 }
 
 function toggleRoboSection(id) {

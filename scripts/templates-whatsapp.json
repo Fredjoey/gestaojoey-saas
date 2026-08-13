@@ -1,0 +1,191 @@
+{
+  "_leia_me": {
+    "o_que_e": "Payloads prontos dos templates da Meta para o tenant joey. Um POST por item.",
+    "quando_submeter": "SÓ depois da migração pro Coex, quando o joey tiver WABA própria. Antes disso não há onde criar.",
+    "como_submeter": "POST https://graph.facebook.com/v25.0/{WABA_ID}/message_templates com Authorization: Bearer {TOKEN_DO_TENANT} e Content-Type: application/json. O corpo de cada item do array `templates` vai inteiro, como está.",
+    "depois_de_aprovar": "Ligar a flag: clientes/joey/config/features.WAC_TEMPLATES = true. Enquanto ela estiver false/ausente, tudo continua saindo como texto livre e nada muda.",
+    "onde_o_codigo_usa": [
+      "painel.html → NOTIF_TEMPLATES (avisos de pedido) e notificarMotoboyEntrega",
+      "gestaojoey-saas/functions/index.js → verificarCarrinhosAbandonados",
+      "joeyapi/src/index.js → /send decide template × texto pela janela de 24h"
+    ],
+    "regras_que_moldaram_estes_textos": [
+      "O corpo não pode começar nem terminar com parâmetro (dangling parameters são recusados na CRIAÇÃO).",
+      "Parâmetro não pode conter # $ %, nem quebra de linha/tab — por isso 'R$' e '#' ficam no texto estático.",
+      "Parâmetros têm que ser sequenciais: {{1}}, {{2}}, {{3}}.",
+      "example.body_text é obrigatório e é array DE ARRAYS.",
+      "Há limite de proporção parâmetros/palavras (PARAMS_TO_WORD_RATIO_EXCEED_LIMIT)."
+    ],
+    "_sem_template_possivel": {
+      "qual": "A 2ª mensagem do 'Gerar novo PIX' — o copia-e-cola cru.",
+      "por_que": "Como template o corpo seria só {{1}}: começa E termina com parâmetro, a Meta não deixa criar. E pôr qualquer texto em volta quebra o copia-e-cola, que é o motivo de a mensagem ser crua (ver comentário em painel.html, no _executarRegerarPix).",
+      "o_que_o_codigo_faz": "Manda semTemplate:true; fora da janela o /send devolve 409 fora_da_janela e o painel abre o _mostrarPixManual, o mesmo modal já usado quando o bot está offline.",
+      "impacto_medido": "4 regerações em 969 pedidos PIX na história do tenant, e 4/4 com o cliente tendo falado no WhatsApp menos de 20 min antes. Na prática este fallback quase nunca dispara."
+    },
+    "onde_este_arquivo_vive": "scripts/ (versionado, mas fora do hosting nos 3 sites). NAO usar docs/, que e gitignored de proposito porque guarda credenciais."
+  },
+  "templates": [
+    {
+      "name": "joey_pedido_confirmado",
+      "language": "pt_BR",
+      "category": "UTILITY",
+      "components": [
+        {
+          "type": "BODY",
+          "text": "✅ Olá {{1}}! Seu pedido *{{2}}* foi confirmado e já está sendo preparado! 🍕 Obrigado por escolher o {{3}}!",
+          "example": {
+            "body_text": [
+              [
+                "Fred",
+                "1042",
+                "Hamburgueria Joey"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "joey_pedido_saiu_entrega",
+      "language": "pt_BR",
+      "category": "UTILITY",
+      "components": [
+        {
+          "type": "BODY",
+          "text": "🛵 Olá {{1}}! Seu pedido *{{2}}* saiu para entrega e já está a caminho! Em breve estará na sua porta. 🍕",
+          "example": {
+            "body_text": [
+              [
+                "Fred",
+                "1042"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "joey_pedido_pronto_retirada",
+      "language": "pt_BR",
+      "category": "UTILITY",
+      "components": [
+        {
+          "type": "BODY",
+          "text": "🏠 Olá {{1}}! Seu pedido *{{2}}* está pronto para retirada! Pode vir buscar no {{3}}. 🍕",
+          "example": {
+            "body_text": [
+              [
+                "Fred",
+                "1042",
+                "Hamburgueria Joey"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "joey_pedido_cancelado",
+      "language": "pt_BR",
+      "category": "UTILITY",
+      "components": [
+        {
+          "type": "BODY",
+          "text": "❌ Olá {{1}}, infelizmente seu pedido *{{2}}* foi cancelado. Motivo: {{3}}. Para mais informações, entre em contato conosco.",
+          "example": {
+            "body_text": [
+              [
+                "Fred",
+                "1042",
+                "Item em falta"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "joey_pix_atualizado",
+      "language": "pt_BR",
+      "category": "UTILITY",
+      "components": [
+        {
+          "type": "BODY",
+          "text": "Olá {{1}}! Pix atualizado — Pedido {{2}}. O código anterior expirou. Use o novo Pix abaixo, válido por 10 minutos. Assim que o pagamento cair, seu pedido entra na produção.",
+          "example": {
+            "body_text": [
+              [
+                "Fred",
+                "1042"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "joey_entrega_motoboy",
+      "language": "pt_BR",
+      "category": "UTILITY",
+      "components": [
+        {
+          "type": "BODY",
+          "text": "🛵 Nova entrega, {{1}}!\nPedido #{{2}} — {{3}}\n📍 {{4}}\nPagamento: {{5}}\nAbra suas entregas no botão abaixo.",
+          "example": {
+            "body_text": [
+              [
+                "João",
+                "1042",
+                "Maria Silva",
+                "Rua das Flores, 120 · Centro",
+                "Cartão na entrega, receber 66,00"
+              ]
+            ]
+          }
+        },
+        {
+          "type": "BUTTONS",
+          "buttons": [
+            {
+              "type": "URL",
+              "text": "Minhas entregas",
+              "url": "https://hamburgueriajoey.com.br/entregador/{{1}}",
+              "example": [
+                "https://hamburgueriajoey.com.br/entregador/joao-x7k2"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "joey_carrinho_abandonado",
+      "language": "pt_BR",
+      "category": "MARKETING",
+      "components": [
+        {
+          "type": "BODY",
+          "text": "Oi {{1}}! 👋 Você montou um pedido aqui na {{2}} mas não finalizou. Ainda quer? 🛒",
+          "example": {
+            "body_text": [
+              [
+                "Fred",
+                "Hamburgueria Joey"
+              ]
+            ]
+          }
+        },
+        {
+          "type": "BUTTONS",
+          "buttons": [
+            {
+              "type": "URL",
+              "text": "Ver meu carrinho",
+              "url": "https://hamburgueriajoey.com.br"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
