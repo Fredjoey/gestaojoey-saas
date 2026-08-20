@@ -4537,9 +4537,10 @@ async function _qzIniciarInterno() {
     // ainda em CONNECTING, e nesse estado a lib ainda não anexou connection.sendData
     // — chamar printers.find aí dá "connection.sendData is not a function".
     try {
-      // host fixo: o certificado do QZ Tray vale para localhost.qz.io, então numa
-      // página https as tentativas em wss://localhost falham por nome de certificado
-      await qz.websocket.connect({ host: 'localhost.qz.io', retries: 2, delay: 1 });
+      // localhost.qz.io primeiro: é para esse nome que o certificado do QZ Tray vale,
+      // então numa página https as tentativas em wss://localhost falham por nome de
+      // certificado. localhost fica como fallback para máquina sem DNS/internet.
+      await qz.websocket.connect({ host: ['localhost.qz.io', 'localhost'], retries: 2, delay: 1 });
     } catch(e) {
       // Conexão já aberta: segue para o find. Handshake em andamento: aborta esta tentativa.
       if (!/already exists/i.test((e && e.message) || '')) throw e;
