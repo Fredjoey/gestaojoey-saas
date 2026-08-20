@@ -4512,21 +4512,35 @@ function imprimirPedidoProducao(p) {
 }
 
 // =================== QZ TRAY ===================
-let _qzConectado = false, _qzImpressora = null, _qzInicializado = false;
+let _qzConectado = false, _qzImpressora = null, _qzInicializado = false, _qzTentativa = null;
 
+// Cliques repetidos no "Reconectar" reaproveitam a tentativa em curso em vez de
+// disparar uma nova em cima do handshake que ainda não terminou.
 async function _qzIniciar() {
+  if (_qzTentativa) return _qzTentativa;
+  _qzTentativa = _qzIniciarInterno();
+  try { return await _qzTentativa; } finally { _qzTentativa = null; }
+}
+
+async function _qzIniciarInterno() {
   if (typeof qz === 'undefined') {
     console.warn('[QZ] biblioteca não carregada');
     _atualizarStatusQZ();
     return false;
   }
   try {
-    if (!qz.websocket.isActive()) {
-      qz.security.setCertificatePromise(resolve => resolve());
-      qz.security.setSignaturePromise(() => resolve => resolve());
-      qz.api.setPromiseType(resolver => new RSVP.Promise(resolver));
-      qz.api.setSha256Type(data => sha256(data));
+    qz.security.setCertificatePromise(resolve => resolve());
+    qz.security.setSignaturePromise(() => resolve => resolve());
+    qz.api.setPromiseType(resolver => new RSVP.Promise(resolver));
+    qz.api.setSha256Type(data => sha256(data));
+    // Não usar qz.websocket.isActive() como guarda: ele responde true com o socket
+    // ainda em CONNECTING, e nesse estado a lib ainda não anexou connection.sendData
+    // — chamar printers.find aí dá "connection.sendData is not a function".
+    try {
       await qz.websocket.connect({ retries: 2, delay: 1 });
+    } catch(e) {
+      // Conexão já aberta: segue para o find. Handshake em andamento: aborta esta tentativa.
+      if (!/already exists/i.test((e && e.message) || '')) throw e;
     }
     const nomeBusca = config.impressoraNome || 'EPSON TM-T20X';
     _qzImpressora = await qz.printers.find(nomeBusca);
