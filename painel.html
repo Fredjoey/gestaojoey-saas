@@ -1221,6 +1221,26 @@ body.suporte-on #botAlertBanner{top:36px}
           </div>
           <script>if(window.electronAPI){var _qz=document.getElementById('qzTrayBlock');if(_qz)_qz.style.display='none';}</script>
 
+          <!-- Impressora nativa do app desktop (>= 1.2.0). Escondida no navegador e em
+               versões antigas do app; o script no fim do bloco só a revela quando
+               window.gestaoJoeyPrint existe. O bloco do QZ Tray acima segue intocado. -->
+          <div id="gjpBlock" style="display:none">
+            <div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:1rem">
+              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Impressora</div>
+              <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Impressão direta pelo app, sem QZ Tray. A escolha vale só nesta máquina.</div>
+              <select id="gjpSelect" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:13px;color:var(--text);margin-bottom:10px">
+                <option value="">Carregando…</option>
+              </select>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-primary" onclick="gjpSalvar()" style="padding:7px 14px;font-size:12px">✓ Salvar</button>
+                <button class="btn" onclick="gjpTesteImpressao()" style="padding:7px 14px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);color:var(--text)">🖨️ Imprimir cupom de teste</button>
+                <button class="btn btn-ghost" onclick="gjpDesativar()" style="padding:7px 14px;font-size:12px">Desativar impressão nativa</button>
+              </div>
+              <div id="gjpStatus" style="font-size:11px;margin-top:10px;color:var(--text2)">⚪ Impressão nativa desligada — usando QZ Tray</div>
+            </div>
+          </div>
+          <script>if(window.gestaoJoeyPrint){var _gjpB=document.getElementById('gjpBlock');if(_gjpB)_gjpB.style.display='';}</script>
+
           <div class="section-lbl">🕐 Horários por Dia</div>
           <p style="font-size:11px;color:var(--text2);margin-bottom:10px">Configure o horário de cada dia. Dias sem horário são considerados fechados.</p>
           <div id="horariosDias" style="display:flex;flex-direction:column;gap:6px;margin-bottom:1rem"></div>
@@ -4228,13 +4248,6 @@ function _executarImpressao(p) {
 
     const copias = Math.min(5, Math.max(1, config.viasImpressao || 1));
 
-    // Electron: impressão silenciosa via API nativa (sem diálogo)
-    if (window.electronAPI?.isElectron) {
-      console.log('[PRINT] Electron API — ' + copias + ' via(s)');
-      window.electronAPI.printSilent(html, copias);
-      return;
-    }
-
     // Fallback browser: iframe off-screen + onload, repete por cópias
     function imprimirCopia(vez, total) {
       const id = 'printFrame_' + vez;
@@ -4253,8 +4266,26 @@ function _executarImpressao(p) {
       const doc = iframe.contentDocument || iframe.contentWindow.document;
       doc.open(); doc.write(html); doc.close();
     }
-    console.log('[PRINT] browser — ' + copias + ' cópia(s)');
-    imprimirCopia(1, copias);
+    // Caminho de HOJE, sem alteração nenhuma: Electron (impressora padrão) -> iframe.
+    function _legado() {
+      if (window.electronAPI?.isElectron) {
+        console.log('[PRINT] Electron API — ' + copias + ' via(s)');
+        window.electronAPI.printSilent(html, copias);
+        return;
+      }
+      console.log('[PRINT] browser — ' + copias + ' cópia(s)');
+      imprimirCopia(1, copias);
+    }
+
+    // NOVO: impressão nativa na impressora escolhida nesta máquina (app >= 1.2.0).
+    // Só entra quando há impressora salva; qualquer erro volta pro caminho de hoje.
+    if (_gjpAtiva()) {
+      window.gestaoJoeyPrint.imprimir(html, copias)
+        .then(() => console.log('[PRINT NATIVO] ' + copias + ' via(s) em ' + _gjpImpressora))
+        .catch(e => { console.error('[PRINT NATIVO] falhou -> caminho antigo:', e && e.message); _legado(); });
+      return;
+    }
+    _legado();
   } catch(e) {
     console.error('[PRINT] erro geral:', e);
   }
@@ -4269,6 +4300,19 @@ function imprimirThermal(p) {
 // Dispatcher compartilhado: aceita HTML pronto — Electron > QZ Tray > iframe browser
 async function _dispararHtml(html) {
   const copias = Math.min(5, Math.max(1, config.viasImpressao || 1));
+
+  // NOVO: impressão nativa na impressora escolhida nesta máquina (app >= 1.2.0).
+  // Sem impressora configurada, ou se falhar, segue exatamente o fluxo de hoje logo
+  // abaixo (Electron padrão -> QZ Tray -> iframe). Nada do QZ foi alterado.
+  if (_gjpAtiva()) {
+    try {
+      await window.gestaoJoeyPrint.imprimir(html, copias);
+      console.log('[PRINT NATIVO] ' + copias + ' via(s) em ' + _gjpImpressora);
+      return;
+    } catch (e) {
+      console.error('[PRINT NATIVO] falhou -> caminho antigo (Electron/QZ):', e && e.message);
+    }
+  }
 
   if (window.electronAPI?.isElectron) {
     window.electronAPI.printSilent(html, copias);
@@ -4523,6 +4567,116 @@ function imprimirPedidoProducao(p) {
   if (!config.impressaoAtiva) return;
   try { _dispararHtml(gerarHtmlPedidoProducao(p)); }
   catch(e) { console.error('[PRINT PRODUCAO]', e); }
+}
+
+// ============ IMPRESSÃO NATIVA (app desktop >= 1.2.0) ============
+// A impressora é escolhida na tela de Configurações e guardada NA MÁQUINA pelo app
+// (não no Firestore): a mesma conta abre em máquinas diferentes, cada uma com a sua
+// térmica. Aqui só mantemos uma cópia em memória do nome, para a decisão de rota ser
+// síncrona no meio da impressão. O HTML e o CSS do cupom não mudam em nada — este
+// caminho só troca PARA ONDE o mesmo HTML é enviado.
+let _gjpImpressora = null;
+
+function _gjpDisponivel() { return !!(window.gestaoJoeyPrint && window.gestaoJoeyPrint.imprimir); }
+function _gjpAtiva()      { return _gjpDisponivel() && !!_gjpImpressora; }
+
+// Lê do app qual impressora está salva. Roda no boot e depois de salvar/desativar.
+async function _gjpCarregar() {
+  if (!_gjpDisponivel()) return null;
+  try {
+    _gjpImpressora = await window.gestaoJoeyPrint.obterImpressora();
+  } catch (e) {
+    console.warn('[PRINT NATIVO] não consegui ler a impressora salva:', e && e.message);
+    _gjpImpressora = null;
+  }
+  _gjpAtualizarStatus();
+  return _gjpImpressora;
+}
+
+function _gjpAtualizarStatus() {
+  const el = document.getElementById('gjpStatus');
+  if (!el) return;
+  if (_gjpImpressora) {
+    el.textContent = '🟢 Impressão nativa ativa — ' + _gjpImpressora;
+    el.style.color = '#34d399';
+  } else {
+    el.textContent = '⚪ Impressão nativa desligada — usando QZ Tray';
+    el.style.color = 'var(--text2)';
+  }
+}
+
+// Preenche o dropdown com as impressoras instaladas no Windows desta máquina.
+async function gjpRenderImpressoras() {
+  const bloco = document.getElementById('gjpBlock');
+  if (!bloco || !_gjpDisponivel()) return;
+  bloco.style.display = '';
+  const sel = document.getElementById('gjpSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Carregando…</option>';
+  try {
+    const lista = await window.gestaoJoeyPrint.listarImpressoras();
+    await _gjpCarregar();
+    if (!lista || !lista.length) {
+      sel.innerHTML = '<option value="">Nenhuma impressora encontrada no Windows</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— escolha a impressora —</option>' + lista.map(p =>
+      '<option value="' + _esc(p.nome) + '"' + (p.nome === _gjpImpressora ? ' selected' : '') + '>' +
+      _esc(p.nome) + (p.padrao ? ' (padrão do Windows)' : '') + '</option>'
+    ).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">Erro ao listar impressoras</option>';
+    console.error('[PRINT NATIVO] listar falhou:', e);
+  }
+}
+
+async function gjpSalvar() {
+  const sel = document.getElementById('gjpSelect');
+  const nome = sel ? sel.value : '';
+  if (!nome) { notify('Escolha uma impressora na lista.', 'warning'); return; }
+  try {
+    await window.gestaoJoeyPrint.definirImpressora(nome);
+    await _gjpCarregar();
+    notify('Impressora salva nesta máquina: ' + nome);
+  } catch (e) {
+    notify('Não consegui salvar a impressora: ' + (e && e.message), 'error');
+  }
+}
+
+// Volta ao QZ Tray na hora, sem reinstalar nada.
+async function gjpDesativar() {
+  try {
+    await window.gestaoJoeyPrint.definirImpressora(null);
+    await _gjpCarregar();
+    const sel = document.getElementById('gjpSelect');
+    if (sel) sel.value = '';
+    notify('Impressão nativa desativada — voltou para o QZ Tray.');
+  } catch (e) {
+    notify('Não consegui desativar: ' + (e && e.message), 'error');
+  }
+}
+
+// Cupom de teste pelo caminho NATIVO. Aqui NÃO há fallback de propósito: o objetivo
+// do botão é testar a impressora nativa, então a falha tem que aparecer.
+async function gjpTesteImpressao() {
+  if (!_gjpAtiva()) { notify('Salve uma impressora antes de imprimir o teste.', 'warning'); return; }
+  const pedidoFake = {
+    id: 'TESTE',
+    hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+    cliente: { nome: 'Cliente Teste', tel: '(21) 99999-9999', rua: 'Rua das Flores, 123', bairro: 'Centro', comp: 'Apto 4', ref: 'Próx. ao mercado' },
+    entrega: 'delivery',
+    itens: [
+      { qty: 1, nome: 'Pizza Margherita', preco: 45, obs: 'sem cebola' },
+      { qty: 2, nome: 'Coca-Cola 600ml', preco: 8, obs: '' }
+    ],
+    subtotal: 61, taxaEntrega: 5, total: 66, pagamento: 'dinheiro', troco: 80
+  };
+  try {
+    await window.gestaoJoeyPrint.imprimir(gerarHtmlComanda(pedidoFake), 1);
+    notify('Cupom de teste enviado para ' + _gjpImpressora + ' 🖨️');
+  } catch (e) {
+    notify('Falhou na impressora nativa: ' + (e && e.message), 'error');
+  }
 }
 
 // =================== QZ TRAY ===================
@@ -5568,6 +5722,8 @@ function carregarConfig() {
 
   const nomeImp = document.getElementById('cfgImpressoraNome');
   if (nomeImp) nomeImp.value = config.impressoraNome || '';
+
+  gjpRenderImpressoras();   // só faz algo quando o app desktop >= 1.2.0 está rodando
 
   renderDestaqueOpts();
   renderHorariosDias();
@@ -8429,7 +8585,7 @@ function iniciarListenersFirestore() {
     atualizarSidebar();
     atualizarTempoStrip();
     _setImpressaoUI(config.impressaoAtiva === true);
-    if (!_qzInicializado) { _qzInicializado = true; _qzIniciar(); }
+    if (!_qzInicializado) { _qzInicializado = true; _qzIniciar(); _gjpCarregar(); }
     if (document.getElementById('panel-config').style.display !== 'none') { renderDestaqueOpts(); carregarConfig(); }
   });
 
