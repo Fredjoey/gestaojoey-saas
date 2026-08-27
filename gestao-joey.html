@@ -663,7 +663,10 @@
         <a href="#" id="linkPedidos" target="_blank" title="Painel de Pedidos"
            style="position:absolute; top:50%; right:1.5rem; transform:translateY(-50%); text-decoration:none; font-size:22px; opacity:0.55; transition:opacity 0.15s;"
            onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">🛒</a>
-        <button onclick="fazerLogout()" style="position:absolute; top:50%; left:1.5rem; transform:translateY(-50%); background:transparent; border:1px solid #444; color:#888; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;" onmouseover="this.style.borderColor='#e74c3c';this.style.color='#e74c3c'" onmouseout="this.style.borderColor='#444';this.style.color='#888'">Sair</button>
+        <div style="position:absolute; top:50%; left:1.5rem; transform:translateY(-50%); display:flex; align-items:center; gap:10px;">
+          <button onclick="fazerLogout()" style="background:transparent; border:1px solid #444; color:#888; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;" onmouseover="this.style.borderColor='#e74c3c';this.style.color='#e74c3c'" onmouseout="this.style.borderColor='#444';this.style.color='#888'">Sair</button>
+          <span data-slot="privacidade"></span>
+        </div>
         <div style="display:flex; align-items:center; justify-content:center; gap:16px;">
             <img id="logoLeft" src="" alt="Logo" style="height:120px; width:120px; object-fit:contain; opacity:1;" onerror="this.style.display='none'">
             <div>
@@ -881,7 +884,7 @@
             <div class="two-col">
                 <div class="form-group">
                     <label for="recipeYield">Rendimento (quantidade de unidades)</label>
-                    <input type="number" id="recipeYield" placeholder="1" value="1" min="1" step="0.1">
+                    <input type="number" id="recipeYield" placeholder="1" value="1" min="1" step="0.1" data-sem-privacidade>
                 </div>
                 <div class="form-group">
                     <label for="recipeCategoria">Categoria</label>
@@ -1098,11 +1101,11 @@
             <p class="text-secondary">Taxas reais cobradas por meio de pagamento. Usadas no DRE (Financeiro, Análise, Vendas) e no preço sugerido. Salvas por loja.</p>
             <div style="background:#2c2c2c; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #3a3a3a;">
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:14px;">
-                    <div class="form-group" style="margin:0;"><label>PIX (%)</label><input type="number" id="taxaPix" value="0" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
-                    <div class="form-group" style="margin:0;"><label>Débito (%)</label><input type="number" id="taxaDebito" value="1.5" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
-                    <div class="form-group" style="margin:0;"><label>Crédito (%)</label><input type="number" id="taxaCredito" value="2.99" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
-                    <div class="form-group" style="margin:0;"><label>VR/VA (%)</label><input type="number" id="taxaVR" value="1.2" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
-                    <div class="form-group" style="margin:0;"><label>Cartão genérico (%)</label><input type="number" id="taxaCartao" value="2.99" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>PIX (%)</label><input type="number" id="taxaPix" data-valor value="0" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>Débito (%)</label><input type="number" id="taxaDebito" data-valor value="1.5" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>Crédito (%)</label><input type="number" id="taxaCredito" data-valor value="2.99" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>VR/VA (%)</label><input type="number" id="taxaVR" data-valor value="1.2" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
+                    <div class="form-group" style="margin:0;"><label>Cartão genérico (%)</label><input type="number" id="taxaCartao" data-valor value="2.99" step="0.01" min="0" max="100" oninput="_onConfigEdit()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:16px; font-weight:700;"></div>
                 </div>
                 <div style="font-size:10px; color:#777; margin-top:8px;">Editar aqui recalcula o DRE e o preço sugerido na hora, e salva por loja.</div>
             </div>
@@ -1239,7 +1242,7 @@
             <div id="finCompContainer" style="margin-bottom:2rem;"></div>
 
             <!-- ③ ONDE VAI CADA REAL -->
-            <div class="section-title">③ Onde Vai Cada R$ 1,00</div>
+            <div class="section-title" data-sem-privacidade>③ Onde Vai Cada R$ 1,00</div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:2rem;">
                 <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem;">
                     <canvas id="finPie" height="240"></canvas>
@@ -1474,7 +1477,7 @@
                 <div style="font-size:12px; color:#aaa; margin:4px 0 14px;">É a sua decisão. O sistema calcula o preço pra sobrar isso de lucro limpo, já descontando imposto, taxa de cartão e os custos da loja.</div>
                 <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                     <div style="display:flex; align-items:baseline; gap:6px;">
-                        <input type="number" id="precMargemDesejada" value="15" min="0" max="100" step="0.1" oninput="_onConfigEdit()"
+                        <input type="number" id="precMargemDesejada" data-valor value="15" min="0" max="100" step="0.1" oninput="_onConfigEdit()"
                                style="width:120px; padding:12px; border:2px solid #E87722; border-radius:8px; font-size:28px; font-weight:800; text-align:center; background:var(--bg); color:#E87722;">
                         <span style="font-size:22px; font-weight:800; color:#E87722;">%</span>
                     </div>
@@ -1494,7 +1497,7 @@
                     <div>
                         <div style="font-size:11px; color:#888; margin-bottom:3px;">Imposto (Simples Nacional)</div>
                         <div style="display:flex; align-items:baseline; gap:3px;">
-                            <input type="number" id="precSimples" value="6" min="0" max="100" step="0.01" oninput="_onConfigEdit()"
+                            <input type="number" id="precSimples" data-valor value="6" min="0" max="100" step="0.01" oninput="_onConfigEdit()"
                                    style="width:66px; padding:5px 6px; border:1px solid #3a3a3a; border-radius:5px; font-size:14px; font-weight:600; background:var(--bg); color:var(--text2);">
                             <span style="color:#888; font-size:13px;">%</span>
                         </div>
@@ -1521,7 +1524,7 @@
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-top:14px;">
                     <div class="form-group" style="margin:0;">
                         <label>Meta de CMV — ingredientes no máximo (%)</label>
-                        <input type="number" id="precCmvDesejado" value="33" min="0" max="100" step="0.1" oninput="_onConfigEdit()"
+                        <input type="number" id="precCmvDesejado" data-valor value="33" min="0" max="100" step="0.1" oninput="_onConfigEdit()"
                                style="padding:10px; border:1px solid #444; border-radius:6px; font-size:15px; font-weight:600;">
                         <div style="font-size:10px; color:#777; margin-top:4px;">usada no semáforo de saúde acima</div>
                     </div>
@@ -1530,7 +1533,7 @@
                         <input type="text" id="precTaxaGenericaNome" value="Taxa adicional" maxlength="40"
                                oninput="_onConfigEdit()" title="Nome da taxa (editável)"
                                style="width:100%; box-sizing:border-box; padding:4px 6px; margin-bottom:4px; border:1px solid #444; border-radius:6px; font-size:12px; font-weight:600; background:var(--bg4); color:var(--text);">
-                        <input type="number" id="precTaxaGenerica" value="0" min="0" max="100" step="0.01"
+                        <input type="number" id="precTaxaGenerica" data-valor value="0" min="0" max="100" step="0.01"
                                oninput="_onConfigEdit()"
                                style="padding:10px; border:1px solid #444; border-radius:6px; font-size:15px; font-weight:600;">
                         <div style="font-size:10px; color:#777; margin-top:4px;">ex: marketplace, royalties (% sobre o preço)</div>
@@ -3647,7 +3650,7 @@
                                 </div>
                                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #333">
                                     <span style="font-size:12px;font-weight:600;color:#ffb380">📦 Estoque do dia</span>
-                                    <input type="number" min="0" inputmode="numeric" value="${_estoqueVal}" placeholder="ilimitado"
+                                    <input type="number" min="0" inputmode="numeric" data-sem-privacidade value="${_estoqueVal}" placeholder="ilimitado"
                                         onchange="salvarEstoqueDia(${recipe.id}, this.value)"
                                         style="width:96px;padding:6px 9px;background:#0f0f0f;border:1px solid #444;border-radius:6px;color:#eee;font-size:13px;outline:none"
                                         onfocus="this.style.borderColor='#ff6b35'" onblur="this.style.borderColor='#444'">
@@ -10011,7 +10014,7 @@
             });
 
             leg.innerHTML = `
-                <div style="font-size:12px; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">Para onde vai cada R$ 1,00</div>
+                <div data-sem-privacidade style="font-size:12px; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">Para onde vai cada R$ 1,00</div>
                 ${fatias.map(f => {
                     const pct = dre.fat > 0 ? (f.val / dre.fat) * 100 : 0;
                     return `
@@ -10663,5 +10666,6 @@
       });
     </script>
 
+<script src="assets/js/privacidade.js" defer></script>
 </body>
 </html>
