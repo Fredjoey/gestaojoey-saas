@@ -76,7 +76,10 @@
       });
     }
     atualizarBotao();
-    requestAnimationFrame(function () { pintando = false; });
+    // setTimeout em vez de requestAnimationFrame: aba em segundo plano nao roda rAF,
+    // entao a flag ficava presa em true e o observer parava de pegar conteudo novo
+    // ate a aba voltar a ser exibida. Timer roda mesmo com a aba oculta.
+    setTimeout(function () { pintando = false; }, 0);
   }
 
   /* ---------- botão ---------- */
