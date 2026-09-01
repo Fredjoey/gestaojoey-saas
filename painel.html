@@ -3653,11 +3653,41 @@ function _agendadoBadgeHtml(p) {
   return html;
 }
 
+// Timestamp do Firestore ou ms cru → ms. null quando não dá pra converter.
+function _tsMs(v) {
+  if (!v) return null;
+  if (typeof v.toMillis === 'function') return v.toMillis();
+  if (typeof v.toDate   === 'function') return v.toDate().getTime();
+  if (typeof v === 'number')            return v;
+  return null;
+}
+function _mmss(ms) {
+  const seg = Math.floor(Math.abs(ms) / 1000);
+  return String(Math.floor(seg / 60)).padStart(2, '0') + ':' + String(seg % 60).padStart(2, '0');
+}
+
+// Momento em que o cronômetro PARA: quando o card chega em "Entregues hoje".
+//   undefined = ainda contando (outras colunas)
+//   número    = parado nesse ms
+//   null      = está na coluna mas não tem carimbo nenhum (card antigo) → esconde o pill,
+//               melhor que um número crescendo pra sempre.
+// 'entregue' é o "Marcar entregue" (saiu p/ entrega) → saiuParaEntregaEm, carimbado em
+// atualizarStatusFb. 'finalizado'+entregueEm é o motoboy confirmando no app: o card continua
+// na MESMA coluna, então o tempo segue congelado na CHEGADA (a hora da entrega real já
+// aparece na linha do entregador).
+function _timerParadoEm(p) {
+  const naColunaEntregues = p.status === 'entregue' || (p.status === 'finalizado' && p.entregueEm);
+  if (!naColunaEntregues) return undefined;
+  return _tsMs(p.saiuParaEntregaEm) || _tsMs(p.entregueEm) || _tsMs(p.prontoEm) || null;
+}
+
 function _timerEntregaInfo(p) {
   if (p && p.agendado) return null;   // pedido agendado mostra a etiqueta 📅, não a contagem regressiva
   const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
   if (isMesa) return null;
   if (p.entrega !== 'delivery' && p.entrega !== 'retirada') return null;
+  const parado = _timerParadoEm(p);
+  if (parado === null) return null;   // já na coluna, mas sem carimbo de quando → sem cronômetro
   // base = momento que o pedido entrou
   let baseMs = null;
   if (p.criadoEm && typeof p.criadoEm.toMillis === 'function')      baseMs = p.criadoEm.toMillis();
@@ -3669,12 +3699,19 @@ function _timerEntregaInfo(p) {
   if (p.entrega === 'delivery') { const t = _parseTempo(config.tempo_delivery); min = t ? t.max : 45; }
   else                          { const t = _parseTempo(config.tempo_retirada); min = t ? t.max : 20; }
   if (!min || min <= 0) return null;
-  return { limite: baseMs + min * 60000 };
+  return { limite: baseMs + min * 60000, base: baseMs, parado };
 }
 
 function _timerPillHtml(p) {
   const info = _timerEntregaInfo(p);
   if (!info) return '';
+  // PARADO ("Entregues hoje"): tempo TOTAL do pedido (entrada → chegada na coluna), fixo.
+  // Sai sem data-limite de propósito: o tick de 1s nem enxerga esse pill.
+  // Verde = chegou dentro do tempo prometido; vermelho = estourou.
+  if (info.parado !== undefined) {
+    const cor = info.parado > info.limite ? 'red' : 'green';
+    return `<div class="oc-timer-wrap"><span class="oc-timer oc-timer-${cor}" title="Tempo total do pedido (cronômetro parado)">✓ ${_mmss(info.parado - info.base)}</span></div>`;
+  }
   return `<div class="oc-timer-wrap"><span class="oc-timer" id="octimer-${p.id}" data-limite="${info.limite}"></span></div>`;
 }
 
@@ -3687,14 +3724,11 @@ function tickEntregaTimers() {
     if (!limite) return;
     const restante = limite - agora;                 // ms (negativo = atrasado)
     const atrasado = restante <= 0;
-    const totalSeg = Math.floor(Math.abs(restante) / 1000);
-    const mm = String(Math.floor(totalSeg / 60)).padStart(2, '0');
-    const ss = String(totalSeg % 60).padStart(2, '0');
     let cor;
     if (atrasado)                    cor = 'red';     // restante <= 0
     else if (restante <= 20 * 60000) cor = 'orange';  // <= 20 min e > 0
     else                             cor = 'green';    // > 20 min
-    el.textContent = '⏱ ' + (atrasado ? '+' : '') + mm + ':' + ss;
+    el.textContent = '⏱ ' + (atrasado ? '+' : '') + _mmss(restante);
     el.className = 'oc-timer oc-timer-' + cor;
   });
 }
