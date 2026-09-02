@@ -1265,6 +1265,23 @@
             <!-- ⑦ PRA ONDE FOI O DINHEIRO -->
             <div class="section-title">⑦ Pra Onde Foi o Dinheiro <span style="font-size:10px; color:var(--text3); font-weight:500; text-transform:none; letter-spacing:0; margin-left:8px;">por categoria e por fornecedor · período selecionado</span></div>
             <div id="flxCategoriasContainer" style="margin-bottom:2rem;"></div>
+
+            <!-- ⑧ EXTRATO BANCÁRIO — feature EM CONSTRUÇÃO, só o tenant joey.
+                 O gate de verdade é server-side (EXTRATO_SLUGS na callable); esconder
+                 aqui é só para não mostrar caixa vazia a quem não tem a feature.
+                 NÃO altera o cálculo do lucro: é conferência e visualização. -->
+            <div id="extSecao" style="display:none;">
+                <div class="section-title">⑧ Extrato Bancário
+                    <span style="font-size:10px; color:var(--text3); font-weight:500; text-transform:none; letter-spacing:0; margin-left:8px;">InfinitePay · salão · em construção · não entra no lucro</span>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+                    <input type="file" id="extArquivo" accept=".csv,text/csv" style="display:none" onchange="extImportar(this)">
+                    <button type="button" id="extBtn" class="secondary" onclick="document.getElementById('extArquivo').click()"
+                            style="border-color:#E87722; color:#E87722; background:transparent;">⬆️ Importar CSV do extrato</button>
+                    <span id="extStatus" style="font-size:12px; color:#888;">app.infinitepay.io → Seu extrato → CSV</span>
+                </div>
+                <div id="extContainer" style="margin-bottom:2rem;"></div>
+            </div>
         </div>
     </div>
 
@@ -2151,6 +2168,19 @@
         // Fechamentos de conta de mesa (clientes/{slug}/fechamentos) — campo `data` em DD/MM/AAAA.
         // Usados SÓ para descobrir a FORMA de pagamento das vendas de mesa: o valor da venda já
         // entra pelo pedido, então somar o fechamento duplicaria (mesma regra do painel.html).
+        // Extrato bancário (seção ⑧, só joey): transações do período. Filtra pela STRING
+        // `data` (AAAA-MM-DD), que é como o parser grava — ordenável direto.
+        async function fbQueryExtrato(dataInicio, dataFim) {
+            const snap = await getDocs(query(
+                collection(db, `clientes/${slug}/extratoTransacoes`),
+                where('data', '>=', dataInicio), where('data', '<=', dataFim)));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        async function fbGetExtratos() {
+            const snap = await getDocs(collection(db, `clientes/${slug}/extratos`));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+
         async function fbQueryFechamentos(dataInicio, dataFim) {
             const snap = await getDocs(collection(db, `clientes/${slug}/fechamentos`));
             const [iy, im, id] = dataInicio.split('-').map(Number);
@@ -2173,7 +2203,7 @@
             return map;
         }
 
-        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbQueryFechamentos, fbGetEntreguesMes, fbGetCatalogoStatus, slug };
+        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbQueryFechamentos, fbGetEntreguesMes, fbGetCatalogoStatus, fbQueryExtrato, fbGetExtratos, slug };
 
     </script>
     <script>
@@ -9404,6 +9434,143 @@
             _finRenderPie(dre);
             _finRenderPagamentos(dre);
             await _flxUpdate(dre, cur, _finPeriod);
+            await _extUpdate(cur);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ⑧ EXTRATO BANCÁRIO — só joey, em construção. NÃO toca a DRE.
+        //
+        // Segue o período da aba (recebe `cur` do _finUpdate) — não existe segundo
+        // controle de data aqui de propósito.
+        //
+        // Mostra "PARA ONDE SAIU O DINHEIRO" agrupado por contraparte, e NÃO
+        // conciliação com Compras: medido no extrato real de agosto, casar saída com
+        // nota deu 0 de 40 — 95% das saídas desta conta vão para PESSOAS (folha e
+        // pró-labore), não para fornecedor, e o extrato traz razão social enquanto a
+        // nota traz nome fantasia. A conciliação com notas fica para o Mercado Pago
+        // (Parte B), se for lá que o fornecedor é pago.
+        // ═══════════════════════════════════════════════════════════════════════════
+        let _extCache = null, _extFiltro = 'todas';
+
+        function _extLiberado() { return (window._fb && window._fb.slug) === 'joey'; }
+
+        async function _extUpdate(periodo) {
+            const sec = document.getElementById('extSecao');
+            if (!sec) return;
+            if (!_extLiberado()) { sec.style.display = 'none'; return; }
+            sec.style.display = '';
+            const ini = _anaDateToStr(periodo.start), fim = _anaDateToStr(periodo.end);
+            try {
+                _extCache = { transacoes: await window._fb.fbQueryExtrato(ini, fim),
+                              extratos:   await window._fb.fbGetExtratos(), ini, fim };
+            } catch (e) {
+                console.error('[extrato]', e);
+                const el = document.getElementById('extContainer');
+                if (el) el.innerHTML = '<div style="color:#e74c3c; font-size:13px;">Não consegui carregar o extrato: ' + _calEsc(e.message || e) + '</div>';
+                return;
+            }
+            _extRender();
+        }
+
+        function extFiltrar(v) { _extFiltro = v; _extRender(); }
+
+        function _extRender() {
+            const el = document.getElementById('extContainer');
+            if (!el || !_extCache) return;
+            const ts  = _extCache.transacoes || [];
+            const fmt = (v) => formatarMoeda(v || 0);
+
+            if (!ts.length) {
+                el.innerHTML = `<div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem; color:var(--text2); font-size:13px;">
+                    Nenhuma transação neste período. Baixe o CSV em <b>app.infinitepay.io → Seu extrato</b> e clique em <b>Importar CSV do extrato</b>.
+                </div>`;
+                return;
+            }
+
+            const soma    = (f) => ts.filter(f).reduce((s, t) => s + (Number(t.valor) || 0), 0);
+            const entrou  = soma(t => t.tipo === 'entrada');
+            const saiu    = soma(t => t.tipo === 'saida');
+            const repasse = soma(t => t.natureza === 'repasse');
+
+            const card = (rot, val, cor, obs) => `
+                <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1rem 1.25rem;">
+                    <div style="font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">${rot}</div>
+                    <div style="font-size:20px; font-weight:700; color:${cor}; margin-top:4px;">${fmt(val)}</div>
+                    ${obs ? `<div style="font-size:10px; color:var(--text3); margin-top:3px;">${obs}</div>` : ''}
+                </div>`;
+
+            // Para onde saiu — agrupado por contraparte (é o que esta conta responde bem)
+            const porQuem = {};
+            ts.filter(t => t.tipo === 'saida').forEach(t => {
+                const k = (t.contraparte || t.descricao || '—').toUpperCase();
+                porQuem[k] = (porQuem[k] || 0) + (Number(t.valor) || 0);
+            });
+            const destinos = Object.entries(porQuem).map(([nome, valor]) => ({ nome, valor }))
+                .sort((a, b) => b.valor - a.valor);
+            const maior    = destinos.length ? destinos[0].valor : 1;
+            const barras   = destinos.slice(0, 12)
+                .map(d => _flxBarra(d.nome, (d.valor / maior) * 100, fmt(d.valor), '#e74c3c')).join('');
+            const restoQtd = Math.max(0, destinos.length - 12);
+            const restoVal = destinos.slice(12).reduce((s, d) => s + d.valor, 0);
+
+            const visiveis = ts.filter(t => _extFiltro === 'todas' || t.tipo === _extFiltro)
+                .sort((a, b) => String(b.data + b.hora).localeCompare(String(a.data + a.hora)));
+            const btn = (v, rot) => `<button onclick="extFiltrar('${v}')" style="background:${_extFiltro === v ? '#E87722' : 'transparent'}; color:${_extFiltro === v ? '#fff' : '#aaa'}; border:1px solid ${_extFiltro === v ? '#E87722' : '#444'}; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer;">${rot}</button>`;
+            const linhas = visiveis.slice(0, 200).map(t => `
+                <tr style="border-bottom:1px solid #2a2a2a;">
+                    <td style="padding:7px 8px; color:var(--text2); white-space:nowrap;">${_calEsc(t.data)} <span style="color:#666;">${_calEsc(String(t.hora || '').slice(0, 5))}</span></td>
+                    <td style="padding:7px 8px;">${t.natureza === 'repasse'
+                        ? '<span style="background:rgba(96,165,250,.15); color:#60a5fa; border-radius:4px; padding:2px 7px; font-size:11px;">repasse maquininha</span>'
+                        : '<span style="color:var(--text);">' + _calEsc(t.contraparte || '—') + '</span>'}</td>
+                    <td style="padding:7px 8px; color:#777; font-size:11px;">${_calEsc(t.descricao || '')}</td>
+                    <td style="padding:7px 8px; text-align:right; white-space:nowrap; font-weight:700; color:${t.tipo === 'entrada' ? '#4ade80' : '#e74c3c'};">${t.tipo === 'entrada' ? '+' : '−'} ${fmt(t.valor)}</td>
+                </tr>`).join('');
+
+            // O original importa: extração pode errar e sem o arquivo não há conferência.
+            const arqs = (_extCache.extratos || []).sort((a, b) => String(b.periodoInicio).localeCompare(String(a.periodoInicio)));
+            const listaArq = arqs.slice(0, 6).map(a => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #2a2a2a; font-size:12px;">
+                    <span style="color:var(--text2);">${_calEsc(a.periodoInicio || '?')} → ${_calEsc(a.periodoFim || '?')} · ${a.qtdTransacoes || 0} linhas${a.qtdAvisos ? ' · <span style="color:#f0b429;">' + a.qtdAvisos + ' aviso(s)</span>' : ''}</span>
+                    <button onclick="extAbrirOriginal('${_calEsc(a.id)}')" style="background:transparent; border:1px solid #444; color:#aaa; border-radius:6px; padding:3px 10px; font-size:11px; cursor:pointer;">📄 ver original</button>
+                </div>`).join('') || '<div style="font-size:12px; color:var(--text3);">Nenhum arquivo importado ainda.</div>';
+
+            el.innerHTML = `
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:20px;">
+                    ${card('Entrou', entrou, '#4ade80')}
+                    ${card('Saiu', saiu, '#e74c3c')}
+                    ${card('Sobrou', entrou - saiu, (entrou - saiu) >= 0 ? '#4ade80' : '#e74c3c')}
+                    ${card('Repasse da maquininha', repasse, '#60a5fa', 'venda de cartão do salão, já líquida')}
+                </div>
+
+                <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem; margin-bottom:20px;">
+                    <div style="font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px;">Para onde saiu o dinheiro</div>
+                    ${barras || '<div style="font-size:12px; color:var(--text3);">Nenhuma saída no período.</div>'}
+                    ${restoQtd ? `<div style="font-size:11px; color:var(--text3); margin-top:8px;">+ ${restoQtd} destino(s) menores · ${fmt(restoVal)}</div>` : ''}
+                </div>
+
+                <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+                        <span style="font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Transações</span>
+                        <span style="display:flex; gap:6px;">${btn('todas', 'Todas')}${btn('entrada', 'Entradas')}${btn('saida', 'Saídas')}</span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead><tr style="border-bottom:1px solid #3a3a3a; color:#777; font-size:11px; text-transform:uppercase;">
+                                <th style="text-align:left; padding:6px 8px;">Quando</th>
+                                <th style="text-align:left; padding:6px 8px;">Quem</th>
+                                <th style="text-align:left; padding:6px 8px;">Detalhe</th>
+                                <th style="text-align:right; padding:6px 8px;">Valor</th>
+                            </tr></thead>
+                            <tbody>${linhas}</tbody>
+                        </table>
+                    </div>
+                    <div style="font-size:11px; color:var(--text3); margin-top:8px;">${visiveis.length} transação(ões)${visiveis.length > 200 ? ' · mostrando as 200 mais recentes' : ''}</div>
+                </div>
+
+                <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem;">
+                    <div style="font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">Arquivos importados</div>
+                    ${listaArq}
+                </div>`;
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -10553,6 +10720,59 @@
         }
       };
     </script>
+    <!-- Extrato bancário (⑧) — consome importarExtrato / urlExtrato. Só joey; o gate
+         de verdade é server-side. Manda o CSV em base64 (arquivo pequeno) e a função
+         guarda o original no Storage ANTES de gravar qualquer transação. -->
+    <script type="module">
+      import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+      import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
+      const _extFns      = getFunctions(getApp(), 'southamerica-east1');
+      const _extImportar = httpsCallable(_extFns, 'importarExtrato');
+      const _extUrl      = httpsCallable(_extFns, 'urlExtrato');
+      const _extSlug = () => (window._fb && window._fb.slug) || 'joey';
+      const _extSt = (msg, cor) => { const e = document.getElementById('extStatus'); if (e) { e.textContent = msg; e.style.color = cor || '#888'; } };
+
+      window.extImportar = async function (input) {
+        const file = input && input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+        const btn = document.getElementById('extBtn');
+        if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+        _extSt('Importando…', '#E87722');
+        try {
+          const base64 = await new Promise((ok, err) => {
+            const r = new FileReader();
+            r.onload  = () => ok(String(r.result).split(',')[1] || '');
+            r.onerror = () => err(new Error('não consegui ler o arquivo'));
+            r.readAsDataURL(file);
+          });
+          const r = await _extImportar({ slug: _extSlug(), base64, nomeArquivo: file.name, fonte: 'infinitepay' });
+          const d = (r && r.data) || {};
+          if (d.jaImportado) {
+            _extSt(d.aviso || 'Esse arquivo já tinha sido importado.', '#f0b429');
+          } else {
+            const av = (d.avisos && d.avisos.length) ? ` · ${d.avisos.length} linha(s) não lida(s)` : '';
+            _extSt(`✓ ${d.qtdNovas} nova(s), ${d.qtdRepetidas} já existia(m)${av}`, (d.avisos && d.avisos.length) ? '#f0b429' : '#27ae60');
+          }
+          if (typeof _finUpdate === 'function') await _finUpdate();
+        } catch (e) {
+          console.error('[extrato]', e);
+          _extSt((e && e.message) || 'Não consegui importar o arquivo.', '#e74c3c');
+        } finally {
+          if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        }
+      };
+
+      // URL assinada de 5 min. Não é getDownloadURL de propósito: o token daquele link
+      // é permanente, compartilhável e ignora as regras do Storage.
+      window.extAbrirOriginal = async function (extratoId) {
+        try {
+          const r = await _extUrl({ slug: _extSlug(), extratoId });
+          if (r && r.data && r.data.url) window.open(r.data.url, '_blank', 'noopener');
+        } catch (e) { _extSt((e && e.message) || 'Não consegui abrir o arquivo.', '#e74c3c'); }
+      };
+    </script>
+
     <!-- Joey IA — consome a callable perguntarGestao (módulo isolado; SDK modular v10) -->
     <script type="module">
       import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
