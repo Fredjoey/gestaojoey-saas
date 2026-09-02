@@ -1775,9 +1775,13 @@
                             <span style="color:#aaa;">(-) Custo Insumos</span>
                             <span style="color:#e74c3c;" id="rmDreInsumos">—</span>
                         </div>
-                        <div style="display:flex; justify-content:space-between; padding:3px 0 10px 12px; border-bottom:1px solid #2a2a4a;">
+                        <div style="display:flex; justify-content:space-between; padding:3px 0 3px 12px;">
                             <span style="color:#aaa;" id="rmDreFixosTxt">(-) Custos Fixos (proporcional)</span>
                             <span style="color:#e74c3c;" id="rmDreFixos">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; padding:3px 0 10px 12px; border-bottom:1px solid #2a2a4a;">
+                            <span style="color:#aaa;" id="rmDreVariaveisTxt">(-) Custos Variáveis (proporcional)</span>
+                            <span style="color:#e74c3c;" id="rmDreVariaveis">—</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; padding:10px 0 3px;">
                             <span style="color:#e8e8e8; font-weight:700; font-size:14px;">= Lucro Líquido Real</span>
@@ -8181,6 +8185,7 @@
             const rat = dre.fixosRateio;
             const simplesPct = (((dre.cfg && dre.cfg.simples) || 0) * 100).toFixed(2).replace('.', ',');
             const fixosTxt = `(-) Custos Fixos${rat ? ` (${rat.dias}/${rat.diasNoMes} dias)` : ''}`;
+            const varTxt   = `(-) Custos Variáveis${rat ? ` (${rat.dias}/${rat.diasNoMes} dias)` : ''}`;
             const lucroCor = dre.lucroLiquido >= 0 ? '#4ade80' : '#e74c3c';
             const margCor  = dre.margemLiquida >= 10 ? '#4ade80' : dre.margemLiquida >= 0 ? '#f39c12' : '#e74c3c';
             const desp = (lbl, val, extra) => `
@@ -8199,7 +8204,8 @@
                         ${desp(`(-) Simples Nacional ${simplesPct}%`, dre.simples)}
                         ${desp('(-) Taxa Cartão (por método)', dre.taxasCartao)}
                         ${desp('(-) Custo Insumos', dre.cmv)}
-                        ${desp(fixosTxt, dre.custosFixos, ' border-bottom:1px solid #2a2a4a; padding-bottom:10px;')}
+                        ${desp(fixosTxt, dre.custosFixos)}
+                        ${desp(varTxt, dre.custosVariaveis, ' border-bottom:1px solid #2a2a4a; padding-bottom:10px;')}
                         <div style="display:flex; justify-content:space-between; padding:10px 0 3px;">
                             <span style="color:#e8e8e8; font-weight:700; font-size:14px;">= Lucro Líquido Real</span>
                             <span style="font-weight:700; font-size:14px; color:${lucroCor};">${formatarMoeda(dre.lucroLiquido)}</span>
@@ -8970,6 +8976,8 @@
                     set('rmDreInsumos',   `- ${formatarMoeda(_dre.cmv)}`);
                     set('rmDreFixosTxt',  `(-) Custos Fixos${_rat ? ` (${_rat.dias}/${_rat.diasNoMes} dias)` : ''}`);
                     set('rmDreFixos',     `- ${formatarMoeda(_dre.custosFixos)}`);
+                    set('rmDreVariaveisTxt', `(-) Custos Variáveis${_rat ? ` (${_rat.dias}/${_rat.diasNoMes} dias)` : ''}`);
+                    set('rmDreVariaveis', `- ${formatarMoeda(_dre.custosVariaveis)}`);
 
                     const liqEl = document.getElementById('rmDreLucro');
                     if (liqEl) { liqEl.textContent = formatarMoeda(_dre.lucroLiquido); liqEl.style.color = _dre.lucroLiquido >= 0 ? '#4ade80' : '#e74c3c'; }
@@ -9272,7 +9280,18 @@
             return totalFixo * (inf.dias / inf.diasNoMes);
         }
 
-        // Dias decorridos do período (inclusivo) e dias reais do mês de início — base do rateio dos fixos.
+        // Custos variáveis rateados pelo MESMO critério dos fixos. Entram na DRE desde
+        // 09/2026: um "lucro líquido" que ignorava o custo variável não era líquido.
+        function _finVariaveisRateado(periodo, periodKey) {
+            const key = (periodKey !== undefined) ? periodKey : _finPeriod;
+            const totalVar = variableCosts.reduce((s,c) => s + (c.value || 0), 0);
+            if (!periodo || key === 'todos') return totalVar;
+            const inf = _finFixosDias(periodo);
+            return totalVar * (inf.dias / inf.diasNoMes);
+        }
+
+        // Dias decorridos do período (inclusivo) e dias reais do mês de início — base do rateio
+        // dos fixos E dos variáveis.
         function _finFixosDias(periodo) {
             const d0 = new Date(periodo.start.getFullYear(), periodo.start.getMonth(), periodo.start.getDate());
             const d1 = new Date(periodo.end.getFullYear(), periodo.end.getMonth(), periodo.end.getDate());
@@ -9282,7 +9301,7 @@
         }
 
         // Calcula DRE estruturado a partir de agregados
-        function _finDre(agg, pag, cfg, fixos) {
+        function _finDre(agg, pag, cfg, fixos, variaveis) {
             const fat = agg.faturamento || 0;
             const simplesValor = fat * cfg.simples;
             const receitaLiq   = fat - simplesValor;
@@ -9290,7 +9309,8 @@
             const lucroBruto   = receitaLiq - cmv;
             const taxaCartao   = pag.pix*cfg.taxaPix + pag.debito*cfg.taxaDebito + pag.credito*cfg.taxaCredito + pag.vr*cfg.taxaVR + pag.cartao*cfg.taxaCartao;
             const ebitda       = lucroBruto - taxaCartao;
-            const lucroLiq     = ebitda - fixos;
+            const varRateado   = variaveis || 0;
+            const lucroLiq     = ebitda - fixos - varRateado;
             const pct = v => fat > 0 ? (v/fat)*100 : 0;
             return {
                 fat, simplesValor, simplesPct: pct(simplesValor),
@@ -9300,6 +9320,7 @@
                 taxaCartao, taxaPct: pct(taxaCartao),
                 ebitda, ebitdaPct: pct(ebitda),
                 fixos, fixosPct: pct(fixos),
+                variaveis: varRateado, variaveisPct: pct(varRateado),
                 lucroLiq, margemLiqPct: pct(lucroLiq),
                 pag, cfg
             };
@@ -9332,12 +9353,14 @@
             if (periodKey === 'mes') _mixCartaoMes = { debito: pag.debito || 0, credito: pag.credito || 0 };
             const cfg   = _finReadCfg();
             const fixos = _finFixosRateado({ start, end }, periodKey);
-            const dre   = _finDre(agg, pag, cfg, fixos);
+            const variaveis = _finVariaveisRateado({ start, end }, periodKey);
+            const dre   = _finDre(agg, pag, cfg, fixos, variaveis);
             if (periodKey === 'mes') _cmvRealMes = dre.fat > 0 ? (dre.cmv / dre.fat) * 100 : null;
             dre.faturamento   = dre.fat;
             dre.simples       = dre.simplesValor;
             dre.taxasCartao   = dre.taxaCartao;
             dre.custosFixos   = dre.fixos;
+            dre.custosVariaveis = dre.variaveis;
             dre.lucroLiquido  = dre.lucroLiq;
             dre.margemLiquida = dre.margemLiqPct;
             // info de rateio dos fixos (p/ rótulo); null em 'todos' (integral, sem rateio por dias)
@@ -9483,10 +9506,10 @@
             const saiuNotas = notasPagas.reduce((s, n) => s + (parseFloat(n.total) || 0), 0);
             // 2) Custos fixos — rateio CANÔNICO, mesmo valor da linha da DRE.
             const saiuFixos = dre.fixos || 0;
-            // 3) Custos variáveis — ficam FORA da DRE de propósito, mas aqui ENTRAM:
-            //    é dinheiro que sai. Rateados pelo mesmo fator dos fixos.
+            // 3) Custos variáveis — desde 09/2026 também entram na DRE. Aqui reusamos a
+            //    MESMA linha rateada (dre.variaveis) para caixa e DRE nunca divergirem.
             const varMensal     = (variableCosts || []).reduce((s, c) => s + (c.value || 0), 0);
-            const saiuVariaveis = varMensal * fator;
+            const saiuVariaveis = dre.variaveis || 0;
             // 4) Retiradas do dono (calendário) — mesma função que a DRE usa.
             const saiuRetiradas = dre.retiradas || 0;
 
@@ -9736,7 +9759,7 @@
                         <div style="font-size:11px; font-weight:700; color:#e74c3c; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">↑ Saídas de caixa</div>
                         ${linhaSaida('Notas de compra pagas', f.saiuNotas, `${f.notasPagas.length} nota(s) · pela data em que o pagamento foi marcado`)}
                         ${linhaSaida('Custos fixos', f.saiuFixos, f.periodKey === 'todos' ? 'integral' : `rateados: ${_finFixosDias(f.periodo).dias}/${_finFixosDias(f.periodo).diasNoMes} dias`)}
-                        ${linhaSaida('Custos variáveis', f.saiuVariaveis, `${fmt(f.varMensal)}/mês${f.periodKey === 'todos' ? '' : ' rateado'} · fora da DRE, dentro do caixa`)}
+                        ${linhaSaida('Custos variáveis', f.saiuVariaveis, `${fmt(f.varMensal)}/mês${f.periodKey === 'todos' ? '' : ' rateado'} · descontado também na DRE`)}
                         ${linhaSaida('Retiradas do dono', f.saiuRetiradas, 'lançadas no calendário')}
                         <div style="display:flex; justify-content:space-between; padding:9px 0 2px; margin-top:6px; border-top:1px solid #2a2a2a;">
                             <span style="color:#e8e8e8; font-weight:700; font-size:13px;">Total que saiu</span>
