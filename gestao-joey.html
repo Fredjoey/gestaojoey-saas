@@ -2188,6 +2188,16 @@
                 err => console.warn('[extrato MP] escuta caiu', err));
         }
 
+        // Pedidos por janela de ts, para casar com as transações do extrato.
+        // Query por RANGE (índice de campo único, automático) em vez do getDocs da
+        // coleção inteira que o fbQueryPedidos faz — são ~2.800 pedidos e isso roda
+        // a cada troca de período.
+        async function fbGetPedidosPorTs(iniMs, fimMs) {
+            const snap = await getDocs(query(collection(db, `clientes/${slug}/pedidos`),
+                where('ts', '>=', iniMs), where('ts', '<=', fimMs)));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+
         async function fbGetExtratos() {
             const snap = await getDocs(collection(db, `clientes/${slug}/extratos`));
             return snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -2215,7 +2225,7 @@
             return map;
         }
 
-        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbQueryFechamentos, fbGetEntreguesMes, fbGetCatalogoStatus, fbQueryExtrato, fbGetExtratos, fbEscutarExtratosMP, slug };
+        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbQueryFechamentos, fbGetEntreguesMes, fbGetCatalogoStatus, fbQueryExtrato, fbGetExtratos, fbEscutarExtratosMP, fbGetPedidosPorTs, slug };
 
     </script>
     <script>
@@ -9464,6 +9474,7 @@
         // ═══════════════════════════════════════════════════════════════════════════
         let _extCache = null, _extFiltro = 'todas', _extFonte = 'todas';
         let _extPeriodo = null, _extEscutaLigada = false, _extStatusMP = {};
+        let _extNivelPII = 'nome';   // 'contato' só quando o dono pede
 
         function _extLiberado() { return (window._fb && window._fb.slug) === 'joey'; }
 
@@ -9476,8 +9487,16 @@
             _extLigarEscutaMP();
             const ini = _anaDateToStr(periodo.start), fim = _anaDateToStr(periodo.end);
             try {
-                _extCache = { transacoes: await window._fb.fbQueryExtrato(ini, fim),
-                              extratos:   await window._fb.fbGetExtratos(), ini, fim };
+                const transacoes = await window._fb.fbQueryExtrato(ini, fim);
+                // Janela dos pedidos ampliada em 1 dia de cada lado: o cartão liquida
+                // depois do pedido, então o par pode estar fora do período exibido.
+                const iniMs = Date.parse(ini + 'T00:00:00-03:00') - 86400000;
+                const fimMs = Date.parse(fim + 'T23:59:59-03:00') + 86400000;
+                let pedidos = [];
+                try { pedidos = await window._fb.fbGetPedidosPorTs(iniMs, fimMs); }
+                catch (e) { console.warn('[extrato] não consegui carregar pedidos para casar', e); }
+                _extCache = { transacoes, extratos: await window._fb.fbGetExtratos(),
+                              casos: _extCasar(transacoes, pedidos), ini, fim };
             } catch (e) {
                 console.error('[extrato]', e);
                 const el = document.getElementById('extContainer');
@@ -9511,8 +9530,88 @@
             });
         }
 
+        // Selo do pedido casado. Exato = laranja sólido; aproximado = tracejado com
+        // "≈", para ninguém confundir um palpite com um identificador.
+        function _extPedidoHtml(t) {
+            const c = _extCache && _extCache.casos && _extCache.casos.get(t.chaveNatural);
+            if (!c) return '';
+            const cli = _extProjetarCliente(c.pedido, _extNivelPII);
+            const nome = cli.nome ? ' · ' + _calEsc(cli.nome) : '';
+            const tel  = cli.tel  ? ' · ' + _calEsc(cli.tel)  : '';
+            const est = c.exato
+                ? 'color:#E87722; border:1px solid rgba(232,119,34,.45);'
+                : 'color:#a89078; border:1px dashed rgba(232,119,34,.4);';
+            const dica = c.exato ? ('casado por ' + c.via + ' — exato') : ('casado por ' + c.via + ' — APROXIMADO, confira');
+            return ' <span title="' + dica + '" style="' + est + ' border-radius:5px; padding:1px 6px; font-size:10px; white-space:nowrap;">'
+                 + (c.exato ? '' : '≈ ') + '#' + _calEsc(c.pedido.id) + nome + tel + '</span>';
+        }
+
         function extFiltrar(v) { _extFiltro = v; _extRender(); }
         function extFonte(v)   { _extFonte  = v; _extRender(); }
+        function extTelefone() { _extNivelPII = (_extNivelPII === 'contato') ? 'nome' : 'contato'; _extRender(); }
+
+        // ── LIGAR A TRANSAÇÃO AO PEDIDO ──────────────────────────────────────
+        // Três caminhos, medidos no extrato real de agosto (434 entradas do MP):
+        //   1. external_reference → EXATO. Carimbado desde 01/09; em agosto dá 0.
+        //   2. pixId × SOURCE_ID  → EXATO. Casou 247 de 254 (97%), R$ 18.163.
+        //   3. cartão: valor + janela de tempo → APROXIMADO, marcado como tal.
+        //
+        // A janela de 120 min não é chute: medida contra os dados. Com 30 min só
+        // 29 de 137 casavam; com 120 min, 115 casam sozinhos (84%). A defasagem é
+        // o tempo de entrega — o pedido nasce quando é feito e o cartão passa
+        // quando o motoboy chega.
+        //
+        // Candidato ambíguo NÃO casa: dois pedidos do mesmo valor na mesma janela
+        // ficam sem par, porque um palpite errado aqui é pior que um vazio.
+        const EXT_JANELA_CARTAO_MIN = 120;
+
+        // PROJEÇÃO de PII (lista do que ENTRA), no mesmo espírito do CAMPOS_CLIENTE
+        // do joeyia.js — nunca blacklist. Campo novo de PII no pedido não vaza por
+        // padrão. Nível 'nome' é o default; 'contato' acrescenta o telefone e só
+        // acontece quando o dono liga o botão.
+        const EXT_CAMPOS_CLIENTE = { nome: ['nome'], contato: ['nome', 'tel'] };
+        function _extProjetarCliente(pedido, nivel) {
+            const campos = EXT_CAMPOS_CLIENTE[nivel] || EXT_CAMPOS_CLIENTE.nome;
+            const c = (pedido && pedido.cliente) || {};
+            const out = {};
+            campos.forEach(k => { if (c[k]) out[k] = c[k]; });
+            return out;
+        }
+
+        // Devolve Map: chaveNatural da transação → { pedido, exato, via }.
+        function _extCasar(transacoes, pedidos) {
+            const casos = new Map();
+            if (!pedidos || !pedidos.length) return casos;
+
+            const porId    = new Map(pedidos.map(p => [String(p.id), p]));
+            const porPixId = new Map();
+            pedidos.forEach(p => { if (p.pixId) porPixId.set(String(p.pixId), p); });
+            const usados = new Set();
+
+            const entradasMP = transacoes.filter(t => (t.fonte === 'mercadopago') && t.tipo === 'entrada');
+
+            // EXATOS primeiro, para não gastar um pedido num casamento aproximado.
+            entradasMP.forEach(t => {
+                let p = null, via = null;
+                if (t.pedidoId && porId.has(String(t.pedidoId))) { p = porId.get(String(t.pedidoId)); via = 'referência'; }
+                else if (t.idExterno && porPixId.has(String(t.idExterno))) { p = porPixId.get(String(t.idExterno)); via = 'Pix'; }
+                if (p && !usados.has(p.id)) { usados.add(p.id); casos.set(t.chaveNatural, { pedido: p, exato: true, via }); }
+            });
+
+            // APROXIMADO: só cartão, só com candidato único.
+            const FORMAS = ['credito', 'debito', 'cartao'];
+            const cartoes = pedidos.filter(p => FORMAS.indexOf(String(p.pagamento || '').toLowerCase()) >= 0);
+            entradasMP.filter(t => t.natureza === 'cartao' && !casos.has(t.chaveNatural)).forEach(t => {
+                const alvo = Number(t.dataHoraMs) || 0;
+                const cand = cartoes.filter(p => !usados.has(p.id)
+                    && Math.abs((Number(p.total) || 0) - t.valor) < 0.005
+                    && Math.abs((Number(p.ts) || 0) - alvo) <= EXT_JANELA_CARTAO_MIN * 60000);
+                if (cand.length !== 1) return;          // 0 ou ambíguo → deixa sem casar
+                usados.add(cand[0].id);
+                casos.set(t.chaveNatural, { pedido: cand[0], exato: false, via: 'valor e horário' });
+            });
+            return casos;
+        }
 
         // TRADUZ o jargão da API do Mercado Pago para português de dono de
         // restaurante. É só exibição: lê tipoOriginal/metodo/tipo que já estão
@@ -9605,8 +9704,7 @@
                     <td style="padding:7px 8px; white-space:nowrap;"><span style="font-size:10px; color:${(_EXT_FONTES[t.fonte || 'infinitepay'] || {}).cor || '#888'};">${_calEsc((_EXT_FONTES[t.fonte || 'infinitepay'] || {}).rot || t.fonte || '—')}</span></td>
                     <td style="padding:7px 8px;">${t.natureza === 'repasse'
                         ? '<span style="background:rgba(96,165,250,.15); color:#60a5fa; border-radius:4px; padding:2px 7px; font-size:11px;">repasse maquininha</span>'
-                        : '<span style="color:var(--text);">' + _calEsc(_extRotulo(t)) + '</span>'
-                             + (t.pedidoId ? ' <span style="color:#E87722; font-size:10px;">#' + _calEsc(t.pedidoId) + '</span>' : '')}</td>
+                        : '<span style="color:var(--text);">' + _calEsc(_extRotulo(t)) + '</span>' + _extPedidoHtml(t)}</td>
                     <td style="padding:7px 8px; color:#777; font-size:11px;">${_calEsc(t.descricao || '')}</td>
                     <td style="padding:7px 8px; text-align:right; white-space:nowrap; font-weight:700; color:${t.tipo === 'entrada' ? '#4ade80' : '#e74c3c'};">${t.tipo === 'entrada' ? '+' : '−'} ${fmt(t.valor)}</td>
                 </tr>`).join('');
@@ -9639,6 +9737,8 @@
                         <span style="display:flex; gap:6px; flex-wrap:wrap;">
                             ${fontes.length > 1 ? btnF('todas', 'Todas as fontes') + fontes.map(x => btnF(x, (_EXT_FONTES[x] || {}).rot || x)).join('') + '<span style="width:10px"></span>' : ''}
                             ${btn('todas', 'Todas')}${btn('entrada', 'Entradas')}${btn('saida', 'Saídas')}
+                            <button onclick="extTelefone()" title="Mostrar o telefone do cliente nas linhas casadas"
+                                style="background:${_extNivelPII === 'contato' ? '#3a3a5a' : 'transparent'}; color:${_extNivelPII === 'contato' ? '#fff' : '#888'}; border:1px solid ${_extNivelPII === 'contato' ? '#5a5a8a' : '#444'}; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer;">📞 telefone</button>
                         </span>
                     </div>
                     <div style="overflow-x:auto;">
