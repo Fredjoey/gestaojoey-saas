@@ -1278,7 +1278,9 @@
                     <input type="file" id="extArquivo" accept=".csv,text/csv" style="display:none" onchange="extImportar(this)">
                     <button type="button" id="extBtn" class="secondary" onclick="document.getElementById('extArquivo').click()"
                             style="border-color:#E87722; color:#E87722; background:transparent;">⬆️ Importar CSV do extrato</button>
-                    <span id="extStatus" style="font-size:12px; color:#888;">app.infinitepay.io → Seu extrato → CSV</span>
+                    <button type="button" id="extBtnMP" class="secondary" onclick="extAtualizarMP()"
+                            style="border-color:#60a5fa; color:#60a5fa; background:transparent;">🔄 Atualizar Mercado Pago</button>
+                    <span id="extStatus" style="font-size:12px; color:#888;">app.infinitepay.io → Seu extrato → CSV · o MP entra sozinho</span>
                 </div>
                 <div id="extContainer" style="margin-bottom:2rem;"></div>
             </div>
@@ -9450,7 +9452,7 @@
         // nota traz nome fantasia. A conciliação com notas fica para o Mercado Pago
         // (Parte B), se for lá que o fornecedor é pago.
         // ═══════════════════════════════════════════════════════════════════════════
-        let _extCache = null, _extFiltro = 'todas';
+        let _extCache = null, _extFiltro = 'todas', _extFonte = 'todas';
 
         function _extLiberado() { return (window._fb && window._fb.slug) === 'joey'; }
 
@@ -9473,12 +9475,19 @@
         }
 
         function extFiltrar(v) { _extFiltro = v; _extRender(); }
+        function extFonte(v)   { _extFonte  = v; _extRender(); }
+
+        // Rótulo curto da fonte — some quando só existe uma, para não poluir.
+        const _EXT_FONTES = { infinitepay: { rot: 'InfinitePay', cor: '#a78bfa' },
+                              mercadopago: { rot: 'Mercado Pago', cor: '#60a5fa' } };
 
         function _extRender() {
             const el = document.getElementById('extContainer');
             if (!el || !_extCache) return;
-            const ts  = _extCache.transacoes || [];
-            const fmt = (v) => formatarMoeda(v || 0);
+            const todas = _extCache.transacoes || [];
+            const ts    = _extFonte === 'todas' ? todas : todas.filter(t => (t.fonte || 'infinitepay') === _extFonte);
+            const fontes = [...new Set(todas.map(t => t.fonte || 'infinitepay'))];
+            const fmt   = (v) => formatarMoeda(v || 0);
 
             if (!ts.length) {
                 el.innerHTML = `<div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem; color:var(--text2); font-size:13px;">
@@ -9516,12 +9525,15 @@
             const visiveis = ts.filter(t => _extFiltro === 'todas' || t.tipo === _extFiltro)
                 .sort((a, b) => String(b.data + b.hora).localeCompare(String(a.data + a.hora)));
             const btn = (v, rot) => `<button onclick="extFiltrar('${v}')" style="background:${_extFiltro === v ? '#E87722' : 'transparent'}; color:${_extFiltro === v ? '#fff' : '#aaa'}; border:1px solid ${_extFiltro === v ? '#E87722' : '#444'}; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer;">${rot}</button>`;
+            const btnF = (v, rot) => `<button onclick="extFonte('${v}')" style="background:${_extFonte === v ? '#3a3a5a' : 'transparent'}; color:${_extFonte === v ? '#fff' : '#888'}; border:1px solid ${_extFonte === v ? '#5a5a8a' : '#444'}; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer;">${rot}</button>`;
             const linhas = visiveis.slice(0, 200).map(t => `
                 <tr style="border-bottom:1px solid #2a2a2a;">
                     <td style="padding:7px 8px; color:var(--text2); white-space:nowrap;">${_calEsc(t.data)} <span style="color:#666;">${_calEsc(String(t.hora || '').slice(0, 5))}</span></td>
+                    <td style="padding:7px 8px; white-space:nowrap;"><span style="font-size:10px; color:${(_EXT_FONTES[t.fonte || 'infinitepay'] || {}).cor || '#888'};">${_calEsc((_EXT_FONTES[t.fonte || 'infinitepay'] || {}).rot || t.fonte || '—')}</span></td>
                     <td style="padding:7px 8px;">${t.natureza === 'repasse'
                         ? '<span style="background:rgba(96,165,250,.15); color:#60a5fa; border-radius:4px; padding:2px 7px; font-size:11px;">repasse maquininha</span>'
-                        : '<span style="color:var(--text);">' + _calEsc(t.contraparte || '—') + '</span>'}</td>
+                        : '<span style="color:var(--text);">' + _calEsc(t.contraparte || t.metodo || t.natureza || '—') + '</span>'
+                             + (t.pedidoId ? ' <span style="color:#E87722; font-size:10px;">#' + _calEsc(t.pedidoId) + '</span>' : '')}</td>
                     <td style="padding:7px 8px; color:#777; font-size:11px;">${_calEsc(t.descricao || '')}</td>
                     <td style="padding:7px 8px; text-align:right; white-space:nowrap; font-weight:700; color:${t.tipo === 'entrada' ? '#4ade80' : '#e74c3c'};">${t.tipo === 'entrada' ? '+' : '−'} ${fmt(t.valor)}</td>
                 </tr>`).join('');
@@ -9551,12 +9563,16 @@
                 <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
                         <span style="font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Transações</span>
-                        <span style="display:flex; gap:6px;">${btn('todas', 'Todas')}${btn('entrada', 'Entradas')}${btn('saida', 'Saídas')}</span>
+                        <span style="display:flex; gap:6px; flex-wrap:wrap;">
+                            ${fontes.length > 1 ? btnF('todas', 'Todas as fontes') + fontes.map(x => btnF(x, (_EXT_FONTES[x] || {}).rot || x)).join('') + '<span style="width:10px"></span>' : ''}
+                            ${btn('todas', 'Todas')}${btn('entrada', 'Entradas')}${btn('saida', 'Saídas')}
+                        </span>
                     </div>
                     <div style="overflow-x:auto;">
                         <table style="width:100%; border-collapse:collapse; font-size:12px;">
                             <thead><tr style="border-bottom:1px solid #3a3a3a; color:#777; font-size:11px; text-transform:uppercase;">
                                 <th style="text-align:left; padding:6px 8px;">Quando</th>
+                                <th style="text-align:left; padding:6px 8px;">Fonte</th>
                                 <th style="text-align:left; padding:6px 8px;">Quem</th>
                                 <th style="text-align:left; padding:6px 8px;">Detalhe</th>
                                 <th style="text-align:right; padding:6px 8px;">Valor</th>
@@ -10760,6 +10776,26 @@
           _extSt((e && e.message) || 'Não consegui importar o arquivo.', '#e74c3c');
         } finally {
           if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        }
+      };
+
+      // Pede ao MP o relatório do período que está na tela. O arquivo NÃO vem na
+      // hora (leva ~1 min); a função agendada coletarExtratoMP colhe e importa.
+      const _extGerarMP = httpsCallable(_extFns, 'gerarExtratoMP');
+      window.extAtualizarMP = async function () {
+        const b = document.getElementById('extBtnMP');
+        if (b) { b.disabled = true; b.style.opacity = '.6'; }
+        _extSt('Pedindo o relatório ao Mercado Pago…', '#60a5fa');
+        try {
+          const p = (typeof _finPeriodRange === 'function') ? _finPeriodRange(_finPeriod) : null;
+          if (!p) throw new Error('período indisponível');
+          const r = await _extGerarMP({ slug: _extSlug(), inicio: _anaDateToStr(p.start), fim: _anaDateToStr(p.end) });
+          _extSt((r && r.data && r.data.aviso) || 'Pedido enviado.', '#60a5fa');
+        } catch (e) {
+          console.error('[extrato MP]', e);
+          _extSt((e && e.message) || 'Não consegui pedir o relatório.', '#e74c3c');
+        } finally {
+          if (b) { b.disabled = false; b.style.opacity = '1'; }
         }
       };
 
