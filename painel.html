@@ -11007,7 +11007,7 @@ function renderModalMesaBody(mesaId, mesaNome, m) {
     </div>
     ${pagHtml}
     ${ocupada
-      ? `<button onclick="contaFechar('${mesaId}','${nomeJs}')" class="conta-acao" style="width:100%;margin-top:16px;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);color:#34d399">💰 Fechar conta</button>`
+      ? `<button onclick="contaFechar('${mesaId}','${nomeJs}',this)" class="conta-acao" style="width:100%;margin-top:16px;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);color:#34d399">💰 Fechar conta</button>`
       : `<div style="text-align:center;color:var(--text3);padding:1.25rem;font-size:13px">🟢 Mesa livre — nenhuma conta aberta.</div>`}
   `;
 }
@@ -11182,20 +11182,72 @@ async function contaEstornar(mesaId, idx) {
   try { await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ conta: st }, { merge: true }); notify('Pagamento estornado'); }
   catch (e) { console.error('[estornar]', e); notify('Erro ao estornar', 'error'); }
 }
-async function contaFechar(mesaId, mesaNome) {
+// ── FECHAR CONTA: proteção contra duplo clique ───────────────────────────────
+// Clicar duas vezes em "Fechar conta" gravava um SEGUNDO jogo inteiro de
+// fechamentos, porque .add() gera id novo a cada chamada e não havia trava
+// nenhuma. Rendeu R$ 5.699 de receita fantasma entre jun e ago/2026 (18 grupos,
+// 22 documentos), quase tudo na Mesa 4 e sempre no mesmo minuto.
+//
+// São TRÊS camadas, de propósito — trava de botão sozinha não sobrevive a duas
+// abas abertas nem a um clique que passa antes do disable:
+//   1. reentrância em memória (por mesa) + botão desabilitado;
+//   2. id DETERMINÍSTICO: a mesma conta fechada de novo no mesmo minuto vira o
+//      MESMO documento (set em vez de add), então reescreve em vez de duplicar;
+//   3. varredura dos últimos 3 min da mesma mesa, para o caso que o id não pega
+//      (duas abas + virada de minuto). Consome 1 a 1: se a conta legitimamente
+//      tem dois pagamentos iguais e só um já entrou, o outro ainda é gravado.
+const _mesasFechando = new Set();
+
+// AAAAMMDD-mesa-HHMM-i — legível e estável entre cliques da mesma conta.
+function _fechamentoId(mesaId, data, hora, i) {
+  const [d, m, a] = String(data).split('/');
+  const mesa = String(mesaId).replace(/[^a-zA-Z0-9_-]/g, '');
+  return `${a}${m}${d}-${mesa}-${String(hora).replace(/:/g, '')}-${i}`;
+}
+
+// Fechamentos desta mesa nos últimos 3 minutos (rede da 3ª camada).
+async function _fechamentosRecentesDaMesa(mesaId) {
+  try {
+    const snap = await db.collection(`clientes/${slug}/fechamentos`).where('mesa', '==', mesaId).get();
+    const limite = Date.now() - 3 * 60 * 1000;
+    return snap.docs.map(d => d.data()).filter(x => {
+      const ms = (x.timestamp && x.timestamp.toMillis) ? x.timestamp.toMillis() : 0;
+      return ms >= limite;
+    });
+  } catch (e) {
+    console.warn('[contaFechar] checagem de duplicata falhou (segue gravando)', e);
+    return [];   // na dúvida grava: perder fechamento é pior que duplicar
+  }
+}
+
+async function contaFechar(mesaId, mesaNome, btn) {
+  if (_mesasFechando.has(mesaId)) { notify('Fechando a conta… aguarde.', 'warning'); return; }
   const { total, pago, saldoRaw, pagamentos } = _contaTotais(mesaId);
   if (total <= 0 && pagamentos.length === 0) { notify('Conta vazia', 'warning'); return; }
   if (saldoRaw > 0.005) {
     if (!confirm('Ainda falta R$ ' + saldoRaw.toFixed(2).replace('.', ',') + ' para quitar a conta.\nFechar a mesa mesmo assim?')) return;
   }
+  _mesasFechando.add(mesaId);
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; btn.style.pointerEvents = 'none'; btn.textContent = '⏳ Fechando…'; }
   try {
     const now = new Date();
     const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     const hora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
     // 1) registra cada pagamento no Fechamento de Caixa (reconciliação por forma)
-    for (const pg of pagamentos) {
-      await db.collection(`clientes/${slug}/fechamentos`).add({
-        mesa: mesaId, mesaNome, total: Number(pg.valor) || 0, pagamento: pg.forma,
+    const recentes = await _fechamentosRecentesDaMesa(mesaId);
+    for (let i = 0; i < pagamentos.length; i++) {
+      const pg = pagamentos[i];
+      const valor = Number(pg.valor) || 0;
+      const idx = recentes.findIndex(x => (Number(x.total) || 0) === valor
+        && String(x.pagamento || '') === String(pg.forma || '')
+        && String(x.descricao || '') === String(pg.descricao || ''));
+      if (idx >= 0) {                       // já entrou há pouco — consome e pula
+        recentes.splice(idx, 1);
+        console.warn('[contaFechar] pagamento idêntico recente ignorado', { mesaId, valor, forma: pg.forma });
+        continue;
+      }
+      await db.collection(`clientes/${slug}/fechamentos`).doc(_fechamentoId(mesaId, data, hora, i)).set({
+        mesa: mesaId, mesaNome, total: valor, pagamento: pg.forma,
         descricao: pg.descricao || '', data, hora, tipo: 'mesa-conta',
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -11216,7 +11268,13 @@ async function contaFechar(mesaId, mesaNome) {
     );
     closeOrderModal();
     notify(`Conta da ${mesaNome} fechada! Recebido R$ ` + pago.toFixed(2).replace('.', ','));
-  } catch (e) { console.error('[contaFechar]', e); notify('Erro ao fechar conta: ' + e.message, 'error'); }
+  } catch (e) {
+    console.error('[contaFechar]', e);
+    notify('Erro ao fechar conta: ' + e.message, 'error');
+  } finally {
+    _mesasFechando.delete(mesaId);
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.pointerEvents = ''; btn.textContent = '💰 Fechar conta'; }
+  }
 }
 
 async function alterarStatusMesa(mesaId, novoStatus, btn) {
