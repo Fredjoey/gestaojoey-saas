@@ -1280,7 +1280,7 @@
                             style="border-color:#E87722; color:#E87722; background:transparent;">⬆️ Importar CSV do extrato</button>
                     <button type="button" id="extBtnMP" class="secondary" onclick="extAtualizarMP()"
                             style="border-color:#60a5fa; color:#60a5fa; background:transparent;">🔄 Atualizar Mercado Pago</button>
-                    <span id="extStatus" style="font-size:12px; color:#888;">app.infinitepay.io → Seu extrato → CSV · o MP entra sozinho</span>
+                    <span id="extStatus" style="font-size:12px; color:#888;">app.infinitepay.io → Seu extrato → CSV · o Mercado Pago entra sozinho todo dia de madrugada</span>
                 </div>
                 <div id="extContainer" style="margin-bottom:2rem;"></div>
             </div>
@@ -2178,6 +2178,16 @@
                 where('data', '>=', dataInicio), where('data', '<=', dataFim)));
             return snap.docs.map(d => ({ id: d.id, ...d.data() }));
         }
+        // Avisa quando um pedido de relatório do MP muda de estado. É isto que faz a
+        // seção ⑧ se atualizar sozinha: a coleta é assíncrona (o MP monta o arquivo e
+        // a função agendada passa de 5 em 5 min), então sem escuta o dono via tela
+        // velha e achava que tinha quebrado.
+        function fbEscutarExtratosMP(cb) {
+            return onSnapshot(collection(db, `clientes/${slug}/extratosMP`),
+                snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+                err => console.warn('[extrato MP] escuta caiu', err));
+        }
+
         async function fbGetExtratos() {
             const snap = await getDocs(collection(db, `clientes/${slug}/extratos`));
             return snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -2205,7 +2215,7 @@
             return map;
         }
 
-        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbQueryFechamentos, fbGetEntreguesMes, fbGetCatalogoStatus, fbQueryExtrato, fbGetExtratos, slug };
+        window._fb = { fbSave, fbMerge, fbDelete, fbGetAll, fbSaveAll, fbGetOne, fbLog, onSnapshot, collection, doc, db, fbQueryPedidos, fbQueryFechamentos, fbGetEntreguesMes, fbGetCatalogoStatus, fbQueryExtrato, fbGetExtratos, fbEscutarExtratosMP, slug };
 
     </script>
     <script>
@@ -9453,6 +9463,7 @@
         // (Parte B), se for lá que o fornecedor é pago.
         // ═══════════════════════════════════════════════════════════════════════════
         let _extCache = null, _extFiltro = 'todas', _extFonte = 'todas';
+        let _extPeriodo = null, _extEscutaLigada = false, _extStatusMP = {};
 
         function _extLiberado() { return (window._fb && window._fb.slug) === 'joey'; }
 
@@ -9461,6 +9472,8 @@
             if (!sec) return;
             if (!_extLiberado()) { sec.style.display = 'none'; return; }
             sec.style.display = '';
+            _extPeriodo = periodo;
+            _extLigarEscutaMP();
             const ini = _anaDateToStr(periodo.start), fim = _anaDateToStr(periodo.end);
             try {
                 _extCache = { transacoes: await window._fb.fbQueryExtrato(ini, fim),
@@ -9472,6 +9485,30 @@
                 return;
             }
             _extRender();
+        }
+
+        // Liga UMA vez. Quando um pedido do MP vira 'ok', recarrega as transações do
+        // período que está na tela — sem F5 e sem refazer a DRE inteira (_finUpdate
+        // recalcularia tudo à toa).
+        function _extLigarEscutaMP() {
+            if (_extEscutaLigada || !window._fb || !window._fb.fbEscutarExtratosMP) return;
+            _extEscutaLigada = true;
+            window._fb.fbEscutarExtratosMP(docs => {
+                let chegou = false;
+                docs.forEach(d => {
+                    const antes = _extStatusMP[d.id];
+                    _extStatusMP[d.id] = d.status;
+                    if (antes && antes !== 'ok' && d.status === 'ok') chegou = true;
+                    if (antes && antes !== 'erro' && d.status === 'erro') {
+                        const el = document.getElementById('extStatus');
+                        if (el) { el.textContent = 'Mercado Pago: ' + (d.erro || 'falhou ao importar.'); el.style.color = '#e74c3c'; }
+                    }
+                });
+                if (!chegou || !_extPeriodo) return;
+                const el = document.getElementById('extStatus');
+                if (el) { el.textContent = '✓ Mercado Pago chegou — atualizando…'; el.style.color = '#27ae60'; }
+                _extUpdate(_extPeriodo);
+            });
         }
 
         function extFiltrar(v) { _extFiltro = v; _extRender(); }
@@ -10790,7 +10827,8 @@
           const p = (typeof _finPeriodRange === 'function') ? _finPeriodRange(_finPeriod) : null;
           if (!p) throw new Error('período indisponível');
           const r = await _extGerarMP({ slug: _extSlug(), inicio: _anaDateToStr(p.start), fim: _anaDateToStr(p.end) });
-          _extSt((r && r.data && r.data.aviso) || 'Pedido enviado.', '#60a5fa');
+          _extSt((r && r.data && r.data.aviso)
+            || 'Pedido enviado. Pode levar até uns 6 minutos — a tela atualiza sozinha quando chegar.', '#60a5fa');
         } catch (e) {
           console.error('[extrato MP]', e);
           _extSt((e && e.message) || 'Não consegui pedir o relatório.', '#e74c3c');
