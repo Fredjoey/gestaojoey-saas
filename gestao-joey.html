@@ -9514,6 +9514,42 @@
         function extFiltrar(v) { _extFiltro = v; _extRender(); }
         function extFonte(v)   { _extFonte  = v; _extRender(); }
 
+        // TRADUZ o jargão da API do Mercado Pago para português de dono de
+        // restaurante. É só exibição: lê tipoOriginal/metodo/tipo que já estão
+        // gravados, então NÃO exige reimportar nada.
+        //
+        // O que cada um significa, conferido no relatório real de agosto:
+        //   PAYOUTS                        → dinheiro saindo do MP para outra conta
+        //   SETTLEMENT + available_money   → pagamento feito COM o saldo do MP
+        //                                    (R$15.098,16 em agosto — não é estorno
+        //                                     nem erro de sinal; o '-' vem do MP)
+        //   SETTLEMENT + pix/cartão        → a venda em si
+        //   SETTLEMENT sem método, centavos→ rendimento do saldo e o IR dele
+        //                                    (padrão +0,11 / -0,03 / +0,03 por dia)
+        function _extRotulo(t) {
+            if ((t.fonte || 'infinitepay') !== 'mercadopago') {
+                return t.contraparte || t.descricao || '—';
+            }
+            const tipo = String(t.tipoOriginal || '').toUpperCase();
+            const m    = String(t.metodo || '').toLowerCase();
+            const saida = t.tipo === 'saida';
+
+            if (tipo === 'PAYOUTS' || tipo.indexOf('WITHDRAW') >= 0) return 'Saque para outra conta';
+            if (tipo === 'DISPUTE' || tipo === 'CHARGEBACK')         return 'Contestação de cliente';
+            if (tipo === 'REFUND')                                   return 'Estorno ao cliente';
+
+            if (m === 'available_money') return saida ? 'Pagamento com saldo da conta' : 'Entrada no saldo';
+            if (m === 'pix')             return saida ? 'Pix enviado' : 'Venda no Pix';
+            if (/^deb/.test(m))          return 'Venda no débito';
+            if (/visa|master|elo|amex|hiper|cabal/.test(m)) return 'Venda no crédito';
+
+            // Sem método e valor de centavos: é a remuneração diária do saldo.
+            if (!m && Math.abs(Number(t.valor) || 0) < 0.5) {
+                return saida ? 'Imposto sobre o rendimento' : 'Rendimento do saldo';
+            }
+            return saida ? 'Outra saída' : 'Outra entrada';
+        }
+
         // Rótulo curto da fonte — some quando só existe uma, para não poluir.
         const _EXT_FONTES = { infinitepay: { rot: 'InfinitePay', cor: '#a78bfa' },
                               mercadopago: { rot: 'Mercado Pago', cor: '#60a5fa' } };
@@ -9548,7 +9584,7 @@
             // Para onde saiu — agrupado por contraparte (é o que esta conta responde bem)
             const porQuem = {};
             ts.filter(t => t.tipo === 'saida').forEach(t => {
-                const k = (t.contraparte || t.descricao || '—').toUpperCase();
+                const k = _extRotulo(t).toUpperCase();
                 porQuem[k] = (porQuem[k] || 0) + (Number(t.valor) || 0);
             });
             const destinos = Object.entries(porQuem).map(([nome, valor]) => ({ nome, valor }))
@@ -9569,7 +9605,7 @@
                     <td style="padding:7px 8px; white-space:nowrap;"><span style="font-size:10px; color:${(_EXT_FONTES[t.fonte || 'infinitepay'] || {}).cor || '#888'};">${_calEsc((_EXT_FONTES[t.fonte || 'infinitepay'] || {}).rot || t.fonte || '—')}</span></td>
                     <td style="padding:7px 8px;">${t.natureza === 'repasse'
                         ? '<span style="background:rgba(96,165,250,.15); color:#60a5fa; border-radius:4px; padding:2px 7px; font-size:11px;">repasse maquininha</span>'
-                        : '<span style="color:var(--text);">' + _calEsc(t.contraparte || t.metodo || t.natureza || '—') + '</span>'
+                        : '<span style="color:var(--text);">' + _calEsc(_extRotulo(t)) + '</span>'
                              + (t.pedidoId ? ' <span style="color:#E87722; font-size:10px;">#' + _calEsc(t.pedidoId) + '</span>' : '')}</td>
                     <td style="padding:7px 8px; color:#777; font-size:11px;">${_calEsc(t.descricao || '')}</td>
                     <td style="padding:7px 8px; text-align:right; white-space:nowrap; font-weight:700; color:${t.tipo === 'entrada' ? '#4ade80' : '#e74c3c'};">${t.tipo === 'entrada' ? '+' : '−'} ${fmt(t.valor)}</td>
