@@ -9549,6 +9549,19 @@
                  + (c.exato ? '' : '≈ ') + '#' + _calEsc(c.pedido.id) + nome + tel + '</span>';
         }
 
+        // POR QUE esta saída não tem nome. Sem dizer, a tela parece ter perdido
+        // informação — e a verdade é que o Mercado Pago não fornece.
+        //   saque (PAYOUTS)  → nem é "payment" na API: /v1/payments dá 404
+        //   pix enviado (MP) → é payment, mas vem com description null
+        //   pagamento c/ saldo → esse TEM nome, e o import preenche
+        function _extMotivoSemNome(t) {
+            if (t.fonte !== 'mercadopago' || t.tipo !== 'saida' || t.contraparte) return null;
+            if (t.natureza === 'saque') return 'saque para outra conta';
+            if (t.metodo === 'pix')     return 'Pix enviado';
+            if (t.metodo === 'available_money') return 'pagamento com saldo ainda sem detalhe';
+            return 'outras saídas do Mercado Pago';
+        }
+
         function extFiltrar(v) { _extFiltro = v; _extRender(); }
         function extFonte(v)   { _extFonte  = v; _extRender(); }
         function extTelefone() { _extNivelPII = (_extNivelPII === 'contato') ? 'nome' : 'contato'; _extRender(); }
@@ -9697,6 +9710,22 @@
             const restoQtd = Math.max(0, destinos.length - 12);
             const restoVal = destinos.slice(12).reduce((s, d) => s + d.valor, 0);
 
+            // O que o Mercado Pago NÃO informa — dito na cara, por motivo e valor.
+            const semNome = {};
+            ts.filter(t => t.tipo === 'saida').forEach(t => {
+                const m = _extMotivoSemNome(t);
+                if (m) semNome[m] = (semNome[m] || 0) + (Number(t.valor) || 0);
+            });
+            const semNomeItens = Object.entries(semNome).sort((a, b) => b[1] - a[1]);
+            const semNomeTotal = semNomeItens.reduce((s, [, v]) => s + v, 0);
+            const semNomeHtml = semNomeItens.length ? `
+                <div style="margin-top:14px; padding-top:12px; border-top:1px dashed #3a3a3a; font-size:11px; color:var(--text3); line-height:1.5;">
+                    <b style="color:#f0b429;">${fmt(semNomeTotal)} sem quem recebeu</b> — o Mercado Pago não informa:
+                    ${semNomeItens.map(([m, v]) => `${_calEsc(m)} ${fmt(v)}`).join(' · ')}.
+                    <br>Não é dado perdido no caminho: o relatório do MP não traz destinatário, e saque nem aparece como pagamento na API dele.
+                    O que dá para saber (pagamento de conta com saldo) já vem preenchido.
+                </div>` : '';
+
             const visiveis = ts.filter(t => _extFiltro === 'todas' || t.tipo === _extFiltro)
                 .sort((a, b) => String(b.data + b.hora).localeCompare(String(a.data + a.hora)));
             const btn = (v, rot) => `<button onclick="extFiltrar('${v}')" style="background:${_extFiltro === v ? '#E87722' : 'transparent'}; color:${_extFiltro === v ? '#fff' : '#aaa'}; border:1px solid ${_extFiltro === v ? '#E87722' : '#444'}; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer;">${rot}</button>`;
@@ -9732,6 +9761,7 @@
                     <div style="font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:14px;">Para onde saiu o dinheiro</div>
                     ${barras || '<div style="font-size:12px; color:var(--text3);">Nenhuma saída no período.</div>'}
                     ${restoQtd ? `<div style="font-size:11px; color:var(--text3); margin-top:8px;">+ ${restoQtd} destino(s) menores · ${fmt(restoVal)}</div>` : ''}
+                    ${semNomeHtml}
                 </div>
 
                 <div style="background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px; padding:1.25rem; margin-bottom:20px;">
