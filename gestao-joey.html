@@ -10305,6 +10305,7 @@
                             ${linha('(−) Taxas de Cartão', dre.taxaCartao, dre.taxaPct, false, null, true, deltaInv(dre.taxaCartao, prev?.taxaCartao))}
                             ${linha('= EBITDA', dre.ebitda, dre.ebitdaPct, true, '#9b59b6')}
                             ${linha(`(−) Custos Fixos${dre.fixosRateio ? ` (${dre.fixosRateio.dias}/${dre.fixosRateio.diasNoMes} dias)` : ''}`, dre.fixos, dre.fixosPct, false, null, true, deltaInv(dre.fixos, prev?.fixos))}
+                            ${linha(`(−) Custos Variáveis${dre.fixosRateio ? ` (${dre.fixosRateio.dias}/${dre.fixosRateio.diasNoMes} dias)` : ''}`, dre.variaveis, dre.variaveisPct, false, null, true, deltaInv(dre.variaveis, prev?.variaveis))}
                             ${linha('= Lucro Líquido', dre.lucroLiq, dre.margemLiqPct, true, dre.lucroLiq >= 0 ? '#4ade80' : '#ff6b6b', false, delta(dre.lucroLiq, prev?.lucroLiq))}
                         </tbody>
                     </table>
@@ -10400,6 +10401,7 @@
                 { lbl:'Simples Nacional',val: dre.simplesValor,cor:'#9b59b6' },
                 { lbl:'Taxas de Cartão',val: dre.taxaCartao,  cor:'#f39c12' },
                 { lbl:'Custos Fixos',   val: dre.fixos,       cor:'#60a5fa' },
+                { lbl:'Custos Variáveis',val: dre.variaveis,  cor:'#14b8a6' },
                 { lbl:dre.lucroLiq >= 0 ? 'Lucro Líquido' : 'Prejuízo', val: Math.abs(dre.lucroLiq), cor: dre.lucroLiq >= 0 ? '#4ade80' : '#5a1f1f' }
             ];
             const fmt = v => 'R$ ' + (v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -10557,6 +10559,7 @@
                     <tr><td>(−) Taxas de Cartão</td><td class="text-right neg">(${fmt(dre.taxaCartao)})</td><td class="text-right meta">${pct(dre.taxaPct)}</td></tr>
                     <tr class="total"><td><strong>= EBITDA</strong></td><td class="text-right">${fmt(dre.ebitda)}</td><td class="text-right meta">${pct(dre.ebitdaPct)}</td></tr>
                     <tr><td>(−) Custos Fixos</td><td class="text-right neg">(${fmt(dre.fixos)})</td><td class="text-right meta">${pct(dre.fixosPct)}</td></tr>
+                    <tr><td>(−) Custos Variáveis</td><td class="text-right neg">(${fmt(dre.variaveis)})</td><td class="text-right meta">${pct(dre.variaveisPct)}</td></tr>
                     <tr class="total"><td><strong>= Lucro Líquido</strong></td><td class="text-right ${dre.lucroLiq>=0?'pos':'neg'}">${fmt(dre.lucroLiq)}</td><td class="text-right meta">${pct(dre.margemLiqPct)}</td></tr>
                 </table>
 
@@ -10578,6 +10581,7 @@
                     <tr><td>Simples Nacional</td><td class="text-right">${fmt(dre.simplesValor)}</td><td class="text-right">${pct(dre.simplesPct)}</td></tr>
                     <tr><td>Taxas de Cartão</td><td class="text-right">${fmt(dre.taxaCartao)}</td><td class="text-right">${pct(dre.taxaPct)}</td></tr>
                     <tr><td>Custos Fixos</td><td class="text-right">${fmt(dre.fixos)}</td><td class="text-right">${pct(dre.fixosPct)}</td></tr>
+                    <tr><td>Custos Variáveis</td><td class="text-right">${fmt(dre.variaveis)}</td><td class="text-right">${pct(dre.variaveisPct)}</td></tr>
                     <tr class="total"><td><strong>${dre.lucroLiq>=0?'Lucro Líquido':'Prejuízo'}</strong></td><td class="text-right ${dre.lucroLiq>=0?'pos':'neg'}">${fmt(Math.abs(dre.lucroLiq))}</td><td class="text-right">${pct(Math.abs(dre.margemLiqPct))}</td></tr>
                 </table>
 
