@@ -3371,6 +3371,34 @@ function _mesmoTelefone(a, b) {
   return x.slice(-_SUFIXO_TEL) === y.slice(-_SUFIXO_TEL);
 }
 
+// Pedidos do Anota por telefone (8 últimos dígitos), buscados no cadastro de
+// clientes UM telefone por vez e guardados na sessão — o histórico do Anota é fixo.
+// A busca roda quando o pedido aparece (snapshot / Novo Pedido), não na impressão:
+// quando o operador confirma, o número já está aqui e o cupom sai sem esperar rede.
+// O mesmo número tem 2 cadastros (id com e sem 55): fica o MAIOR, não a soma, para
+// não contar o histórico duas vezes. Sem cache ainda = 0 (conta só o Joey).
+const _anotaPorTel = {};
+const _anotaBuscando = new Set();
+let _anotaRenderTimer = null;
+function _prefetchAnota(telBruto) {
+  let t = String(telBruto || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (t.length < 10) return;                          // sem DDD: não dá para montar o id
+  if ((t.length === 12 || t.length === 13) && t.startsWith('55')) t = t.slice(2);
+  const k = t.slice(-_SUFIXO_TEL);
+  if (k in _anotaPorTel || _anotaBuscando.has(k)) return;
+  _anotaBuscando.add(k);
+  const col = db.collection(`clientes/${slug}/clientes`);
+  Promise.all([col.doc('55' + t).get(), col.doc(t).get()])
+    .then(snaps => {
+      const n = Math.max(0, ...snaps.map(s => s.exists ? (Number(s.data().pedidosAnteriores || s.data().totalPedidos) || 0) : 0));
+      _anotaPorTel[k] = n;
+      // O card do Kanban usa a mesma conta: redesenha uma vez só, depois da leva.
+      if (n > 0) { clearTimeout(_anotaRenderTimer); _anotaRenderTimer = setTimeout(renderKanban, 400); }
+    })
+    .catch(e => console.warn('[comanda] histórico do Anota não carregou:', e?.message))  // sem cache: tenta de novo na próxima
+    .finally(() => _anotaBuscando.delete(k));
+}
+
 // O ORDINAL deste pedido na história do cliente: 1 = primeiro, 3 = "3º pedido".
 // 0 = não dá para dizer (sem telefone, ou falha) — e aí a linha não é impressa.
 //
@@ -3383,6 +3411,8 @@ function _mesmoTelefone(a, b) {
 // vezes não (impressão logo depois de criar no painel) — contar a lista deixava
 // o número dependendo do milissegundo em que o snapshot chegou, e o mesmo pedido
 // saía como 2º ou 3º.
+//
+// Soma o histórico do Anota (_anotaPorTel), com a mesma conta da aba Clientes.
 function ordinalPedidoDoCliente(p) {
   try {
     const tel = String(p?.cliente?.tel || '').replace(/\D/g, '');
@@ -3392,7 +3422,11 @@ function ordinalPedidoDoCliente(p) {
       String(x.id) !== String(p?.id) &&
       _mesmoTelefone(x.cliente?.tel, tel)
     ).length;
-    return anteriores + 1;
+    // Ainda não buscado (ex.: reimpressão de pedido antigo): sai só com o Joey
+    // agora e dispara a busca, para a próxima impressão já vir completa.
+    _prefetchAnota(tel);
+    const anota = _anotaPorTel[tel.slice(-_SUFIXO_TEL)] || 0;
+    return anota + anteriores + 1;
   } catch (e) {
     // A comanda NUNCA segura por causa desta linha: sem número, sai sem ela.
     console.warn('[comanda] ordinal do cliente falhou:', e?.message);
@@ -4434,6 +4468,8 @@ function gerarHtmlPedidoProducao(p) {
   const mesaNome    = p.mesaNome || (p.mesa ? p.mesa.replace('mesa-', 'Mesa ') : '');
 
   const mesaHtml = mesaNome ? `<div class="cli">Mesa: ${mesaNome}</div>` : '';
+  // Mesma linha e mesma conta do cupom de entrega (0 = sem telefone: não sai).
+  const ordinalCliente = ordinalPedidoDoCliente(p);
 
   let endHtml = '';
   if (p.entrega === 'delivery') {
@@ -4478,6 +4514,7 @@ body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;paddi
 .adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
 .obs-box{font-family:'Arial Narrow',Arial,sans-serif;font-size:12px;white-space:pre;margin:3px 0;line-height:1.2}
 .cli{font-size:13px;font-weight:700;margin:1px 0}
+.ord-cliente{font-size:14px;font-weight:900;margin:2px 0}
 .row-val{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin:1px 0}
 .row-total{display:flex;justify-content:space-between;font-size:18px;font-weight:900;margin-top:4px}
 .pag-label{font-size:14px;font-weight:700;margin-bottom:2px}
@@ -4506,6 +4543,7 @@ ${itensHtml}
 
 <div class="cli">Nome: ${nomeCliente}</div>
 <div class="cli">Tel: ${tel}</div>
+${ordinalCliente ? `<div class="ord-cliente">${ordinalCliente}º pedido</div>` : ''}
 ${mesaHtml}${endHtml}
 ${obsHtml}
 <div class="line">${dash}</div>
@@ -7682,6 +7720,7 @@ async function _npFazerBuscaCliente() {
   const ind = document.getElementById('npClienteIndicador');
   const tel = _npNormTel(document.getElementById('npTelefone').value);
   if (tel.length < 8) { if (ind) ind.style.display = 'none'; return; }
+  _prefetchAnota(tel);   // Novo Pedido imprime logo ao confirmar: o Anota já tem que estar aqui
 
   try {
     let data = null;
@@ -8624,6 +8663,12 @@ function iniciarListenersFirestore() {
     _pedidosAnt = [...pedidos];
     pedidos = snap.docs.map(d => d.data({ serverTimestamps: 'estimate' }));
     pedidos.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    // Histórico do Anota dos clientes de hoje e de quem está no Kanban ("Nº pedido"
+    // das comandas). O cache segura: cada telefone é buscado uma vez por sessão.
+    const _hojeAnota = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    pedidos.forEach(p => {
+      if (p.data === _hojeAnota || p.status === 'novo' || p.status === 'producao' || p.status === 'pronto') _prefetchAnota(p.cliente?.tel);
+    });
     // Mapa de pedidos: se o modal estiver aberto, re-renderiza os pinos em tempo real.
     if (document.getElementById('mapaPedidosModal')?.classList.contains('show')) _renderMapaPedidos();
 
