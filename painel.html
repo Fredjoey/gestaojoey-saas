@@ -2711,7 +2711,11 @@ setInterval(atualizarStatusWA, 30000);
 // troca o code por token NO SERVIDOR e grava clientes/{slug}/config/whatsappCloud.
 // O estado conectado é dirigido por _wacListenerConfig (onSnapshot) → renderCloudApiCard.
 const WAC_FB_APP_ID    = '1092362123966651';   // App ID público (client-side, não é segredo)
-const WAC_FB_CONFIG_ID = '2010774560314805';   // Config do Embedded Signup
+// Config do Embedded Signup "WhatsApp Coex token permanente": token de usuário do sistema que
+// NUNCA expira. A anterior (2010774560314805) dava token de 60 dias — tipo e validade são
+// imutáveis na Meta, por isso é uma config nova, não uma edição. Quem conectou antes tem que
+// reconectar para trocar o token de 60 dias pelo permanente.
+const WAC_FB_CONFIG_ID = '1070158192295198';
 const WAC_FB_VERSION   = 'v25.0';
 
 // ── COEXISTÊNCIA (Coex) ──────────────────────────────────────────────────────────────
