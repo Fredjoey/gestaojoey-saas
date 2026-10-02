@@ -2491,9 +2491,43 @@ const STATUS_CLIENTE = {
   novo:      { label:'⏳ Recebido',    color:'#f59e0b', bg:'rgba(245,158,11,.15)'  },
   producao:  { label:'👨‍🍳 Preparando', color:'#ff6b35', bg:'rgba(255,107,53,.15)'  },
   pronto:    { label:'🚀 Pronto',      color:'#34d399', bg:'rgba(52,211,153,.15)'  },
-  entregue:  { label:'✅ Concluído',   color:'#a78bfa', bg:'rgba(167,139,250,.15)' },
+  aCaminho:  { label:'🛵 A caminho',   color:'#38bdf8', bg:'rgba(56,189,248,.15)'  },
+  entregue:  { label:'✅ Entregue',    color:'#a78bfa', bg:'rgba(167,139,250,.15)' },
+  concluido: { label:'✅ Concluído',   color:'#a78bfa', bg:'rgba(167,139,250,.15)' },
   cancelado: { label:'❌ Cancelado',   color:'#ff6b6b', bg:'rgba(231,76,60,.15)'   },
 };
+// ⚠️ O status 'entregue' do painel quer dizer SAIU PARA ENTREGA (o botão "Marcar
+// entregue" carimba saiuParaEntregaEm); a entrega de fato é 'finalizado'. Mostrar
+// 'entregue' como "Concluído" dizia ao cliente que o pedido tinha chegado com o
+// motoboy ainda na rua — e 'finalizado' nem tinha rótulo (saía a palavra crua).
+// Mas 'entregue' também é o estado FINAL da maioria dos deliveries (set/2026: 286
+// de 308 nunca passaram a 'finalizado'), e esta tela é um HISTÓRICO: sem limite de
+// tempo, um pedido da semana passada ficaria "A caminho" para sempre. Então "A
+// caminho" só vale até SAIU_A_CAMINHO_MIN depois da saída; depois cai no neutro
+// "Concluído", que não afirma que chegou.
+const SAIU_A_CAMINHO_MIN = 60;
+function _msTs(v) {
+  if (!v) return 0;
+  if (typeof v.toMillis === 'function') return v.toMillis();
+  if (v instanceof Date) return v.getTime();
+  if (typeof v.seconds === 'number') return v.seconds * 1000;
+  return Number(v) || 0;
+}
+function statusClienteDe(p) {
+  const st = p.status;
+  const delivery = p.entrega === 'delivery';
+  if (st === 'entregue' && delivery) {
+    const saiu = _msTs(p.saiuParaEntregaEm);
+    // Sem o carimbo não dá para saber há quanto tempo saiu → neutro, nunca "A caminho" eterno.
+    const recente = saiu > 0 && (Date.now() - saiu) <= SAIU_A_CAMINHO_MIN * 60000;
+    return STATUS_CLIENTE[recente ? 'aCaminho' : 'concluido'];
+  }
+  // Delivery 'finalizado' = entregue (motoboy confirmou ou a loja fechou o pedido).
+  // Retirada/mesa: 'entregue' já é o pedido entregue no balcão/na mesa.
+  if (st === 'finalizado') return STATUS_CLIENTE[delivery ? 'entregue' : 'concluido'];
+  if (st === 'entregue') return STATUS_CLIENTE.concluido;
+  return STATUS_CLIENTE[st] || { label: st, color:'#888', bg:'rgba(128,128,128,.15)' };
+}
 
 let histListener = null;
 
@@ -2938,7 +2972,7 @@ function renderHistLista(lista, tel) {
   }
 
   const cards = lista.map(p => {
-    const st = STATUS_CLIENTE[p.status] || { label: p.status, color:'#888', bg:'rgba(128,128,128,.15)' };
+    const st = statusClienteDe(p);
     const itensStr = (p.itens||[]).map(i => `${i.qty}× ${i.nome}`).join(', ');
     const tipoIcon = p.entrega==='delivery' ? '🛵' : p.entrega==='local' ? '🍽️' : '🏠';
     return `
