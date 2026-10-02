@@ -512,6 +512,8 @@ body.suporte-on #botAlertBanner{top:36px}
 .wpp-s-bot{background:#2e2114;color:#c98a4a}
 .wpp-s-humano{background:#13332a;color:#7BC47F}
 .wpp-s-aguardando{background:#33270c;color:#e0a23c}
+.wpp-s-alerta{font-size:11px;font-weight:700;padding:2px 8px;border-radius:7px;white-space:nowrap;flex-shrink:0;background:#3a1d0c;color:#ff9a3c}
+.wpp-alerta-ia{margin:8px 14px 0;padding:8px 12px;background:rgba(255,140,40,.12);border:1px solid rgba(255,140,40,.4);border-radius:8px;font-size:12px;color:#ffb36b;flex-shrink:0}
 .wpp-chat{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .wpp-chat-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--bg3)}
 .wpp-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#E87722,#b85e16);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#3a1f0a;flex-shrink:0;letter-spacing:.5px}
@@ -8899,6 +8901,7 @@ function iniciarListenersFirestore() {
   db.collection(`clientes/${slug}/conversas`).orderBy('ultimaAtividade', 'desc').onSnapshot(snap => {
     const novas = snap.docs.map(d => ({ ...d.data(), id: d.id })); // id vem por último — impede campo 'id' do documento sobrescrever o doc ID real
     _wppDetectarNovas(novas);
+    _wppDetectarAlertasIA(novas);
     _wppConversas = novas;
     _wppAtualizarBadge();
     _wppAtualizarTitulo();
@@ -8908,6 +8911,28 @@ function iniciarListenersFirestore() {
       if (conv) _wppRenderChat(conv);
     }
   }, err => console.error('[WPP]', err));
+}
+
+// Alerta da IA v2 (conversas/{n}.alertaEquipe): avisa a equipe quando um alerta NOVO aparece.
+// Na 1ª carga só registra (não toca aviso pelos alertas antigos).
+let _wppAlertasVistos = null;
+function _wppDetectarAlertasIA(convs) {
+  const primeira = _wppAlertasVistos === null;
+  if (primeira) _wppAlertasVistos = new Map();
+  convs.forEach(c => {
+    const em = c.alertaEquipe && c.alertaEquipe.em;
+    if (!em) return;
+    if (!primeira && (_wppAlertasVistos.get(c.id) || 0) < em) {
+      const txt = `⚠ ${c.nome || c.id}: ${c.alertaEquipe.motivo || 'a IA pediu atenção'}`;
+      notify(txt, 'warning');
+      mostrarNotificacaoPush('⚠ Atenção no WhatsApp', txt);
+    }
+    _wppAlertasVistos.set(c.id, em);
+  });
+}
+async function wppResolverAlerta(numero) {
+  await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ alertaEquipe: firebase.firestore.FieldValue.delete() }, { merge: true });
+  notify('✓ Alerta resolvido');
 }
 
 // ── RELATÓRIOS ──────────────────────────────────────────────────────────────
@@ -12867,7 +12892,10 @@ function _wppRenderLista() {
   el.innerHTML = _lista.map(c => {
     const ativo = c.id === _wppConvAtiva ? ' ativo' : '';
     const naoLida = _wppTemNaoLida(c);
-    const sl = c.status === 'humano'
+    // alertaEquipe: a IA v2 pediu atenção (ex.: "cadê meu pedido" em produção) sem transferir a conversa.
+    const sl = c.alertaEquipe && c.alertaEquipe.em
+      ? '<span class="wpp-s-alerta" title="A IA pediu atenção da equipe">⚠ Atenção</span>'
+      : c.status === 'humano'
       ? '<span class="wpp-s-humano">Humano</span>'
       : c.status === 'aguardando'
       ? '<span class="wpp-s-aguardando">Aguardando</span>'
@@ -12987,6 +13015,23 @@ function _wppRenderChat(conv) {
       <button class="wpp-btn-apagar" onclick="wppApagarConversa('${conv.id}')">🗑️</button>
     </div>
   `;
+  // Alerta da IA (avisar_equipe) — banner próprio acima do aviso de pausa/humano.
+  let _alertaEl = document.getElementById('wppAlertaIA');
+  if (!_alertaEl) {
+    _alertaEl = document.createElement('div');
+    _alertaEl.id = 'wppAlertaIA'; _alertaEl.className = 'wpp-alerta-ia';
+    document.getElementById('wppAviso').before(_alertaEl);
+  }
+  if (conv.alertaEquipe && conv.alertaEquipe.em) {
+    const _hA = new Date(conv.alertaEquipe.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+    _alertaEl.textContent = `⚠ A IA pediu atenção (${_hA}): ${conv.alertaEquipe.motivo || ''} `;
+    const b = document.createElement('button'); b.className = 'wpp-retomar-ia'; b.textContent = 'Resolvido';
+    b.onclick = () => wppResolverAlerta(conv.id);
+    _alertaEl.append(b);
+    _alertaEl.style.display = 'block';
+  } else {
+    _alertaEl.style.display = 'none';
+  }
   const _avisoEl = document.getElementById('wppAviso');
   if (conv.status === 'humano') {
     _avisoEl.textContent = '👤 Atendimento humano ativo — bot silenciado para este número';
