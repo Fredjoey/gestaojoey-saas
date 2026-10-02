@@ -530,6 +530,8 @@ body.suporte-on #botAlertBanner{top:36px}
 .wpp-msg-ts{font-size:11px;color:rgba(255,255,255,.4);margin-top:3px;display:flex;gap:4px;align-items:center;justify-content:flex-end}
 .wpp-msg.enviada .wpp-msg-ts{color:rgba(242,223,200,.55)}
 .wpp-check{color:#E89A55;letter-spacing:-1.5px}
+.wpp-autor-tag{font-size:9px;font-weight:800;letter-spacing:.4px;padding:0 4px;border-radius:4px;background:rgba(232,154,85,.16);color:#E89A55;line-height:14px}
+.wpp-retomar-ia{background:none;border:none;color:#E89A55;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;margin-left:4px}
 .wpp-dia{align-self:center;margin:6px 0}
 .wpp-dia span{background:#1c1c1c;color:#9a9a9a;font-size:11px;font-weight:600;padding:3px 12px;border-radius:999px}
 .wpp-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0}
@@ -1350,6 +1352,49 @@ body.suporte-on #botAlertBanner{top:36px}
             <p style="font-size:11px;color:var(--text3);margin-bottom:14px">As travas de segurança do sistema (preço sempre do cardápio, loja fechada, etapas do pedido) têm prioridade — suas regras não as anulam.</p>
 
             <button class="btn btn-primary" onclick="salvarAtendenteIA()">✓ Salvar atendente</button>
+          </div>
+        </div>
+
+        <!-- 0b. Base de fatos da IA (v2) — o que a IA pode afirmar. Doc config/iaFatos. -->
+        <div class="card-box" id="secaoFatosIA" style="display:none;margin-top:12px">
+          <div class="robo-sec-hdr" onclick="toggleRoboSection('fatos')">
+            <span>📌 Base de fatos da IA <span class="ia-novo-badge">novo</span></span>
+            <button class="robo-sec-toggle" id="robo-sec-btn-fatos">▲</button>
+          </div>
+          <div id="robo-sec-body-fatos">
+            <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">O que a IA pode <b>afirmar com certeza</b>. Fora daqui e do cardápio, ela não chuta: diz que vai confirmar com a equipe. Vale na próxima mensagem, sem reiniciar nada.</p>
+
+            <label class="fl" style="display:block;margin-bottom:4px">Carro-chefe / o que mais sai</label>
+            <input id="fatos-carro" class="fi" maxlength="120" style="margin-bottom:10px" placeholder="Ex.: Crispy Duplo">
+
+            <label class="fl" style="display:block;margin-bottom:4px">Troco</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+              <select id="fatos-troco" class="fi" style="flex:0 0 auto;width:auto">
+                <option value="">Não informar</option>
+                <option value="sim">Sim, levamos troco</option>
+                <option value="nao">Não levamos troco</option>
+              </select>
+              <input id="fatos-troco-obs" class="fi" maxlength="120" style="flex:1;min-width:160px" placeholder="Observação (opcional). Ex.: troco pra até R$ 200">
+            </div>
+
+            <label class="fl" style="display:block;margin-bottom:4px">Disponibilidade por dia da semana</label>
+            <p style="font-size:11px;color:var(--text3);margin:0 0 6px">Ex.: Pizza só sex/sáb/dom. A IA diz "hoje não tem, a gente faz de sexta a domingo" em vez de "não fazemos".</p>
+            <div id="fatos-disp-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px"></div>
+            <button class="btn" style="font-size:12px;padding:5px 12px;margin-bottom:12px" onclick="_fatosAddDisp()">+ Adicionar produto/categoria</button>
+
+            <label class="fl" style="display:block;margin-bottom:4px">Bebidas especiais de hoje</label>
+            <textarea id="fatos-bebidas" class="fi" rows="2" maxlength="300" style="width:100%;resize:vertical;margin-bottom:4px;font-family:inherit;font-size:12px" placeholder="Ex.: Guaraná Antarctica 3L"></textarea>
+            <p style="font-size:11px;color:var(--text3);margin:0 0 10px">Vale só no dia em que você salvar — no dia seguinte a IA para de oferecer sozinha.</p>
+
+            <label class="fl" style="display:block;margin-bottom:4px">Frete grátis a partir de (R$)</label>
+            <input id="fatos-frete" class="fi" type="number" min="0" step="1" style="margin-bottom:10px;max-width:160px" placeholder="Ex.: 100">
+
+            <label class="fl" style="display:block;margin-bottom:4px">Outros fatos (um por linha)</label>
+            <textarea id="fatos-outros" class="fi" rows="4" maxlength="1500" style="width:100%;resize:vertical;margin-bottom:10px;font-family:inherit;font-size:12px" placeholder="O molho da casa é à base de maionese temperada&#10;Os burgers são artesanais, blend 160g&#10;Aceitamos VR na entrega"></textarea>
+
+            <div style="font-size:11px;color:var(--text2);background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:14px">🔒 Taxa por bairro, horário de funcionamento e pedido mínimo vêm das <b>Configurações</b> — a IA já usa automaticamente.</div>
+
+            <button class="btn btn-primary" onclick="salvarFatosIA()">✓ Salvar fatos</button>
           </div>
         </div>
 
@@ -3845,7 +3890,16 @@ function iniciarIaListeners() {
   // Seção "Atendente Inteligente" é só do Joey por enquanto (a IA do bot vive no joeyapi, slug joey).
   if (slug === 'joey') { const el = document.getElementById('secaoAtendenteIA'); if (el) el.style.display = ''; }
   db.doc(`clientes/${slug}/config/features`).onSnapshot(
-    s => { _iaFeatures = s.exists ? (s.data() || {}) : {}; _setIaTogglesUI(); _aplicarGateJoeyIA(); },
+    s => {
+      _iaFeatures = s.exists ? (s.data() || {}) : {}; _setIaTogglesUI(); _aplicarGateJoeyIA();
+      // Base de fatos: aparece pro tenant com a IA v2 (e pro Joey, que preenche antes de ligar).
+      const fatos = document.getElementById('secaoFatosIA');
+      if (fatos) {
+        const mostrar = slug === 'joey' || _iaFeatures.iaV2 === true;
+        if (mostrar && fatos.style.display === 'none') carregarFatosIA();
+        fatos.style.display = mostrar ? '' : 'none';
+      }
+    },
     e => console.error('[IA] features listener:', e));
   db.doc(`clientes/${slug}/config/aditivos`).onSnapshot(
     s => { _iaLiberada = !!(s.exists && s.data().ia === true); _setIaTogglesUI(); },
@@ -7999,6 +8053,69 @@ async function salvarAtendenteIA() {
     await db.doc(`clientes/${slug}/config/iaInstrucoes`).set(payload, { merge: true });
     notify('Atendente atualizado — já vale na próxima mensagem do bot! 🤖', 'success');
   } catch (e) { console.error('[IA] save instrucoes:', e); notify('Erro ao salvar: ' + e.message, 'error'); }
+}
+
+// ── Base de fatos da IA (v2) — config/iaFatos. O bot (joeyapi, atendimentoV2) lê fresco a cada
+// resposta e só afirma o que está aqui, no cardápio ou nas Configurações.
+const _FATOS_DIAS = [['1','Seg'],['2','Ter'],['3','Qua'],['4','Qui'],['5','Sex'],['6','Sáb'],['0','Dom']];
+function _fatosDispRow(item) {
+  const it = item || { nome: '', dias: [] };
+  const dias = new Set((it.dias || []).map(String));
+  const row = document.createElement('div');
+  row.className = 'fatos-disp-row';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:6px 8px';
+  row.innerHTML = `<input class="fi fatos-disp-nome" maxlength="60" style="flex:1;min-width:120px" placeholder="Ex.: Pizza">`
+    + _FATOS_DIAS.map(([v, l]) => `<label style="font-size:11px;display:flex;align-items:center;gap:2px;color:var(--text2)"><input type="checkbox" class="fatos-disp-dia" value="${v}" ${dias.has(v) ? 'checked' : ''}>${l}</label>`).join('')
+    + `<button class="btn" style="font-size:11px;padding:3px 8px" title="Remover" onclick="this.closest('.fatos-disp-row').remove()">✕</button>`;
+  row.querySelector('.fatos-disp-nome').value = it.nome || '';
+  return row;
+}
+function _fatosAddDisp(item) {
+  const lista = document.getElementById('fatos-disp-lista');
+  if (lista) lista.appendChild(_fatosDispRow(item));
+}
+function _hojeISOSP() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }
+function carregarFatosIA() {
+  if (!document.getElementById('secaoFatosIA')) return;
+  db.doc(`clientes/${slug}/config/iaFatos`).get().then(s => {
+    const d = s.exists ? (s.data() || {}) : {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+    set('fatos-carro', d.carroChefe);
+    set('fatos-troco', d.troco === true ? 'sim' : d.troco === false ? 'nao' : '');
+    set('fatos-troco-obs', d.trocoObs);
+    const beb = d.bebidasDoDia || {};
+    set('fatos-bebidas', beb.data === _hojeISOSP() ? beb.texto : '');   // de outro dia = expirou
+    set('fatos-frete', Number(d.freteGratisAcima) > 0 ? d.freteGratisAcima : '');
+    set('fatos-outros', d.outros);
+    const lista = document.getElementById('fatos-disp-lista');
+    if (lista) {
+      lista.innerHTML = '';
+      (Array.isArray(d.disponibilidade) ? d.disponibilidade : []).forEach(it => _fatosAddDisp(it));
+    }
+  }).catch(e => console.error('[IA] load fatos:', e));
+}
+async function salvarFatosIA() {
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  const troco = val('fatos-troco');
+  const disponibilidade = [...document.querySelectorAll('#fatos-disp-lista .fatos-disp-row')].map(r => ({
+    nome: (r.querySelector('.fatos-disp-nome')?.value || '').trim().slice(0, 60),
+    dias: [...r.querySelectorAll('.fatos-disp-dia:checked')].map(c => Number(c.value)),
+  })).filter(x => x.nome && x.dias.length);
+  const frete = Number(val('fatos-frete').replace(',', '.'));
+  const payload = {
+    carroChefe:       val('fatos-carro').slice(0, 120),
+    troco:            troco === 'sim' ? true : troco === 'nao' ? false : null,
+    trocoObs:         val('fatos-troco-obs').slice(0, 120),
+    disponibilidade,
+    bebidasDoDia:     { texto: val('fatos-bebidas').slice(0, 300), data: _hojeISOSP() },
+    freteGratisAcima: frete > 0 ? frete : null,
+    outros:           val('fatos-outros').slice(0, 1500),
+    atualizadoEm:     firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.doc(`clientes/${slug}/config/iaFatos`).set(payload, { merge: true });
+    notify('Fatos salvos — a IA já usa na próxima mensagem! 📌', 'success');
+  } catch (e) { console.error('[IA] save fatos:', e); notify('Erro ao salvar: ' + e.message, 'error'); }
 }
 
 // toggleBot/atualizarBotStatus removidos — o liga/desliga do bot agora é ÚNICO:
@@ -12844,8 +12961,13 @@ function _wppRenderChat(conv) {
   if (conv.id === _wppConvAtiva) _wppVistas.add(_wppChaveVista(conv));
   const head = document.getElementById('wppChatHead');
   const isHumano = conv.status === 'humano' || conv.status === 'aguardando';
+  // IA v2 (config/features.iaV2): mensagem da equipe pausa a IA por 30 min nesta conversa (pausaIaAte).
+  const _pausaAte = Number(conv.pausaIaAte) || 0;
+  const _iaPausada = !isHumano && _iaFeatures.iaV2 === true && _pausaAte > Date.now();
+  const _hhmmPausa = _iaPausada ? new Date(_pausaAte).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
   const statusTxt = conv.status === 'humano' ? '👤 Atendimento humano'
                   : conv.status === 'aguardando' ? '⚠️ Aguardando'
+                  : _iaPausada ? `⏸ IA pausada até ${_hhmmPausa}`
                   : '🤖 Bot ativo';
   const _telDigits = String(conv.telefone || conv.numero || conv.tel || conv.id || conv.jid || '').replace(/\D/g, '');
   const _telFmt = _wppFmtTel(_telDigits);
@@ -12865,9 +12987,25 @@ function _wppRenderChat(conv) {
       <button class="wpp-btn-apagar" onclick="wppApagarConversa('${conv.id}')">🗑️</button>
     </div>
   `;
-  document.getElementById('wppAviso').style.display = conv.status === 'humano' ? 'block' : 'none';
+  const _avisoEl = document.getElementById('wppAviso');
+  if (conv.status === 'humano') {
+    _avisoEl.textContent = '👤 Atendimento humano ativo — bot silenciado para este número';
+    _avisoEl.style.display = 'block';
+  } else if (_iaPausada) {
+    _avisoEl.innerHTML = `⏸ A equipe respondeu aqui — a IA fica quieta nesta conversa até ${_hhmmPausa} (renova a cada mensagem sua).<button class="wpp-retomar-ia" onclick="wppRetomarIA('${conv.id}')">Retomar agora</button>`;
+    _avisoEl.style.display = 'block';
+    // Re-renderiza quando a pausa vence (o snapshot não muda sozinho só porque o tempo passou).
+    clearTimeout(window._wppPausaTimer);
+    window._wppPausaTimer = setTimeout(() => {
+      const c = _wppConversas.find(x => x.id === _wppConvAtiva);
+      if (c && c.id === conv.id) _wppRenderChat(c);
+    }, Math.min(_pausaAte - Date.now() + 1000, 2147483000));
+  } else {
+    _avisoEl.style.display = 'none';
+  }
   const msgsEl = document.getElementById('wppMsgs');
-  const msgs = Array.isArray(conv.mensagens) ? [...conv.mensagens].sort((a, b) => a.ts - b.ts) : [];
+  // Ordem = ts da mensagem (o bot grava o relógio do WhatsApp); empate mantém a ordem de gravação.
+  const msgs = Array.isArray(conv.mensagens) ? [...conv.mensagens].sort((a, b) => (a.ts || 0) - (b.ts || 0)) : [];
   if (!msgs.length) {
     msgsEl.innerHTML = '<div style="color:var(--text2);font-size:12px;text-align:center;margin:24px 0">Sem mensagens registradas.</div>';
   } else {
@@ -12876,10 +13014,15 @@ function _wppRenderChat(conv) {
       const tipo = m.tipo === 'enviada' ? 'enviada' : 'recebida';
       const ts = m.ts ? new Date(m.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
       const check = tipo === 'enviada' ? ' <span class="wpp-check">✓✓</span>' : '';
+      // Rótulo só pra equipe: quem mandou a mensagem automática (o cliente não vê nada disso).
+      const autorTag = tipo !== 'enviada' ? ''
+        : m.autor === 'ia' ? '<span class="wpp-autor-tag" title="Resposta da IA">IA</span>'
+        : m.autor === 'bot' ? '<span class="wpp-autor-tag" title="Resposta automática do robô">BOT</span>'
+        : '';
       const dia = m.ts ? new Date(m.ts).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
       let divisor = '';
       if (dia && dia !== _diaAnt) { divisor = `<div class="wpp-dia"><span>${_wppDiaLabel(m.ts)}</span></div>`; _diaAnt = dia; }
-      return `${divisor}<div class="wpp-msg ${tipo}">${m.texto}<div class="wpp-msg-ts">${ts}${check}</div></div>`;
+      return `${divisor}<div class="wpp-msg ${tipo}">${m.texto}<div class="wpp-msg-ts">${autorTag}${ts}${check}</div></div>`;
     }).join('');
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -12888,6 +13031,11 @@ function _wppRenderChat(conv) {
 async function wppAssumirAtendimento(numero) {
   await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ status: 'humano' }, { merge: true });
   notify('👤 Atendimento assumido');
+}
+
+async function wppRetomarIA(numero) {
+  await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ pausaIaAte: 0 }, { merge: true });
+  notify('🤖 IA retomada — ela responde a partir da próxima mensagem do cliente');
 }
 
 async function wppDevolverBot(numero) {
@@ -12952,10 +13100,13 @@ async function wppEnviar() {
 
   // 1. Salva no Firestore (prioritário — garante histórico)
   try {
+    // autor:'humano' → a IA v2 lê isto como ATENDENTE (decisão tomada, não contradiz).
+    // pausaIaAte → IA v2 calada nesta conversa por 30 min, renovando a cada envio (sem v2 o bot ignora).
     await db.collection(`clientes/${slug}/conversas`).doc(_wppConvAtiva).set({
-      mensagens:       firebase.firestore.FieldValue.arrayUnion({ tipo: 'enviada', texto, ts: agora }),
+      mensagens:       firebase.firestore.FieldValue.arrayUnion({ tipo: 'enviada', texto, ts: agora, autor: 'humano' }),
       ultimaMensagem:  texto,
       ultimaAtividade: agora,
+      pausaIaAte:      agora + 30 * 60 * 1000,
     }, { merge: true });
   } catch (err) {
     console.error('[WPP] Firestore save error:', err);
