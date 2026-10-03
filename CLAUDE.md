@@ -66,3 +66,22 @@ A seção segue o filtro de período que a aba Financeiro já tem (`_finPeriodRa
 Lembre que `gestao-joey.html` existe em **duas cópias** que precisam ficar idênticas (ver [gestao-joey dual deploy]) e que ele **não carrega o SDK de Storage** hoje — só `firebase-app`, `firestore` e `auth`.
 
 O resto (regras de Storage, parser, Cloud Functions, `external_reference`) está documentado no `CLAUDE.md` do **gestaojoey-admin**.
+
+## Mapas do painel — Google Maps JS (desde 03/10/2026)
+
+Os 3 mapas do `painel.html` (mapa de pedidos, posição da loja em Configurações, portaria do bairro) usam
+**Google Maps JavaScript API**. Antes era Leaflet + fundo do CARTO, que passou a exigir chave e mostrava
+"API KEY REQUIRED" em cada tile. Só a equipe vê mapa — cardápio e página do entregador não têm (o entregador
+abre a rota por link do Google Maps/Waze, sem custo de API).
+
+- **Chave de NAVEGADOR** (`GMAPS_KEY`, no próprio `painel.html`): projeto `joey-secretario`, restrita à Maps
+  JavaScript API e aos referenciadores do painel (`*.gestaojoey.com.br` — inclui o `app.gestaojoey.com.br`
+  que o joey-app abre —, `hamburgueriajoey.com.br`, e `pedidos-joey`/`pedidos-joey-painel`/`gestaojoey-painel`
+  em `.web.app` e `.firebaseapp.com`). Domínio novo servindo o painel → incluir no console, senão o mapa não abre.
+  **Não é a chave do Geocoding** (essa é de servidor, segredo do `gestaojoey`).
+- **Map ID** `GMAPS_MAP_ID` (Rasterização): estilo escuro no slot "Modo escuro" → o mapa é criado com
+  `colorScheme: DARK`; sem isso abre claro.
+- Marcadores: `AdvancedMarkerElement`. ⚠️ Clique só com `gmpClickable: true` + evento `gmp-click` —
+  `addListener('click')` não torna o marcador clicável (3.66). Arrasto: `gmpDraggable` + `dragend`.
+- Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
+  pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
