@@ -47,9 +47,15 @@ da revisão no Cloud Run; é a conta padrão, compartilhada por todas as functio
 Todas as 8 functions dependem desse acesso — inclusive o `verifyIdToken` que autentica as rotas
 fiscais. Sem a chave **e** sem os papéis, elas sobem e quebram em runtime, não no deploy.
 
-**Estado em 03/10/2026: papéis NÃO concedidos** (o IAM do gestaojoey só tem contas do próprio
-projeto). Enquanto for assim: **deploy só do desktop**, que é onde a chave está. Quando a concessão
-sair, atualizar esta linha — o resto da seção continua valendo.
+**Estado em 03/10/2026: papéis concedidos — deploy sai das duas máquinas.** Confirmado em
+produção no mesmo dia: a `nfceDanfe` foi deployada de uma máquina sem a chave no diretório (revisão
+`nfcedanfe-00002-qet`); o log do boot trouxe o aviso do fallback e a function leu
+`clientes/joey/notasFiscais` no gestaojoey normalmente — o aviso diz que o caminho mudou, não que
+falhou.
+
+Uma ressalva enquanto durar: **as outras 7 functions ainda rodam a revisão de julho**, com a chave
+embutida naquele bundle. Cada uma passa a usar ADC no primeiro redeploy — é aí que o
+`storage.objectAdmin` entra em jogo, na `nfceXml`/`nfceXmlZip`, que gravam e leem os XMLs.
 
 ## Extrato bancário (⑧ da aba Financeiro do gestao-joey.html) — **só o tenant joey**
 
