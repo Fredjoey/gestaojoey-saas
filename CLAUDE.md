@@ -98,6 +98,20 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
 - Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
   pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
 
+## "📍 Enviar localização" no balão do pedido (desde 03/10/2026)
+
+No mapa de pedidos, o balão de cada pino tem botões que mandam a **localização nativa do WhatsApp** (a bolha com
+mapa, via joeyapi `POST /send-location`, autenticado com o ID token do login) — `enviarLocalizacaoPedido()`:
+
+- **ao motoboy atribuído** (só aparece com `entregadorId`; telefone lido de `motoboys/{id}.telefone`);
+- **a cada pessoa de `config/loja.equipeLocalizacao`** — lista `[{ nome, tel }]`, hoje Fred (5521999981727) e
+  Isabela (5521972116397), gravada direto no Firestore em 03/10. Não tem tela de edição: trocar/adicionar
+  alguém é editar esse campo. ⚠️ O `salvarConfig` reescreve o doc inteiro — o campo está na lista de
+  preservação; campo novo em `config/loja` precisa entrar lá também, senão o primeiro "Salvar" o apaga.
+- Coordenada: **GPS do cliente → geocodificação**, a mesma do pino. Fora do GPS, precisão `aproximado`/`bairro`
+  vai escrita no próprio nome do lugar ("(local aproximado)", "(portão do condomínio, não a casa)"); o nome é
+  "Pedido #ID — Cliente" e o endereço "rua, nº · bairro (ref: …)".
+
 ## GPS do cliente no pedido (desde 03/10/2026)
 
 No cardápio, em delivery, o botão **"📍 Estou no local — usar minha localização"** (em destaque, opcional) manda a

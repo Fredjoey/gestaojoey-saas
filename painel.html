@@ -2625,8 +2625,14 @@ async function _renderMapaPedidos() {
       ? `<br><a href="${sv}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;padding:5px 10px;background:#243447;color:#7cc4ff;border:1px solid #2f4763;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none">👁 Ver a rua</a>`
       : '';
 
+    // "📍 Enviar localização": a bolha NATIVA do WhatsApp (joeyapi /send-location), ao motoboy
+    // atribuído e a quem estiver em config/loja.equipeLocalizacao.
+    const _btnLoc = (rot, destino) => `<button onclick="enviarLocalizacaoPedido('${_esc(p.id)}','${destino}',this)" style="display:block;margin-top:6px;padding:5px 10px;background:#1f3a2c;color:#6ee7b7;border:1px solid #2f5a44;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">📍 ${rot}</button>`;
+    const locBtns = (p.entregadorId ? _btnLoc(`Enviar ao motoboy (${_esc(p.entregadorNome || 'atribuído')})`, 'motoboy') : '')
+      + (Array.isArray(config.equipeLocalizacao) ? config.equipeLocalizacao : []).map((d, i) => _btnLoc(`Enviar a ${_esc(d.nome || d.tel)}`, 'equipe:' + i)).join('');
+
     marca(ponto.lat, ponto.lng, _gmBola(estilo),
-      `<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#666">${itens || '—'}</span><br><b>${total}</b>${aviso}${svBtn}`,
+      `<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#666">${itens || '—'}</span><br><b>${total}</b>${aviso}${svBtn}${locBtns}`,
       `#${p.id}`, gps ? 20 : 10);
     bounds.extend(ponto);
   });
@@ -2644,6 +2650,59 @@ async function _renderMapaPedidos() {
     _mapPedidos.setZoom(14);
   }
 }
+// Envia a localização do pedido como LOCALIZAÇÃO NATIVA do WhatsApp (a bolha com mapa).
+// Mesma prioridade do pino: GPS do cliente → geocodificação. Coordenada que não é a casa (aproximada
+// ou portão do condomínio) leva o aviso no próprio nome do lugar — o motoboy não pode confiar demais.
+async function enviarLocalizacaoPedido(id, destino, btn) {
+  const p = pedidos.find(x => String(x.id) === String(id));
+  if (!p) return notify('Pedido não encontrado.', 'error');
+  const gps = p.gpsLat != null && p.gpsLng != null;
+  const lat = gps ? p.gpsLat : p.geoLat, lng = gps ? p.gpsLng : p.geoLng;
+  if (lat == null || lng == null) return notify('Este pedido não tem coordenada.', 'error');
+  const c = p.cliente || {};
+  const prec = gps ? '' : p.geoPrecisao === 'bairro' ? ' (portão do condomínio, não a casa)'
+    : p.geoPrecisao === 'aproximado' ? ' (local aproximado)' : '';
+  const nome = `Pedido #${p.id} — ${c.nome || 'cliente'}${prec}`;
+  const endereco = [[c.rua, c.numero].filter(Boolean).join(', '), c.bairro].filter(Boolean).join(' · ') + (c.ref ? ` (ref: ${c.ref})` : '');
+
+  let tel = '', quem = '';
+  if (destino === 'motoboy') {
+    if (!p.entregadorId) return notify('Pedido sem motoboy atribuído.', 'error');
+    const m = (await db.collection(`clientes/${slug}/motoboys`).doc(p.entregadorId).get()).data() || {};
+    tel = String(m.telefone || '').replace(/\D/g, ''); quem = m.nome || 'motoboy';
+  } else if (String(destino).startsWith('equipe:')) {
+    const d = (config.equipeLocalizacao || [])[Number(String(destino).split(':')[1])] || {};
+    tel = String(d.tel || '').replace(/\D/g, ''); quem = d.nome || tel;
+  }
+  if (tel.length < 10) return notify(`Sem telefone válido para ${quem || 'o destino'}.`, 'error');
+  if (!tel.startsWith('55')) tel = '55' + tel;
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando…'; }
+  try {
+    const u = firebase.auth().currentUser;
+    const idToken = u ? await u.getIdToken() : '';
+    const r = await fetch(`${BOT_URL}/send-location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: 'Bearer ' + idToken } : {}) },
+      body: JSON.stringify({ numero: tel, lat, lng, nome, endereco }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.ok) {
+      notify(`📍 Localização do pedido #${p.id} enviada para ${quem}${gps ? ' (GPS do cliente)' : ''}`);
+      if (btn) btn.textContent = `✓ Enviado para ${quem}`;
+      return;
+    }
+    const motivo = d.erro === 'fora_da_janela' ? `${quem} não falou com o restaurante nas últimas 24h — mande pelo celular`
+      : r.status === 401 ? 'sessão sem permissão — faça login de novo'
+      : d.erro || `erro ${r.status}`;
+    notify(`Não enviei a localização: ${motivo}`, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '📍 Tentar de novo'; }
+  } catch (e) {
+    notify('Não enviei a localização: o robô do WhatsApp não respondeu.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '📍 Tentar de novo'; }
+  }
+}
+
 function _agoraBRT() {
   const brtStr = new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' });
   return new Date(brtStr.replace(' ', 'T'));
@@ -6013,6 +6072,8 @@ function salvarConfig() {
     } : {}),
     ...(config.cidade !== undefined ? { cidade: config.cidade } : {}),
     ...(config.estado !== undefined ? { estado: config.estado } : {}),
+    // Quem recebe a localização da entrega pelo mapa ([{nome, tel}]) — sem isto o set total apagaria.
+    ...(config.equipeLocalizacao !== undefined ? { equipeLocalizacao: config.equipeLocalizacao } : {}),
   };
   saveConfig();
   // PIN do App Garçom (se preenchido) -> salvo server-side em doc privado
