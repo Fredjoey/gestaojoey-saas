@@ -532,6 +532,13 @@ body{
 }
 
 /* INFO BOX */
+/* "Usar minha localização" — em DESTAQUE de propósito: convida sem travar (quem não toca pede normal). */
+.gps-box{margin:2px 0 14px;padding:12px;border-radius:12px;background:rgba(255,107,53,0.1);border:1.5px solid var(--orange)}
+.gps-btn{width:100%;padding:13px 12px;background:var(--orange);color:#fff;border:none;border-radius:10px;
+  font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(255,107,53,.35)}
+.gps-btn:disabled{opacity:.7;cursor:default}
+.gps-sub{font-size:12px;color:var(--text2);margin-top:7px;text-align:center;line-height:1.4}
+.gps-ok{color:#22c55e;font-weight:700}
 .info-note{
   background:rgba(255,107,53,0.08);
   border:1px solid rgba(255,107,53,0.2);
@@ -980,6 +987,9 @@ function carregarDadosPainel() {
     CONFIG.tempo_local     = cfg.tempo_local     || '15-20 min';
     CONFIG.pedidoMinimo    = cfg.pedidoMinimo    || 0;
     CONFIG.destaque        = cfg.destaque        || null;
+    // Posição da loja: o GPS do cliente a mais de GPS_RAIO_LOJA_KM dela é descartado (pedido feito de longe).
+    CONFIG.lojaLat = cfg.estabelecimentoLat != null ? Number(cfg.estabelecimentoLat) : null;
+    CONFIG.lojaLng = cfg.estabelecimentoLng != null ? Number(cfg.estabelecimentoLng) : null;
     CONFIG.premioJogo      = cfg.premioJogo      || '';   // frase do prêmio do jogo da cobrinha (editável no painel; ''=fallback)
     CONFIG.playlistMusica  = cfg.playlistMusica;   // 'PL…'=toca a playlist do próprio tenant | ''/undefined=sem música (aditivo off)
     CONFIG.playlistShuffle = cfg.playlistShuffle === true;   // true=embaralha (toggle do admin) | false/ausente=ordem da playlist
@@ -1940,7 +1950,53 @@ function _salvarEnderecoTenant() {
   } catch(e) {}
 }
 
+// ── LOCALIZAÇÃO DO CLIENTE (GPS do celular) ──────────────────────────────────
+// Endereço digitado em Cachoeiras de Macacu geocodifica errado com frequência e o entregador se
+// perde. O cliente que está no local pode mandar a coordenada do celular JUNTO com o endereço:
+//   - NÃO substitui o endereço (o entregador lê o endereço; a coordenada vai pro mapa e pra rota);
+//   - campos PRÓPRIOS no pedido (gpsLat/gpsLng/gpsPrecisaoM/gpsEm), nunca os geo* da geocodificação —
+//     o entregador precisa saber de onde veio cada um;
+//   - negou, falhou, demorou → o pedido segue normal, sem coordenada. Nunca trava.
+// ⚠️ Fica SÓ nesta variável, para ESTE pedido: o clienteData vai pro localStorage e é reusado no
+// próximo pedido — a coordenada de hoje não pode virar a entrega de amanhã.
+let _gpsEntrega = null; // { lat, lng, precisaoM, em }
+const GPS_PRECISAO_MAX_M = 100; // pior que isso é IP/Wi-Fi (computador), não GPS — erro de quilômetros
+const GPS_RAIO_LOJA_KM   = 10;  // mesmo raio da geocodificação: longe disso, o cliente não está no local
+function _distKmGps(a, b) {
+  const dLat = (a.lat - b.lat) * 111.32, dLng = (a.lng - b.lng) * 111.32 * Math.cos(a.lat * Math.PI / 180);
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+function _gpsMsg(html) { const el = document.getElementById('gpsMsg'); if (el) el.innerHTML = html; }
+function usarMinhaLocalizacao() {
+  const btn = document.getElementById('gpsBtn');
+  if (!navigator.geolocation) return;
+  if (btn) { btn.disabled = true; btn.textContent = '📍 Buscando sua localização...'; }
+  const voltar = (msg) => {   // falhou: botão volta, pedido segue normal
+    _gpsEntrega = null;
+    if (btn) { btn.disabled = false; btn.textContent = '📍 Estou no local — usar minha localização'; }
+    _gpsMsg(msg);
+  };
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const c = pos.coords, precisaoM = Math.round(c.accuracy || 0);
+    if (!precisaoM || precisaoM > GPS_PRECISAO_MAX_M) {
+      return voltar(`A localização veio imprecisa (±${precisaoM || '?'} m) — seguimos pelo endereço digitado.`);
+    }
+    if (CONFIG.lojaLat != null && _distKmGps({ lat: c.latitude, lng: c.longitude }, { lat: CONFIG.lojaLat, lng: CONFIG.lojaLng }) > GPS_RAIO_LOJA_KM) {
+      return voltar('Sua localização está fora da área de entrega — seguimos pelo endereço digitado.');
+    }
+    _gpsEntrega = { lat: c.latitude, lng: c.longitude, precisaoM, em: Date.now() };
+    if (btn) btn.textContent = '📍 Localização capturada';
+    _gpsMsg(`<span class="gps-ok">✓ Localização capturada (±${precisaoM} m)</span>`);
+  }, () => {
+    voltar('Sem problema — seu pedido segue normal pelo endereço.');
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+}
+
 function limparEndereco() {
+  _gpsEntrega = null;   // outro endereço → a coordenada capturada não vale pra ele
+  const gb = document.getElementById('gpsBtn');
+  if (gb) { gb.disabled = false; gb.textContent = '📍 Estou no local — usar minha localização'; }
+  _gpsMsg('Ajuda o entregador a te achar. Use se você está no endereço da entrega agora.');
   ['fRua','fNumero','fComp','fRef'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const sn = document.getElementById('fSemNumero');
   if (sn) sn.checked = false;
@@ -2069,6 +2125,13 @@ function renderStepDados(el) {
           🛵 Taxa de entrega para <strong>${bairroSelecionado.nome}</strong>:
           <strong>R$ ${Number(bairroSelecionado.taxa).toFixed(2).replace('.',',')}</strong>
         </div>` : temBairros ? `<div class="info-note" id="taxaInfo" style="display:none"></div>` : ''}
+      ${navigator.geolocation ? `
+      <div class="gps-box">
+        <button type="button" class="gps-btn" id="gpsBtn" onclick="usarMinhaLocalizacao()"${_gpsEntrega ? ' disabled' : ''}>📍 Estou no local — usar minha localização</button>
+        <div class="gps-sub" id="gpsMsg">${_gpsEntrega
+          ? `<span class="gps-ok">✓ Localização capturada (±${_gpsEntrega.precisaoM} m)</span>`
+          : 'Ajuda o entregador a te achar. Use se você está no endereço da entrega agora.'}</div>
+      </div>` : ''}
       <div style="text-align:right;margin-top:-4px">
         <a onclick="limparEndereco()" style="font-size:12px;color:var(--orange);cursor:pointer;text-decoration:underline">Entregar em outro endereço?</a>
       </div>
@@ -2100,7 +2163,7 @@ function setEntrega(tipo) {
   document.getElementById('enderecoFields').style.display = tipo==='delivery' ? 'block' : 'none';
   document.querySelectorAll('.delivery-option').forEach(el => el.classList.remove('selected'));
   event.currentTarget.classList.add('selected');
-  if (tipo !== 'delivery') bairroSelecionado = null;
+  if (tipo !== 'delivery') { bairroSelecionado = null; _gpsEntrega = null; }
   _atualizarMinimoWarning();
 }
 
@@ -2353,6 +2416,10 @@ function finalizarPedido() {
           // retirada/local), que é o TIPO DE VENDA e sempre esteve correto.
           origem: 'cardapio',
           ...(sessionStorage.getItem('mesaAtiva') ? { mesa: sessionStorage.getItem('mesaAtiva') } : {}),
+          // GPS do cliente (opcional) — campos próprios, separados dos geo* da geocodificação.
+          ...(tipoEntrega === 'delivery' && _gpsEntrega ? {
+            gpsLat: _gpsEntrega.lat, gpsLng: _gpsEntrega.lng, gpsPrecisaoM: _gpsEntrega.precisaoM, gpsEm: _gpsEntrega.em,
+          } : {}),
           ...(formaPag === 'pix' ? { pixStatus: 'aguardando_geracao', cardapioOrigin: location.origin } : {})
         };
         return pedidosRef.doc(pedido.id).set(pedido).then(() => pedido);
@@ -2371,6 +2438,7 @@ function finalizarPedido() {
       _salvarEnderecoTenant();
       renderCartContent();
       _pedidoReqId = null; // intenção concluída → próximo pedido gera novo reqId
+      _gpsEntrega = null;  // a coordenada era deste pedido; o próximo pede de novo
     })
     .catch(err => {
       const code = (err && err.code) ? String(err.code) : '';

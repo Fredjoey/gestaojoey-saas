@@ -2571,7 +2571,9 @@ async function _renderMapaPedidos() {
   marca(cLat, cLng, _gmBola({ raio: 11, cor: '#ff6b35', borda: '#fff', espessura: 2 }), '🏠 <b>Estabelecimento</b>', 'Estabelecimento');
   // pedidos de delivery de HOJE em produção/pronto
   const lista = pedidos.filter(p => p.data === hoje && p.entrega === 'delivery' && (p.status === 'producao' || p.status === 'pronto'));
-  const comGeo = lista.filter(p => p.geoStatus === 'ok' && p.geoLat != null && p.geoLng != null);
+  // GPS do cliente (gpsLat/gpsLng, mandado do cardápio) tem PRIORIDADE sobre a geocodificação do endereço.
+  const temGps = (p) => p.gpsLat != null && p.gpsLng != null;
+  const comGeo = lista.filter(p => temGps(p) || (p.geoStatus === 'ok' && p.geoLat != null && p.geoLng != null));
   const semGeo = lista.length - comGeo.length;
   const bounds = new g.LatLngBounds();
   bounds.extend({ lat: cLat, lng: cLng });
@@ -2588,8 +2590,21 @@ async function _renderMapaPedidos() {
     //   aproximado → círculo tracejado, oco (é a rua/região; a casa está por perto)
     //   bairro     → pino no ponto marcado do condomínio (é o portão, não a casa)
     const prec = p.geoPrecisao || 'exato';   // pedidos antigos (Nominatim) não têm o campo
+    //   gps        → anel AZUL: o ponto veio do celular do cliente, no local (≤100 m de precisão)
+    const gps = temGps(p);
+    const ponto = gps ? { lat: p.gpsLat, lng: p.gpsLng } : { lat: p.geoLat, lng: p.geoLng };
     let estilo, aviso;
-    if (prec === 'bairro') {
+    if (gps) {
+      estilo = { raio: 10, borda: '#38bdf8', espessura: 3, cor, opacidade: .95 };
+      aviso  = `<br><span style="color:#0369a1">📡 Localização enviada pelo cliente${p.gpsPrecisaoM ? ` (±${Number(p.gpsPrecisaoM)} m)` : ''}</span>`;
+      // O endereço digitado foi geocodificado longe do GPS? Avisa — pode ter digitado errado, ou
+      // mandado o GPS de outro lugar. 300 m: mais que o erro do GPS e de um match "exato" do Google.
+      if (p.geoStatus === 'ok' && p.geoLat != null && p.geoLng != null) {
+        const dLat = (p.gpsLat - p.geoLat) * 111320, dLng = (p.gpsLng - p.geoLng) * 111320 * Math.cos(p.gpsLat * Math.PI / 180);
+        const distM = Math.round(Math.sqrt(dLat * dLat + dLng * dLng));
+        if (distM > 300) aviso += `<br><span style="color:#b45309">⚠️ O endereço digitado fica a ${distM >= 1000 ? (distM / 1000).toFixed(1).replace('.', ',') + ' km' : distM + ' m'} daqui — confira com o cliente</span>`;
+      }
+    } else if (prec === 'bairro') {
       estilo = { raio: 11, borda: '#a78bfa', espessura: 3, cor, opacidade: .35 };
       aviso  = '<br><span style="color:#7c3aed">🏘️ Ponto do condomínio (portão) — não é a casa exata</span>';
     } else if (prec === 'aproximado') {
@@ -2602,17 +2617,17 @@ async function _renderMapaPedidos() {
 
     // "Ver a rua": só existe quando há coordenada (todo pino plotado tem — a checagem
     // é defensiva). Ajuda o motoboy/atendente a reconhecer a fachada antes de sair.
-    const sv = streetViewUrl(p.geoLat, p.geoLng);
+    const sv = streetViewUrl(ponto.lat, ponto.lng);
     const svBtn = sv
       ? `<br><a href="${sv}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;padding:5px 10px;background:#243447;color:#7cc4ff;border:1px solid #2f4763;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none">👁 Ver a rua</a>`
       : '';
 
-    marca(p.geoLat, p.geoLng, _gmBola(estilo),
+    marca(ponto.lat, ponto.lng, _gmBola(estilo),
       `<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#666">${itens || '—'}</span><br><b>${total}</b>${aviso}${svBtn}`,
       `#${p.id}`);
-    bounds.extend({ lat: p.geoLat, lng: p.geoLng });
+    bounds.extend(ponto);
   });
-  const nAprox = comGeo.filter(p => p.geoPrecisao === 'aproximado' || p.geoPrecisao === 'bairro').length;
+  const nAprox = comGeo.filter(p => !temGps(p) && (p.geoPrecisao === 'aproximado' || p.geoPrecisao === 'bairro')).length;
   const avisos = [];
   if (semGeo > 0)  avisos.push(`⚠️ ${semGeo} sem localização`);
   if (nAprox > 0)  avisos.push(`${nAprox} aproximado(s)`);

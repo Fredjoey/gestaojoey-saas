@@ -97,3 +97,19 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
   `addListener('click')` não torna o marcador clicável (3.66). Arrasto: `gmpDraggable` + `dragend`.
 - Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
   pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
+
+## GPS do cliente no pedido (desde 03/10/2026)
+
+No cardápio, em delivery, o botão **"📍 Estou no local — usar minha localização"** (em destaque, opcional) manda a
+coordenada do celular JUNTO com o endereço digitado — não o substitui. Campos de topo **próprios** no pedido:
+`gpsLat`, `gpsLng`, `gpsPrecisaoM`, `gpsEm` — nunca os `geo*`, que são da geocodificação do endereço.
+
+- Descarta precisão pior que **100 m** (computador localiza por IP) e ponto a mais de **10 km** da loja (cliente não
+  está no local). Negou/falhou/demorou → pedido segue normal, sem coordenada.
+- A coordenada vive só em `_gpsEntrega`, para ESTE pedido — fora do `clienteData`, que vai pro localStorage e é
+  reusado no próximo pedido.
+- **Prioridade:** entregador (`destinoRota`) e mapa do painel usam GPS → geocodificação exata → texto. O entregador
+  vê "📡 Localização enviada pelo cliente"; no mapa o pino tem anel azul e avisa quando o endereço geocodificado
+  fica a mais de **300 m** do GPS.
+- **Privacidade:** é a casa do cliente ao metro. O assessor (joey-secretário) só mostra `gps*` no nível
+  `endereco` — a projeção de pedido de lá virou lista do que PODE sair (03/10). A Joey IA já projetava.

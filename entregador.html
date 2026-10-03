@@ -30,6 +30,7 @@
   .cli{font-size:16px;font-weight:700;margin-bottom:2px}
   .end{font-size:14px;color:var(--text);line-height:1.45;margin:6px 0}
   .end .ref{color:var(--orange)}
+  .gps-cli{font-size:12.5px;font-weight:700;color:#38bdf8;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35);border-radius:8px;padding:6px 9px;margin:4px 0 6px}
   .tel{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--orange2);text-decoration:none;font-weight:600;margin:2px 0 8px}
   .itens{font-size:13px;color:var(--text2);line-height:1.5;border-top:1px solid var(--border);padding-top:8px;margin-top:6px}
   .pag{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:14px}
@@ -146,17 +147,23 @@ function enderecoTxt(c) {
   const l1 = [c.rua, c.numero].filter(Boolean).join(', ');
   return [l1, c.bairro].filter(Boolean).join(' · ');
 }
-// DESTINO — coordenada quando o Google achou a CASA (geoPrecisao 'exato'); senão, texto.
-// O texto é frágil: tem pedido com "Jonas burguers, S/N" no lugar da rua. Quando a
-// coordenada é confiável, ela ganha. Nos demais casos (aproximado/bairro/sem geo) o
-// texto é melhor, porque a coord seria só a rua ou o portão do condomínio.
+// DESTINO — por ordem de confiança:
+//   1. GPS do CLIENTE (gpsLat/gpsLng, mandado do cardápio quando ele estava no local, ≤100 m de
+//      precisão): é onde ele está, não o que o Google entendeu do endereço digitado;
+//   2. geocodificação que achou a CASA (geoPrecisao 'exato');
+//   3. o texto do endereço.
+// O texto é frágil: tem pedido com "Jonas burguers, S/N" no lugar da rua. Nos casos aproximado/bairro
+// o texto ainda é melhor que a coord, que seria só a rua ou o portão do condomínio.
 function destinoRota(p) {
   const c = (p && p.cliente) || {};
+  if (p && p.gpsLat != null && p.gpsLng != null) {
+    return { txt: p.gpsLat + ',' + p.gpsLng, coord: true, fonte: 'gps' };
+  }
   if (p && p.geoPrecisao === 'exato' && p.geoLat != null && p.geoLng != null) {
-    return { txt: p.geoLat + ',' + p.geoLng, coord: true };
+    return { txt: p.geoLat + ',' + p.geoLng, coord: true, fonte: 'geo' };
   }
   const txt = [c.rua, c.numero, c.bairro, c.cidade || _lojaGeo.cidade, _lojaGeo.estado].filter(Boolean).join(', ');
-  return { txt, coord: false };
+  return { txt, coord: false, fonte: 'texto' };
 }
 
 // ORIGEM — GPS REAL do celular do motoboy.
@@ -328,6 +335,7 @@ function render(lista) {
       <div class="cli">${esc(c.nome || '—')}</div>
       ${tel ? `<a class="tel" href="tel:${tel}">📞 ${esc(c.tel)}</a>` : ''}
       <div class="end">📍 ${esc(enderecoTxt(c)) || '—'}${c.ref ? `<br><span class="ref">Ref: ${esc(c.ref)}</span>` : ''}${c.complemento ? `<br>${esc(c.complemento)}` : ''}</div>
+      ${_dr.fonte === 'gps' ? `<div class="gps-cli">📡 Localização enviada pelo cliente${p.gpsPrecisaoM ? ` (±${Number(p.gpsPrecisaoM)} m)` : ''} — a rota vai direto ao ponto dele</div>` : ''}
       <div class="itens">${itens || '—'}</div>
       <div class="pag">${pagHtml}<span class="total">${total}</span></div>
       <div class="btns">
