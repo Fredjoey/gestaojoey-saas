@@ -6,12 +6,36 @@ const JSZip = require('jszip');
 const { precoUnitario } = require('./preco');   // preço canônico do item (base + adicionais)
 admin.initializeApp();
 const db = admin.firestore();
+const GESTAO_BUCKET = 'gestaojoey.firebasestorage.app';   // Storage do gestaojoey (XMLs das NFC-e)
+
+// Estas functions rodam no projeto pedidos-joey e precisam ler o Firestore/Storage do
+// gestaojoey — OUTRO projeto. Isso é feito com a chave ./serviceAccount-gestaojoey.json, que é
+// gitignored e só existe no desktop. Como o require era direto, o módulo quebrava ao carregar em
+// qualquer máquina sem a chave, e o deploy falhava junto (o firebase-tools carrega o index.js
+// pra descobrir as exports). Por isso o carregamento virou condicional.
+//
+// ATENÇÃO: o fallback NÃO é equivalente. Sem a chave, o app 'gestao' usa a credencial do
+// ambiente, que em produção é a conta de serviço do pedidos-joey — e ela só enxerga o gestaojoey
+// se tiver papel concedido lá (ver CLAUDE.md, seção Projetos e deploy). Daí o log ruidoso
+// quando o fallback acontece rodando no GCP: é pra aparecer, não pra passar batido.
+function _credGestao() {
+  try {
+    return { cred: admin.credential.cert(require('./serviceAccount-gestaojoey.json')), via: 'chave no bundle' };
+  } catch (e) {
+    if (e.code !== 'MODULE_NOT_FOUND') throw e;   // JSON corrompido não vira fallback silencioso
+    return { cred: admin.credential.applicationDefault(), via: 'credencial do ambiente (ADC)' };
+  }
+}
+const _credGest = _credGestao();
+if (_credGest.via !== 'chave no bundle' && process.env.K_SERVICE) {
+  console.error('[gestao] ATENCAO: deploy SEM serviceAccount-gestaojoey.json — o acesso ao projeto' +
+    ' gestaojoey agora depende de IAM cross-project para a conta de servico do pedidos-joey.');
+}
 const gestaoApp = admin.initializeApp(
-  { credential: admin.credential.cert(require('./serviceAccount-gestaojoey.json')) },
+  { credential: _credGest.cred, projectId: 'gestaojoey', storageBucket: GESTAO_BUCKET },
   'gestao'
 );
 const dbGestao = gestaoApp.firestore();
-const GESTAO_BUCKET = 'gestaojoey.firebasestorage.app';   // Storage do gestaojoey (XMLs das NFC-e)
 
 // ── FOCUS NFe — EMISSÃO DE NFCe ──────────────────────────────────────────────
 
