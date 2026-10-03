@@ -11,8 +11,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -2479,46 +2477,104 @@ async function notificarMotoboyEntrega(p) {
 }
 
 // ── Mapa de pedidos de entrega (Leaflet, reusa o CDN da Parte B) — SÓ visualização ──
-// Fundo dos 3 mapas (pedidos, posição da loja, portaria do bairro). PALIATIVO de 03/10/2026: o CARTO
-// (dark_all) passou a exigir chave e devolvia a imagem "API KEY REQUIRED" no lugar de cada tile.
-// OpenStreetMap direto não pede chave (tráfego do painel é baixo, dentro da política de uso deles).
-// Visual claro em vez de escuro — temporário até a troca para Google Maps JS.
-const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const OSM_ATRIB = '© OpenStreetMap';
-let _mapPedidos = null, _mapPedidosLayer = null;
+// ── GOOGLE MAPS JS — os 3 mapas do painel (pedidos, posição da loja, portaria do bairro) ──
+// Trocado do Leaflet em 03/10/2026: o fundo do CARTO passou a exigir chave ("API KEY REQUIRED" em cada
+// tile) e o Fred prefere o visual do Google. Só o painel da equipe usa mapa — o cliente não vê nenhum.
+// A chave é de NAVEGADOR (fica no código, como toda chave do Maps JS): projeto joey-secretario, restrita
+// à Maps JavaScript API e aos referenciadores do painel. NÃO é a do Geocoding (essa é do servidor).
+// Cobrança: 1 "map load" por `new Map` — cada mapa é criado UMA vez por sessão do painel e reaproveitado.
+const GMAPS_KEY    = 'AIzaSyD7BS9C7TUVtdOEuqKSqpjCYxSN4h_q9_k';
+const GMAPS_MAP_ID = 'dcb92f618f2c5b005cf0344a';   // estilo "painel-joey-escuro" no slot Modo escuro
+let _gmPronto = null;
+// Carrega o SDK uma vez (só quando um mapa é aberto) e devolve as classes usadas.
+function _gm() {
+  if (_gmPronto) return _gmPronto;
+  _gmPronto = new Promise((ok, falha) => {
+    window.__gmCarregado = ok;
+    const sc = document.createElement('script');
+    sc.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&v=weekly&loading=async&callback=__gmCarregado`;
+    sc.async = true;
+    sc.onerror = () => { _gmPronto = null; falha(new Error('Google Maps não carregou')); };
+    document.head.appendChild(sc);
+  }).then(async () => {
+    const [{ Map, InfoWindow }, { AdvancedMarkerElement }, { LatLngBounds, ColorScheme }] = await Promise.all([
+      google.maps.importLibrary('maps'), google.maps.importLibrary('marker'), google.maps.importLibrary('core'),
+    ]);
+    return { Map, InfoWindow, AdvancedMarkerElement, LatLngBounds, ColorScheme };
+  });
+  return _gmPronto;
+}
+// ⚠️ colorScheme DARK é obrigatório: o estilo escuro está no slot "Modo escuro" do Map ID; sem isto o
+// mapa abre com o estilo padrão (claro). Só vale na criação — não muda depois.
+function _gmNovoMapa(g, el, lat, lng, zoom) {
+  return new g.Map(el, {
+    center: { lat, lng }, zoom, mapId: GMAPS_MAP_ID, colorScheme: g.ColorScheme.DARK,
+    mapTypeControl: false, streetViewControl: false, clickableIcons: false, gestureHandling: 'greedy',
+  });
+}
+// Bolinha (o "circleMarker" do Leaflet) como conteúdo de AdvancedMarker. O conteúdo é ancorado pela
+// BASE; o translateY(50%) põe o CENTRO da bola no ponto.
+function _gmBola({ raio = 9, cor = '#ff6b35', borda = '#fff', espessura = 2, opacidade = 1, tracejado = false }) {
+  const d = document.createElement('div');
+  const hex = cor.replace('#', '');
+  const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+  d.style.cssText = `width:${raio * 2}px;height:${raio * 2}px;border-radius:50%;box-sizing:border-box;` +
+    `background:rgba(${rgb.join(',')},${opacidade});border:${espessura}px ${tracejado ? 'dashed' : 'solid'} ${borda};` +
+    `transform:translateY(50%);cursor:pointer`;
+  return d;
+}
+const _gmLat = (pos) => (typeof pos.lat === 'function' ? pos.lat() : pos.lat);
+const _gmLng = (pos) => (typeof pos.lng === 'function' ? pos.lng() : pos.lng);
+// Conteúdo do balão: o InfoWindow é sempre claro, então o texto vai escuro.
+const _gmBalao = (html) => `<div style="color:#1a1a1a;font-size:13px;line-height:1.45;max-width:260px">${html}</div>`;
+
+let _mapPedidos = null, _mapPedidosMarcas = [], _mapPedidosInfo = null, _mapPedidosCriando = null;
 function abrirMapaPedidos() {
   document.getElementById('mapaPedidosModal').classList.add('show');
-  setTimeout(_renderMapaPedidos, 100);   // espera o modal exibir → invalidateSize correto
+  setTimeout(_renderMapaPedidos, 100);   // espera o modal exibir (o mapa precisa do tamanho final)
 }
 function fecharMapaPedidos() { document.getElementById('mapaPedidosModal').classList.remove('show'); }
 
-// Street View no ponto do pedido — abre o Google numa aba (o mapa segue Leaflet/OSM, sem custo).
+// Street View no ponto do pedido — abre o Google numa aba (Maps URLs: link, sem custo de API).
 // Formato oficial da Maps URLs API; o Google casa com o panorama mais próximo do viewpoint.
 function streetViewUrl(lat, lng) {
   if (lat == null || lng == null) return '';
   return 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + lat + ',' + lng;
 }
-function _renderMapaPedidos() {
+async function _renderMapaPedidos() {
   const el = document.getElementById('mapaPedidos');
-  if (!el || typeof L === 'undefined') return;
+  if (!el) return;
+  let g;
+  try { g = await _gm(); } catch (e) { console.error('[mapa]', e); notify('Não consegui carregar o Google Maps.', 'error'); return; }
   const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   const cLat = (config.estabelecimentoLat != null) ? config.estabelecimentoLat : -22.460;
   const cLng = (config.estabelecimentoLng != null) ? config.estabelecimentoLng : -42.652;
+  // Cria UMA vez por sessão (cada `new Map` é cobrado). O snapshot dos pedidos chama isto de novo com o
+  // modal aberto — a promessa impede duas criações concorrentes.
   if (!_mapPedidos) {
-    _mapPedidos = L.map('mapaPedidos').setView([cLat, cLng], 14);
-    L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATRIB }).addTo(_mapPedidos);
-    _mapPedidosLayer = L.layerGroup().addTo(_mapPedidos);
+    _mapPedidosCriando = _mapPedidosCriando || Promise.resolve().then(() => {
+      _mapPedidos = _gmNovoMapa(g, el, cLat, cLng, 14);
+      _mapPedidosInfo = new g.InfoWindow();
+    });
+    await _mapPedidosCriando;
   }
-  _mapPedidos.invalidateSize();
-  _mapPedidosLayer.clearLayers();
-  // estabelecimento (laranja do painel) — circleMarker evita dependência de imagem de ícone do Leaflet
-  L.circleMarker([cLat, cLng], { radius: 11, color: '#fff', weight: 2, fillColor: '#ff6b35', fillOpacity: 1 })
-    .bindPopup('🏠 <b>Estabelecimento</b>').addTo(_mapPedidosLayer);
+  _mapPedidosMarcas.forEach(m => { m.map = null; });
+  _mapPedidosMarcas = [];
+  const marca = (lat, lng, conteudo, balao, titulo) => {
+    // ⚠️ gmpClickable + 'gmp-click': com addListener('click') o marcador avançado não fica clicável
+    // (testado na 3.66 — o clique caía no mapa e o balão não abria).
+    const m = new g.AdvancedMarkerElement({ map: _mapPedidos, position: { lat, lng }, content: conteudo, title: titulo || '', gmpClickable: true });
+    m.addEventListener('gmp-click', () => { _mapPedidosInfo.setContent(_gmBalao(balao)); _mapPedidosInfo.open({ map: _mapPedidos, anchor: m }); });
+    _mapPedidosMarcas.push(m);
+  };
+  // estabelecimento (laranja do painel)
+  marca(cLat, cLng, _gmBola({ raio: 11, cor: '#ff6b35', borda: '#fff', espessura: 2 }), '🏠 <b>Estabelecimento</b>', 'Estabelecimento');
   // pedidos de delivery de HOJE em produção/pronto
   const lista = pedidos.filter(p => p.data === hoje && p.entrega === 'delivery' && (p.status === 'producao' || p.status === 'pronto'));
   const comGeo = lista.filter(p => p.geoStatus === 'ok' && p.geoLat != null && p.geoLng != null);
   const semGeo = lista.length - comGeo.length;
-  const pts = [[cLat, cLng]];
+  const bounds = new g.LatLngBounds();
+  bounds.extend({ lat: cLat, lng: cLng });
   comGeo.forEach(p => {
     const cor = p.status === 'producao' ? '#f59e0b' : '#34d399';
     const c = p.cliente || {};
@@ -2534,13 +2590,13 @@ function _renderMapaPedidos() {
     const prec = p.geoPrecisao || 'exato';   // pedidos antigos (Nominatim) não têm o campo
     let estilo, aviso;
     if (prec === 'bairro') {
-      estilo = { radius: 11, color: '#a78bfa', weight: 3, fillColor: cor, fillOpacity: .35, dashArray: null };
-      aviso  = '<br><span style="color:#a78bfa">🏘️ Ponto do condomínio (portão) — não é a casa exata</span>';
+      estilo = { raio: 11, borda: '#a78bfa', espessura: 3, cor, opacidade: .35 };
+      aviso  = '<br><span style="color:#7c3aed">🏘️ Ponto do condomínio (portão) — não é a casa exata</span>';
     } else if (prec === 'aproximado') {
-      estilo = { radius: 10, color: cor, weight: 2, fillColor: cor, fillOpacity: .12, dashArray: '4 3' };
-      aviso  = '<br><span style="color:#fbbf24">📍 Localização aproximada — confira o endereço</span>';
+      estilo = { raio: 10, borda: cor, espessura: 2, cor, opacidade: .12, tracejado: true };
+      aviso  = '<br><span style="color:#b45309">📍 Localização aproximada — confira o endereço</span>';
     } else {
-      estilo = { radius: 9, color: '#0f0f0f', weight: 2, fillColor: cor, fillOpacity: .95, dashArray: null };
+      estilo = { raio: 9, borda: '#0f0f0f', espessura: 2, cor, opacidade: .95 };
       aviso  = '';
     }
 
@@ -2551,18 +2607,24 @@ function _renderMapaPedidos() {
       ? `<br><a href="${sv}" target="_blank" rel="noopener" style="display:inline-block;margin-top:7px;padding:5px 10px;background:#243447;color:#7cc4ff;border:1px solid #2f4763;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none">👁 Ver a rua</a>`
       : '';
 
-    L.circleMarker([p.geoLat, p.geoLng], estilo)
-      .bindPopup(`<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#999">${itens || '—'}</span><br><b>${total}</b>${aviso}${svBtn}`)
-      .addTo(_mapPedidosLayer);
-    pts.push([p.geoLat, p.geoLng]);
+    marca(p.geoLat, p.geoLng, _gmBola(estilo),
+      `<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#666">${itens || '—'}</span><br><b>${total}</b>${aviso}${svBtn}`,
+      `#${p.id}`);
+    bounds.extend({ lat: p.geoLat, lng: p.geoLng });
   });
   const nAprox = comGeo.filter(p => p.geoPrecisao === 'aproximado' || p.geoPrecisao === 'bairro').length;
   const avisos = [];
   if (semGeo > 0)  avisos.push(`⚠️ ${semGeo} sem localização`);
   if (nAprox > 0)  avisos.push(`${nAprox} aproximado(s)`);
   document.getElementById('mapaPedidosAviso').textContent = avisos.join(' · ');
-  if (pts.length > 1) _mapPedidos.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
-  else _mapPedidos.setView([cLat, cLng], 14);
+  if (comGeo.length) {
+    _mapPedidos.fitBounds(bounds, 40);
+    // fitBounds não tem maxZoom: com um pedido só ele afundaria no zoom máximo.
+    google.maps.event.addListenerOnce(_mapPedidos, 'idle', () => { if (_mapPedidos.getZoom() > 16) _mapPedidos.setZoom(16); });
+  } else {
+    _mapPedidos.setCenter({ lat: cLat, lng: cLng });
+    _mapPedidos.setZoom(14);
+  }
 }
 function _agoraBRT() {
   const brtStr = new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' });
@@ -5831,29 +5893,35 @@ function carregarConfig() {
   setTimeout(_initMapaEstab, 120);
 }
 
-// ── Posição do estabelecimento no mapa (Leaflet) — base da Gestão de Entrega (geocodificação) ──
+// ── Posição do estabelecimento no mapa (Google Maps) — base da Gestão de Entrega (geocodificação) ──
 // Geocodificação roda no SERVIDOR (function geocodificarEndereco); aqui só renderiza/arrasta o pino.
-let _mapEstab = null, _markEstab = null, _estabPos = null, _estabGeo = null;
-function _initMapaEstab() {
+let _mapEstab = null, _markEstab = null, _estabPos = null, _estabGeo = null, _mapEstabCriando = null;
+async function _initMapaEstab() {
   const el = document.getElementById('mapaEstab');
-  if (!el || typeof L === 'undefined') return;
-  if (_mapEstab) { _mapEstab.invalidateSize(); return; }   // idempotente (re-show da aba)
-  const temPos = config.estabelecimentoLat != null;
-  const lat = temPos ? config.estabelecimentoLat : -22.460; // fallback: Cachoeiras de Macacu/RJ
-  const lng = temPos ? config.estabelecimentoLng : -42.652;
-  _mapEstab = L.map('mapaEstab').setView([lat, lng], temPos ? 16 : 13);
-  L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATRIB }).addTo(_mapEstab);
-  if (temPos) _setPinoEstab(lat, lng);
-  setTimeout(() => { if (_mapEstab) _mapEstab.invalidateSize(); }, 200);
+  if (!el) return;
+  if (_mapEstab) return;                                     // idempotente (re-show da aba)
+  if (_mapEstabCriando) return _mapEstabCriando;
+  _mapEstabCriando = (async () => {
+    let g;
+    try { g = await _gm(); } catch (e) { console.error('[mapaEstab]', e); _mapEstabCriando = null; return; }
+    const temPos = config.estabelecimentoLat != null;
+    const lat = temPos ? config.estabelecimentoLat : -22.460; // fallback: Cachoeiras de Macacu/RJ
+    const lng = temPos ? config.estabelecimentoLng : -42.652;
+    _mapEstab = _gmNovoMapa(g, el, lat, lng, temPos ? 16 : 13);
+    if (temPos) await _setPinoEstab(lat, lng);
+  })();
+  return _mapEstabCriando;
 }
-function _setPinoEstab(lat, lng) {
+async function _setPinoEstab(lat, lng) {
+  const g = await _gm();
   _estabPos = { lat, lng };
-  if (_markEstab) _markEstab.setLatLng([lat, lng]);
+  if (_markEstab) _markEstab.position = { lat, lng };
   else {
-    _markEstab = L.marker([lat, lng], { draggable: true }).addTo(_mapEstab);
-    _markEstab.on('dragend', () => { const ll = _markEstab.getLatLng(); _estabPos = { lat: ll.lat, lng: ll.lng }; _mostrarCoordEstab(); });
+    _markEstab = new g.AdvancedMarkerElement({ map: _mapEstab, position: { lat, lng }, gmpDraggable: true, title: 'Estabelecimento — arraste para ajustar' });
+    _markEstab.addListener('dragend', () => { const ll = _markEstab.position; _estabPos = { lat: _gmLat(ll), lng: _gmLng(ll) }; _mostrarCoordEstab(); });
   }
-  _mapEstab.setView([lat, lng], 16);
+  _mapEstab.setCenter({ lat, lng });
+  _mapEstab.setZoom(16);
   const b = document.getElementById('btnSalvarPos'); if (b) b.style.display = '';
   _mostrarCoordEstab();
 }
@@ -5868,8 +5936,8 @@ async function geocodarEstab() {
     const fn = firebase.app().functions('southamerica-east1').httpsCallable('geocodificarEndereco');
     const { data } = await fn({ endereco: end });
     _estabGeo = data;                 // guarda cidade/estado p/ salvar (usados na geocodificação dos pedidos)
-    _initMapaEstab();
-    _setPinoEstab(data.lat, data.lng);
+    await _initMapaEstab();
+    await _setPinoEstab(data.lat, data.lng);
   } catch (e) {
     console.error('[geocodarEstab]', e);
     notify('Não encontrei esse endereço. Ajuste o texto e tente de novo.', 'error');
@@ -6252,12 +6320,13 @@ function renderBairros() {
 }
 
 // ── COORDENADA FIXA DO BAIRRO (mini-mapa) ────────────────────────────────────
-let _mbIdx = -1, _mbMap = null, _mbMarker = null;
+let _mbIdx = -1, _mbMap = null, _mbMarker = null, _mbLoja = null, _mbPos = null;
 
 function abrirMapaBairro(i) {
   const b = (config.bairros || [])[i];
   if (!b) return;
   _mbIdx = i;
+  _mbPos = null;
   document.getElementById('mapaBairroTitulo').textContent = '📍 ' + b.nome;
   const temCoord = b.lat != null && b.lng != null;
   const lat = temCoord ? Number(b.lat) : (config.estabelecimentoLat != null ? config.estabelecimentoLat : -22.4655);
@@ -6265,37 +6334,38 @@ function abrirMapaBairro(i) {
   document.getElementById('mapaBairroRemover').style.display = temCoord ? '' : 'none';
   document.getElementById('mapaBairroModal').classList.add('show');
 
-  setTimeout(() => {
+  setTimeout(async () => {
+    let g;
+    try { g = await _gm(); } catch (e) { console.error('[mapaBairro]', e); notify('Não consegui carregar o Google Maps.', 'error'); return; }
     if (!_mbMap) {
-      _mbMap = L.map('mapaBairroMap').setView([lat, lng], temCoord ? 17 : 14);
-      L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATRIB }).addTo(_mbMap);
-      _mbMap.on('click', e => _mbSetPino(e.latlng.lat, e.latlng.lng));
+      _mbMap = _gmNovoMapa(g, document.getElementById('mapaBairroMap'), lat, lng, temCoord ? 17 : 14);
+      _mbMap.addListener('click', e => _mbSetPino(e.latLng.lat(), e.latLng.lng()));
     } else {
-      _mbMap.setView([lat, lng], temCoord ? 17 : 14);
+      _mbMap.setCenter({ lat, lng });
+      _mbMap.setZoom(temCoord ? 17 : 14);
     }
-    _mbMap.invalidateSize();
-    // Loja como referência (não arrastável)
-    if (config.estabelecimentoLat != null) {
-      L.circleMarker([config.estabelecimentoLat, config.estabelecimentoLng], { radius: 7, color: '#fff', weight: 2, fillColor: '#ff6b35', fillOpacity: 1 })
-        .bindPopup('🏠 Estabelecimento').addTo(_mbMap);
+    // Loja como referência (não arrastável). UMA vez: o Leaflet empilhava um marcador novo a cada abertura.
+    if (config.estabelecimentoLat != null && !_mbLoja) {
+      _mbLoja = new g.AdvancedMarkerElement({ map: _mbMap, title: 'Estabelecimento',
+        position: { lat: config.estabelecimentoLat, lng: config.estabelecimentoLng },
+        content: _gmBola({ raio: 7, cor: '#ff6b35', borda: '#fff', espessura: 2 }) });
     }
-    _mbSetPino(lat, lng);
+    await _mbSetPino(lat, lng);
     _mbAtualizarLabel(temCoord ? lat : null, temCoord ? lng : null);
   }, 120);
 }
 
-function _mbSetPino(lat, lng) {
-  if (_mbMarker) _mbMap.removeLayer(_mbMarker);
-  _mbMarker = L.circleMarker([lat, lng], { radius: 10, color: '#0f0f0f', weight: 2, fillColor: '#34d399', fillOpacity: .95, draggable: true }).addTo(_mbMap);
-  _mbMarker._latlng = L.latLng(lat, lng);
-  // arrastar: circleMarker não tem drag nativo — usa mousedown + move do mapa
-  _mbMarker.on('mousedown', () => {
-    _mbMap.dragging.disable();
-    const mover = e => _mbSetPino(e.latlng.lat, e.latlng.lng);
-    const soltar = () => { _mbMap.off('mousemove', mover); _mbMap.off('mouseup', soltar); _mbMap.dragging.enable(); };
-    _mbMap.on('mousemove', mover);
-    _mbMap.on('mouseup', soltar);
-  });
+// Pino da portaria: marcador arrastável nativo (o Leaflet não arrastava circleMarker e precisava de
+// mousedown + mousemove na mão). Clique no mapa também move o pino.
+async function _mbSetPino(lat, lng) {
+  const g = await _gm();
+  _mbPos = { lat, lng };
+  if (_mbMarker) _mbMarker.position = { lat, lng };
+  else {
+    _mbMarker = new g.AdvancedMarkerElement({ map: _mbMap, position: { lat, lng }, gmpDraggable: true, title: 'Portão do condomínio — arraste para ajustar',
+      content: _gmBola({ raio: 10, cor: '#34d399', borda: '#0f0f0f', espessura: 2, opacidade: .95 }) });
+    _mbMarker.addListener('dragend', () => { const ll = _mbMarker.position; _mbPos = { lat: _gmLat(ll), lng: _gmLng(ll) }; _mbAtualizarLabel(_mbPos.lat, _mbPos.lng); });
+  }
   _mbAtualizarLabel(lat, lng);
 }
 
@@ -6309,9 +6379,8 @@ function _mbAtualizarLabel(lat, lng) {
 
 function salvarMapaBairro() {
   const b = (config.bairros || [])[_mbIdx];
-  if (!b || !_mbMarker) return;
-  const ll = _mbMarker.getLatLng();
-  config.bairros[_mbIdx] = { ...b, lat: ll.lat, lng: ll.lng };
+  if (!b || !_mbPos) return;
+  config.bairros[_mbIdx] = { ...b, lat: _mbPos.lat, lng: _mbPos.lng };
   saveConfig();
   renderBairros();
   fecharMapaBairro();
