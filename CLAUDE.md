@@ -75,9 +75,21 @@ Os 3 mapas do `painel.html` (mapa de pedidos, posição da loja em Configuraçõ
 abre a rota por link do Google Maps/Waze, sem custo de API).
 
 - **Chave de NAVEGADOR** (`GMAPS_KEY`, no próprio `painel.html`): projeto `joey-secretario`, restrita à Maps
-  JavaScript API e aos referenciadores do painel (`*.gestaojoey.com.br` — inclui o `app.gestaojoey.com.br`
-  que o joey-app abre —, `hamburgueriajoey.com.br`, e `pedidos-joey`/`pedidos-joey-painel`/`gestaojoey-painel`
-  em `.web.app` e `.firebaseapp.com`). Domínio novo servindo o painel → incluir no console, senão o mapa não abre.
+  JavaScript API e aos **9 referenciadores** que servem o painel:
+  ```
+  https://*.gestaojoey.com.br/*                  (inclui app.gestaojoey.com.br, que o joey-app abre)
+  https://hamburgueriajoey.com.br/*
+  https://pedidos.hamburgueriajoey.com.br/*      (faltou na 1ª lista — o mapa não abria nele; adicionado em 03/10)
+  https://pedidos-joey.web.app/*
+  https://pedidos-joey.firebaseapp.com/*
+  https://pedidos-joey-painel.web.app/*
+  https://pedidos-joey-painel.firebaseapp.com/*
+  https://gestaojoey-painel.web.app/*
+  https://gestaojoey-painel.firebaseapp.com/*
+  ```
+  ⚠️ Domínio novo servindo o painel → incluir no console da chave, senão o mapa não abre ali (sem erro no resto
+  da tela). Foi o que aconteceu com o `pedidos.hamburgueriajoey.com.br`: a lista inicial saiu de uma varredura
+  dos domínios conhecidos e ele não estava nela.
   **Não é a chave do Geocoding** (essa é de servidor, segredo do `gestaojoey`).
 - **Map ID** `GMAPS_MAP_ID` (Rasterização): estilo escuro no slot "Modo escuro" → o mapa é criado com
   `colorScheme: DARK`; sem isso abre claro.
