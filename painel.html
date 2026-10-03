@@ -2479,6 +2479,12 @@ async function notificarMotoboyEntrega(p) {
 }
 
 // ── Mapa de pedidos de entrega (Leaflet, reusa o CDN da Parte B) — SÓ visualização ──
+// Fundo dos 3 mapas (pedidos, posição da loja, portaria do bairro). PALIATIVO de 03/10/2026: o CARTO
+// (dark_all) passou a exigir chave e devolvia a imagem "API KEY REQUIRED" no lugar de cada tile.
+// OpenStreetMap direto não pede chave (tráfego do painel é baixo, dentro da política de uso deles).
+// Visual claro em vez de escuro — temporário até a troca para Google Maps JS.
+const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATRIB = '© OpenStreetMap';
 let _mapPedidos = null, _mapPedidosLayer = null;
 function abrirMapaPedidos() {
   document.getElementById('mapaPedidosModal').classList.add('show');
@@ -2500,7 +2506,7 @@ function _renderMapaPedidos() {
   const cLng = (config.estabelecimentoLng != null) ? config.estabelecimentoLng : -42.652;
   if (!_mapPedidos) {
     _mapPedidos = L.map('mapaPedidos').setView([cLat, cLng], 14);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap, © CARTO' }).addTo(_mapPedidos);
+    L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATRIB }).addTo(_mapPedidos);
     _mapPedidosLayer = L.layerGroup().addTo(_mapPedidos);
   }
   _mapPedidos.invalidateSize();
@@ -5836,7 +5842,7 @@ function _initMapaEstab() {
   const lat = temPos ? config.estabelecimentoLat : -22.460; // fallback: Cachoeiras de Macacu/RJ
   const lng = temPos ? config.estabelecimentoLng : -42.652;
   _mapEstab = L.map('mapaEstab').setView([lat, lng], temPos ? 16 : 13);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap, © CARTO' }).addTo(_mapEstab);
+  L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATRIB }).addTo(_mapEstab);
   if (temPos) _setPinoEstab(lat, lng);
   setTimeout(() => { if (_mapEstab) _mapEstab.invalidateSize(); }, 200);
 }
@@ -6262,7 +6268,7 @@ function abrirMapaBairro(i) {
   setTimeout(() => {
     if (!_mbMap) {
       _mbMap = L.map('mapaBairroMap').setView([lat, lng], temCoord ? 17 : 14);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap, © CARTO' }).addTo(_mbMap);
+      L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATRIB }).addTo(_mbMap);
       _mbMap.on('click', e => _mbSetPino(e.latlng.lat, e.latlng.lng));
     } else {
       _mbMap.setView([lat, lng], temCoord ? 17 : 14);
