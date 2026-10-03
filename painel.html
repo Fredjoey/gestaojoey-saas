@@ -2560,15 +2560,18 @@ async function _renderMapaPedidos() {
   }
   _mapPedidosMarcas.forEach(m => { m.map = null; });
   _mapPedidosMarcas = [];
-  const marca = (lat, lng, conteudo, balao, titulo) => {
+  // zIndex: a LOJA fica por baixo (1), pedido por cima (10), pedido com GPS do cliente no topo (20). Sem
+  // isso o Google empilha pela latitude (mais ao sul = na frente) e a bola da loja cobria o anel azul de
+  // um pedido feito ali do lado — foi o que aconteceu no 1º pedido com GPS (#35929, a 15 m da loja).
+  const marca = (lat, lng, conteudo, balao, titulo, zIndex = 10) => {
     // ⚠️ gmpClickable + 'gmp-click': com addListener('click') o marcador avançado não fica clicável
     // (testado na 3.66 — o clique caía no mapa e o balão não abria).
-    const m = new g.AdvancedMarkerElement({ map: _mapPedidos, position: { lat, lng }, content: conteudo, title: titulo || '', gmpClickable: true });
+    const m = new g.AdvancedMarkerElement({ map: _mapPedidos, position: { lat, lng }, content: conteudo, title: titulo || '', gmpClickable: true, zIndex });
     m.addEventListener('gmp-click', () => { _mapPedidosInfo.setContent(_gmBalao(balao)); _mapPedidosInfo.open({ map: _mapPedidos, anchor: m }); });
     _mapPedidosMarcas.push(m);
   };
   // estabelecimento (laranja do painel)
-  marca(cLat, cLng, _gmBola({ raio: 11, cor: '#ff6b35', borda: '#fff', espessura: 2 }), '🏠 <b>Estabelecimento</b>', 'Estabelecimento');
+  marca(cLat, cLng, _gmBola({ raio: 11, cor: '#ff6b35', borda: '#fff', espessura: 2 }), '🏠 <b>Estabelecimento</b>', 'Estabelecimento', 1);
   // pedidos de delivery de HOJE em produção/pronto
   const lista = pedidos.filter(p => p.data === hoje && p.entrega === 'delivery' && (p.status === 'producao' || p.status === 'pronto'));
   // GPS do cliente (gpsLat/gpsLng, mandado do cardápio) tem PRIORIDADE sobre a geocodificação do endereço.
@@ -2624,7 +2627,7 @@ async function _renderMapaPedidos() {
 
     marca(ponto.lat, ponto.lng, _gmBola(estilo),
       `<b>#${_esc(p.id)}</b> — ${_esc(c.nome || 'cliente')}<br>📍 ${end || '—'}<br><span style="color:#666">${itens || '—'}</span><br><b>${total}</b>${aviso}${svBtn}`,
-      `#${p.id}`);
+      `#${p.id}`, gps ? 20 : 10);
     bounds.extend(ponto);
   });
   const nAprox = comGeo.filter(p => !temGps(p) && (p.geoPrecisao === 'aproximado' || p.geoPrecisao === 'bairro')).length;
@@ -6361,7 +6364,7 @@ function abrirMapaBairro(i) {
     }
     // Loja como referência (não arrastável). UMA vez: o Leaflet empilhava um marcador novo a cada abertura.
     if (config.estabelecimentoLat != null && !_mbLoja) {
-      _mbLoja = new g.AdvancedMarkerElement({ map: _mbMap, title: 'Estabelecimento',
+      _mbLoja = new g.AdvancedMarkerElement({ map: _mbMap, title: 'Estabelecimento', zIndex: 1,
         position: { lat: config.estabelecimentoLat, lng: config.estabelecimentoLng },
         content: _gmBola({ raio: 7, cor: '#ff6b35', borda: '#fff', espessura: 2 }) });
     }
@@ -6377,7 +6380,7 @@ async function _mbSetPino(lat, lng) {
   _mbPos = { lat, lng };
   if (_mbMarker) _mbMarker.position = { lat, lng };
   else {
-    _mbMarker = new g.AdvancedMarkerElement({ map: _mbMap, position: { lat, lng }, gmpDraggable: true, title: 'Portão do condomínio — arraste para ajustar',
+    _mbMarker = new g.AdvancedMarkerElement({ map: _mbMap, position: { lat, lng }, gmpDraggable: true, zIndex: 10, title: 'Portão do condomínio — arraste para ajustar',
       content: _gmBola({ raio: 10, cor: '#34d399', borda: '#0f0f0f', espessura: 2, opacidade: .95 }) });
     _mbMarker.addListener('dragend', () => { const ll = _mbMarker.position; _mbPos = { lat: _gmLat(ll), lng: _gmLng(ll) }; _mbAtualizarLabel(_mbPos.lat, _mbPos.lng); });
   }
