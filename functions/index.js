@@ -645,6 +645,44 @@ async function _fnBaixarXml(baseUrl, token, ref) {
   return typeof x.data === 'string' ? x.data : String(x.data);
 }
 
+// A DANFE vem PRONTA da Focus: é o único documento que chega na impressora sem passar
+// por template nosso. Ela declara @page{size:auto} e um .content de max-width:500px
+// (~132mm) — medido num DANFE real: 337px de conteúdo num papel de 302px (80mm).
+// O QZ Tray escondia isso porque rasterizava o HTML e encaixava na largura do papel;
+// no caminho nativo quem pagina é o Chromium, que obedece o documento e corta os ~9mm
+// que sobram. Então o documento passa a declarar 80mm, aqui, antes de sair daqui.
+//
+// Vai no fim do <head>, depois dos dois <style> da Focus (o segundo sobrescreve o
+// primeiro, que já vinha com max-width:300px), e com !important porque é override.
+const _DANFE_CSS_80MM = `
+@page{margin:0;size:80mm auto}
+html,body{box-sizing:border-box!important;width:80mm!important;min-width:0!important;max-width:80mm!important;margin:0!important}
+body{padding:4mm!important}
+.content{display:block!important;max-width:none!important;width:100%!important;margin:0!important;padding:0!important;border:0!important}
+table{width:100%!important;max-width:100%!important}
+td,th,div,p,span{max-width:100%!important;overflow-wrap:anywhere!important;word-break:break-word!important}
+img,canvas{max-width:100%!important;height:auto!important}
+`;
+
+// Injeta o CSS de 80mm no HTML da Focus. O QR Code é desenhado em runtime pelo
+// qrcode.min.js da Focus (canvas escondido + <img>), então nada aqui pode mexer na
+// estrutura: só CSS, sem tocar no DOM.
+function _fnDanfe80mm(html) {
+  if (typeof html !== 'string' || !html) return html;
+  const tag = `<style data-gj="80mm">${_DANFE_CSS_80MM}</style>`;
+  const baixo = html.toLowerCase();
+  const fimHead = baixo.lastIndexOf('</head>');
+  if (fimHead !== -1) return html.slice(0, fimHead) + tag + html.slice(fimHead);
+  // Sem </head> (a Focus sempre manda, mas não dá pra depender disso): entra logo
+  // depois do <body>, que continua sendo DEPOIS dos <style> dela.
+  const abreBody = baixo.indexOf('<body');
+  if (abreBody !== -1) {
+    const fecha = html.indexOf('>', abreBody);
+    if (fecha !== -1) return html.slice(0, fecha + 1) + tag + html.slice(fecha + 1);
+  }
+  return tag + html;
+}
+
 // Consulta a Focus por ref, pega caminho_danfe e baixa o DANFE (HTML do cupom). Lança em falha.
 async function _fnBaixarDanfe(baseUrl, token, ref) {
   const meta = await axios.get(`${baseUrl}/v2/nfce/${encodeURIComponent(ref)}`, {
@@ -747,7 +785,7 @@ exports.nfceDanfe = onRequest({ invoker: 'public', region: 'us-central1' }, asyn
       focusRef = nota.focusRef || nota.ref;
       if (!focusRef) return res.status(404).json({ ok: false, erro: 'Nota sem referência Focus.' });
     }
-    const html = await _fnBaixarDanfe(baseUrl, token, focusRef);
+    const html = _fnDanfe80mm(await _fnBaixarDanfe(baseUrl, token, focusRef));
     res.set('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(html);
   } catch (err) {
