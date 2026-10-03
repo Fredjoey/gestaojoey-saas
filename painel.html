@@ -12909,6 +12909,7 @@ function _wppRenderLista() {
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="display:flex;align-items:center;gap:0;min-width:0">
             <div class="wpp-conv-nome" style="${naoLida ? 'color:var(--text)' : ''}">${c.nome || c.id}</div>
+            ${_wppFinalTel(c) ? `<span style="flex-shrink:0;font-size:11px;color:var(--text3);margin-left:6px;white-space:nowrap" title="Final do telefone">•${_wppFinalTel(c)}</span>` : ''}
             ${naoLida ? '<span class="wpp-unread-dot"></span>' : ''}
           </div>
           <div style="font-size:10px;color:var(--text3);white-space:nowrap;margin-left:6px">${ts}</div>
@@ -12953,6 +12954,14 @@ function _wppAvatarCor(key) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return cores[h % cores.length];
+}
+
+// Final do telefone ao lado do nome na lista. Duas clientes "Luana" (telefones diferentes) apareciam
+// iguais e a equipe abria a errada (02/10). Só para telefone BR de verdade (55 + DDD + número):
+// conversa antiga chaveada por LID não tem telefone, e dígito de LID mostrado como número engana.
+function _wppFinalTel(c) {
+  const d = [c.id, c.numero, c.telefone].map(v => String(v || '').replace(/\D/g, '')).find(v => /^55\d{10,11}$/.test(v));
+  return d ? d.slice(-4) : '';
 }
 
 function _wppFmtTel(raw) {
