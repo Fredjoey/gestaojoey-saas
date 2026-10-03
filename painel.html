@@ -13034,7 +13034,17 @@ function _wppRenderChat(conv) {
   }
   const _avisoEl = document.getElementById('wppAviso');
   if (conv.status === 'humano') {
-    _avisoEl.textContent = '👤 Atendimento humano ativo — bot silenciado para este número';
+    if (_iaFeatures.iaV2 === true) {
+      // A IA v2 solta sozinha 6h depois da última mensagem DA EQUIPE (joeyapi: liberaPorInatividade).
+      const _saidas = (Array.isArray(conv.mensagens) ? conv.mensagens : []).filter(m => m && m.tipo === 'enviada');
+      const _equipe = _saidas.filter(m => m.autor !== 'ia');
+      const _ultTs = Math.max(0, ...(_equipe.length ? _equipe : _saidas).map(m => Number(m.ts) || 0));
+      const _libera = _ultTs ? new Date(_ultTs + 6 * 3600 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
+      _avisoEl.textContent = `👤 A equipe assumiu — a IA fica quieta até alguém tocar em "🤖 Devolver ao bot"`
+        + (_libera ? ` ou a equipe ficar 6h sem escrever aqui (a partir das ${_libera}).` : '.');
+    } else {
+      _avisoEl.textContent = '👤 Atendimento humano ativo — bot silenciado para este número';
+    }
     _avisoEl.style.display = 'block';
   } else if (_iaPausada) {
     _avisoEl.innerHTML = `⏸ A equipe respondeu aqui — a IA fica quieta nesta conversa até ${_hhmmPausa} (renova a cada mensagem sua).<button class="wpp-retomar-ia" onclick="wppRetomarIA('${conv.id}')">Retomar agora</button>`;
@@ -13084,7 +13094,9 @@ async function wppRetomarIA(numero) {
 }
 
 async function wppDevolverBot(numero) {
-  await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ status: 'bot' }, { merge: true });
+  // pausaIaAte: 0 junto — senão um resto de pausa antiga seguraria a IA mesmo depois de devolver.
+  await db.collection(`clientes/${slug}/conversas`).doc(numero).set(
+    { status: 'bot', pausaIaAte: 0, liberadoEm: Date.now(), liberadoPor: 'painel' }, { merge: true });
   notify('🤖 Devolvido ao bot');
 }
 
@@ -13146,12 +13158,18 @@ async function wppEnviar() {
   // 1. Salva no Firestore (prioritário — garante histórico)
   try {
     // autor:'humano' → a IA v2 lê isto como ATENDENTE (decisão tomada, não contradiz).
-    // pausaIaAte → IA v2 calada nesta conversa por 30 min, renovando a cada envio (sem v2 o bot ignora).
+    // IA v2: a equipe escreveu → TRAVA a IA (status 'humano') até alguém devolver ("🤖 Devolver ao
+    // bot") ou 6h sem mensagem da equipe (o joeyapi solta sozinho). Era uma pausa de 30 min, e
+    // em 02/10 a IA voltou no meio do atendimento (DM Soluções) e numa conversa pessoal da equipe.
+    // Sem v2 continua só o pausaIaAte, que o bot legado ignora — outros tenants não mudam.
+    const _trava = _iaFeatures.iaV2 === true
+      ? { status: 'humano', humanoEm: agora }
+      : { pausaIaAte: agora + 30 * 60 * 1000 };
     await db.collection(`clientes/${slug}/conversas`).doc(_wppConvAtiva).set({
       mensagens:       firebase.firestore.FieldValue.arrayUnion({ tipo: 'enviada', texto, ts: agora, autor: 'humano' }),
       ultimaMensagem:  texto,
       ultimaAtividade: agora,
-      pausaIaAte:      agora + 30 * 60 * 1000,
+      ..._trava,
     }, { merge: true });
   } catch (err) {
     console.error('[WPP] Firestore save error:', err);
