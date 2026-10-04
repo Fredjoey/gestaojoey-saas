@@ -98,6 +98,17 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
 - Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
   pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
 
+## Mensagens automáticas no inbox — "🤖 Automático" (desde 04/10/2026)
+
+Confirmado (+ resumo), saiu para entrega, pronto para retirada, cancelado, Pix novo, parabéns, o aviso ao motoboy
+e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`enviarWhatsAppBot`, `_botSend` direto e
+`/send-location`), e o joeyapi grava na conversa como `autor:'sistema'` (desenho completo no CLAUDE.md do joeyapi).
+
+- Bolha própria (`_wppBolhaAuto`): cinza tracejada, etiqueta "🤖 Automático · Pedido confirmado #36001", texto
+  escapado, e o que vem depois da 1ª linha em branco (o resumo do pedido) **recolhido** em "ver resumo".
+- Não marca a conversa como não lida (`_wppChaveVista` ignora as automáticas) e não toca som.
+- O aviso de "humano" diz **30 min** (era 6h; a regra do joeyapi mudou em 04/10) e não conta automática como equipe.
+
 ## Faixa "cliente esperando a equipe" (desde 04/10/2026)
 
 Nível 1 do alerta de conversa sem resposta (o nível 2, WhatsApp aos 5 min, é do joeyapi — `src/alertaEquipe.js`, com o

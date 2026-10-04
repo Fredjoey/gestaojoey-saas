@@ -537,6 +537,13 @@ body.suporte-on #botAlertBanner{top:36px}
 .wpp-msg.enviada{background:#3a2814;color:#F2DFC8;align-self:flex-end;border-radius:14px 14px 4px 14px}
 .wpp-msg-ts{font-size:11px;color:rgba(255,255,255,.4);margin-top:3px;display:flex;gap:4px;align-items:center;justify-content:flex-end}
 .wpp-msg.enviada .wpp-msg-ts{color:rgba(242,223,200,.55)}
+/* Mensagem automática (autor 'sistema'): cinza, etiqueta própria, resumo recolhido */
+.wpp-msg.wpp-auto{background:#2a2a2a;color:#cfcfcf;border:1px dashed #4a4a4a}
+.wpp-msg.wpp-auto .wpp-msg-ts{color:rgba(255,255,255,.4)}
+.wpp-auto-tag{font-size:10.5px;font-weight:700;color:#9a9a9a;margin-bottom:4px;letter-spacing:.2px}
+.wpp-auto-txt{white-space:pre-wrap}
+.wpp-auto-mais summary{cursor:pointer;font-size:11.5px;color:#9a9a9a;margin-top:5px}
+.wpp-auto-mais .wpp-auto-txt{margin-top:5px;font-size:12px;color:#bdbdbd}
 .wpp-check{color:#E89A55;letter-spacing:-1.5px}
 .wpp-autor-tag{font-size:9px;font-weight:800;letter-spacing:.4px;padding:0 4px;border-radius:4px;background:rgba(232,154,85,.16);color:#E89A55;line-height:14px}
 .wpp-retomar-ia{background:none;border:none;color:#E89A55;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;margin-left:4px}
@@ -2478,7 +2485,7 @@ async function notificarMotoboyEntrega(p) {
       name: 'joey_entrega_motoboy',
       params: [primeiro, p.id, c.nome || 'cliente', end || 'endereço não informado', pagTpl].map(_tplParam),
       urlParam: m.slug,
-    });  // helper já é failure-safe (try/catch interno; não lança)
+    }, { tipo: 'motoboy', pedidoId: p.id, nome: m.nome || '' });  // helper já é failure-safe (try/catch interno; não lança)
   } catch (e) {
     console.error('[entrega] aviso ao motoboy falhou (pedido avança normalmente):', e && e.message ? e.message : e);
   }
@@ -2692,7 +2699,7 @@ async function enviarLocalizacaoPedido(id, destino, btn) {
     const r = await fetch(`${BOT_URL}/send-location`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: 'Bearer ' + idToken } : {}) },
-      body: JSON.stringify({ numero: tel, lat, lng, nome, endereco }),
+      body: JSON.stringify({ numero: tel, lat, lng, nome, endereco, registrar: { tipo: 'localizacao', pedidoId: p.id, nome: quem } }),
     });
     const d = await r.json().catch(() => ({}));
     if (r.ok && d.ok) {
@@ -2828,12 +2835,14 @@ if (slug) definirUrlsDoSlug(); // subdomínio: slug já conhecido no load (inalt
 // `template` (opcional) = { name, params[], urlParam? }. Só é USADO se a flag WAC_TEMPLATES
 // estiver ligada no tenant E a janela de 24h estiver fechada — quem decide isso é o /send do
 // joeyapi, que tem o carimbo da última mensagem recebida. Com a flag off, ignorado.
-async function enviarWhatsAppBot(numero, mensagem, template) {
+// `registrar` (opcional) = { tipo, pedidoId?, nome? }: o joeyapi grava a mensagem na conversa como
+// autor:'sistema' (🤖 Automático) DEPOIS de enviar — ver joeyapi/src/mensagemSistema.js.
+async function enviarWhatsAppBot(numero, mensagem, template, registrar) {
   let tel = (numero || '').replace(/\D/g, '');
   if (!tel.startsWith('55')) tel = '55' + tel;
   console.log('[BOT] Enviando para:', tel, '| Mensagem:', mensagem);
   try {
-    const resp = await _botSend({ numero: tel, mensagem, ...(template ? { template } : {}) });
+    const resp = await _botSend({ numero: tel, mensagem, ...(template ? { template } : {}), ...(registrar ? { registrar } : {}) });
     const data = await resp.json();
     console.log('[BOT] Resposta:', data);
     if (!data.ok) throw new Error(data.erro);
@@ -4172,7 +4181,8 @@ async function _enviarWppConfirmadoAuto(p) {
   // Fora da janela de 24h o /send troca por template. Note que o template NÃO leva o resumo
   // do pedido que o _buildNotifMsg anexa aqui — resumo multilinha não cabe em parâmetro da
   // Meta (quebra de linha e proporção parâmetro/texto). Dentro da janela o resumo segue indo.
-  const resp = await _botSend({ numero: tel, mensagem: msg, template: _notifTemplate('confirmado', p) });
+  const resp = await _botSend({ numero: tel, mensagem: msg, template: _notifTemplate('confirmado', p),
+    registrar: { tipo: 'confirmado', pedidoId: p.id, nome: p.cliente.nome || '' } });
   const data = await resp.json().catch(() => ({ ok: false, erro: 'resposta inválida da API' }));
   if (!data.ok) throw new Error(data.erro || 'Falha no envio');
 }
@@ -10090,7 +10100,7 @@ async function _executarRegerarPix(id, ov) {
   // modal que o operador já usa quando o bot está offline. A auditoria mostrou que isso quase
   // nunca vai disparar: nos 4 regerados da história, 4/4 tinham o cliente falando havia <20min.
   const enviar = async (mensagem) => {
-    const r    = await _botSend({ numero: full, mensagem, semTemplate: true });
+    const r    = await _botSend({ numero: full, mensagem, semTemplate: true, registrar: { tipo: 'pix', pedidoId: id } });
     const data = await r.json().catch(() => ({}));
     if (!data.ok) {
       const err = new Error(data.erro || `bot retornou ${r.status}`);
@@ -10219,7 +10229,7 @@ async function enviarParabens(tel, nome) {
     `A equipe ${config.nome||'Joey Pizza'} deseja a você um dia incrível cheio de alegria e delícias! 🍕\n\n` +
     `Temos uma surpresa especial para você hoje — venha nos visitar! 😍`;
   try {
-    const r = await _botSend({ numero: full, mensagem: msg });
+    const r = await _botSend({ numero: full, mensagem: msg, registrar: { tipo: 'aniversario', nome } });
     const data = await r.json();
     if (data.ok) { notify(`🎉 Parabéns enviado para ${nome}!`); }
     else throw new Error(data.erro || 'erro na API');
@@ -10545,7 +10555,7 @@ function _dispararNotif(key, p) {
   if (!p?.cliente?.tel) return;
   const tel = p.cliente.tel.replace(/\D/g, '');
   const msg = _buildNotifMsg(cfg.template, p, key);
-  enviarWhatsAppBot(tel, msg, _notifTemplate(key, p));
+  enviarWhatsAppBot(tel, msg, _notifTemplate(key, p), { tipo: key, pedidoId: p.id, nome: p.cliente.nome || '' });
 }
 
 function toggleRoboSection(id) {
@@ -13047,8 +13057,12 @@ function _wppNotificarDesktop(nome, mensagem) {
   n.onclick = () => { window.focus(); abrirWppPanel(); n.close(); };
 }
 
+// Chave de "já vi": o ts da última mensagem que NÃO é automática. Uma automática (🤖 pedido confirmado,
+// saiu…) mexe em ultimaAtividade, mas não é algo novo para a equipe ler — não marca como não lida.
 function _wppChaveVista(c) {
-  return `${c.id}:${c.ultimaAtividade || 0}`;
+  const ms = (Array.isArray(c.mensagens) ? c.mensagens : []).filter(m => m && m.autor !== 'sistema' && Number(m.ts) > 0);
+  const ult = ms.length ? Math.max(...ms.map(m => Number(m.ts))) : (c.ultimaAtividade || 0);
+  return `${c.id}:${ult}`;
 }
 
 function _wppTemNaoLida(c) {
@@ -13303,13 +13317,14 @@ function _wppRenderChat(conv) {
   const _avisoEl = document.getElementById('wppAviso');
   if (conv.status === 'humano') {
     if (_iaFeatures.iaV2 === true) {
-      // A IA v2 solta sozinha 6h depois da última mensagem DA EQUIPE (joeyapi: liberaPorInatividade).
-      const _saidas = (Array.isArray(conv.mensagens) ? conv.mensagens : []).filter(m => m && m.tipo === 'enviada');
+      // A IA v2 solta sozinha 30 min depois da última mensagem DA EQUIPE (joeyapi: liberaPorInatividade,
+      // HUMANO_LIBERA_MS). Automática (autor 'sistema') não conta como equipe.
+      const _saidas = (Array.isArray(conv.mensagens) ? conv.mensagens : []).filter(m => m && m.tipo === 'enviada' && m.autor !== 'sistema');
       const _equipe = _saidas.filter(m => m.autor !== 'ia');
       const _ultTs = Math.max(0, ...(_equipe.length ? _equipe : _saidas).map(m => Number(m.ts) || 0));
-      const _libera = _ultTs ? new Date(_ultTs + 6 * 3600 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
+      const _libera = _ultTs ? new Date(_ultTs + 30 * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
       _avisoEl.textContent = `👤 A equipe assumiu — a IA fica quieta até alguém tocar em "🤖 Devolver ao bot"`
-        + (_libera ? ` ou a equipe ficar 6h sem escrever aqui (a partir das ${_libera}).` : '.');
+        + (_libera ? ` ou o cliente escrever depois de 30 min sem a equipe responder aqui (a partir das ${_libera}).` : '.');
     } else {
       _avisoEl.textContent = '👤 Atendimento humano ativo — bot silenciado para este número';
     }
@@ -13345,10 +13360,30 @@ function _wppRenderChat(conv) {
       const dia = m.ts ? new Date(m.ts).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
       let divisor = '';
       if (dia && dia !== _diaAnt) { divisor = `<div class="wpp-dia"><span>${_wppDiaLabel(m.ts)}</span></div>`; _diaAnt = dia; }
+      if (m.autor === 'sistema') return divisor + _wppBolhaAuto(m, ts);
       return `${divisor}<div class="wpp-msg ${tipo}">${m.texto}<div class="wpp-msg-ts">${autorTag}${ts}${check}</div></div>`;
     }).join('');
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
+}
+
+// Bolha da mensagem AUTOMÁTICA (autor 'sistema', gravada pelo joeyapi no /send): cinza, com a etiqueta
+// "🤖 Automático · <o que foi>", e o resumo do pedido RECOLHIDO — quem atende lê de relance o que o
+// cliente já recebeu, sem confundir com o que a IA ou o atendente escreveram.
+const _WPP_AUTO_ROTULO = { confirmado: 'Pedido confirmado', prontoDelivery: 'Saiu para entrega', prontoRetirada: 'Pronto para retirada',
+  cancelado: 'Pedido cancelado', pix: 'Pix do pedido', aniversario: 'Feliz aniversário', motoboy: 'Entrega para o motoboy', localizacao: 'Localização do pedido' };
+function _wppBolhaAuto(m, ts) {
+  const a = m.auto || {};
+  const rot = (_WPP_AUTO_ROTULO[a.tipo] || 'Mensagem automática') + (a.pedidoId ? ` #${_esc(a.pedidoId)}` : '') + (a.via === 'template' ? ' · via template' : '');
+  const txt = String(m.texto || '');
+  // O que vem depois da 1ª linha em branco (o resumo do pedido, no "confirmado") fica recolhido.
+  const corte = txt.indexOf('\n\n');
+  const topo = corte > 0 ? txt.slice(0, corte) : txt;
+  const resto = corte > 0 ? txt.slice(corte + 2) : '';
+  return `<div class="wpp-msg enviada wpp-auto"><div class="wpp-auto-tag">🤖 Automático · ${rot}</div>`
+    + `<div class="wpp-auto-txt">${_esc(topo)}</div>`
+    + (resto ? `<details class="wpp-auto-mais"><summary>ver resumo</summary><div class="wpp-auto-txt">${_esc(resto)}</div></details>` : '')
+    + `<div class="wpp-msg-ts">${ts}</div></div>`;
 }
 
 async function wppAssumirAtendimento(numero) {
