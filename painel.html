@@ -5071,7 +5071,7 @@ async function cancelarConfirmar() {
       if (!temOutroAtivo) {
         try {
           await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
-            { status: 'livre', pedidos: [], total: 0 },
+            { status: 'livre' },
             { merge: false }
           );
         } catch (e) {
@@ -11120,14 +11120,13 @@ function renderSalao() {
 
   grid.innerHTML = ativas.map(m => {
     const est = mesasData[m.id] || {};
-    // Card = pedidos ATIVOS do cliente HOJE (coleção pedidos) + comandas lançadas no painel (doc de estado).
-    // As duas fontes são disjuntas (cliente→pedidos; painel→comandas), então somar não duplica.
+    // Card = SÓ os pedidos ATIVOS da mesa (fonte única — ver _comandasDaMesa). A premissa antiga ("as duas
+    // fontes são disjuntas, somar não duplica") era falsa: o lançamento do salão gravava nas duas.
     // Mesa fica aberta até a conta ser fechada (que finaliza os pedidos): conta os ativos vinculados, sem filtro de data.
     const ativos = _pedidosDaMesa(m.id).filter(_mesaPedidoAtivo);
-    const totalPedidos = ativos.reduce((s, p) => s + (Number(p.total) || 0), 0);
-    const ocupada = ativos.length > 0 || Object.keys(_getComandasFromMesa(est)).length > 0;
+    const total = ativos.reduce((s, p) => s + (Number(p.total) || 0), 0);
+    const ocupada = ativos.length > 0;
     const status = ocupada ? (est.status === 'fechando' ? 'fechando' : 'ocupada') : 'livre';
-    const total = totalPedidos + (Number(est.total) || 0);
     const statusLabel = status === 'livre' ? '🟢 Livre' : status === 'ocupada' ? '🟡 Ocupada' : '🔴 Fechando conta';
     const qrParam = String(m.id).replace(/^mesa-/, '');
     const nomeEsc = String(m.nome || '').replace(/'/g, "\\'");
@@ -11423,7 +11422,7 @@ function abrirVerMesa(mesaId, mesaNome) {
   document.getElementById('orderModal').classList.add('show');
 }
 
-// ===================== CONTA DA MESA (unificada: pedidos QR de hoje + comandas do painel) =====================
+// ===================== CONTA DA MESA (fonte única: os pedidos ativos da mesa — ver _comandasDaMesa) =====================
 function renderModalMesaBody(mesaId, mesaNome, m) {
   const fmt = v => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
   const { total, pago, saldoRaw, itens, pagamentos } = _contaTotais(mesaId);
@@ -11489,7 +11488,7 @@ function _contaEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-// Itens unificados da conta (pedidos do cliente HOJE + comandas do painel), chave estável + flag pago.
+// Itens da conta (os pedidos ativos da mesa), chave estável `ped-<id>#<idx>` + flag pago.
 function _contaItens(mesaId) {
   const comandas = _comandasDaMesa(mesaId);
   const m = mesasData[mesaId] || {};
@@ -11736,7 +11735,7 @@ async function contaFechar(mesaId, mesaNome, btn) {
       .catch(e => console.warn('[fechar conta] pedido', p.id, e))));
     // 3) zera o estado da mesa -> volta pra Livre
     await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
-      { status: 'livre', comandas: {}, pedidos: [], total: 0, conta: { pagamentos: [], itensPagos: [], divisao: null } },
+      { status: 'livre', conta: { pagamentos: [], itensPagos: [], divisao: null } },
       { merge: false }
     );
     closeOrderModal();
@@ -11755,17 +11754,6 @@ async function alterarStatusMesa(mesaId, novoStatus, btn) {
   btn.classList.add('active');
   await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: novoStatus }, { merge: true });
   notify('Status da mesa atualizado');
-}
-
-async function removerPedidoMesa(mesaId, idx) {
-  const m = mesasData[mesaId] || {};
-  const pedidosMesa = [...(m.pedidos || [])];
-  pedidosMesa.splice(idx, 1);
-  const total = pedidosMesa.reduce((s, p) => s + (p.subtotal || 0), 0);
-  const status = pedidosMesa.length === 0 ? 'livre' : (m.status || 'ocupada');
-  await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ pedidos: pedidosMesa, total, status }, { merge: true });
-  closeOrderModal();
-  notify('Item removido da mesa');
 }
 
 async function fecharMesa(mesaId, mesaNome) {
@@ -11794,44 +11782,6 @@ function fecharConfirmModal() {
 // =================== FECHAMENTO DE CONTA ===================
 let _fecharContaPagamento = '';
 
-function abrirFecharConta(mesaId, mesaNome) {
-  _fecharContaPagamento = '';
-  db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'fechando' }, { merge: true })
-    .catch(e => console.warn('[mesa status fechando]', e));
-  const m = mesasData[mesaId] || {};
-  const total = m.total || 0;
-
-  const todosItens = [];
-  Object.values(_getComandasFromMesa(m)).forEach(c => {
-    (c.itens || []).forEach(it => todosItens.push({ ...it }));
-  });
-
-  const itensHtml = todosItens.map(it => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
-      <div>
-        <span style="font-size:13px;color:var(--text)">${it.qty}× ${it.nome}</span>
-        ${it.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">📝 ${it.obs}</div>` : ''}
-      </div>
-      <span style="color:var(--orange);font-weight:700;font-size:13px;white-space:nowrap;padding-left:12px">R$&nbsp;${(it.preco * it.qty).toFixed(2).replace('.',',')}</span>
-    </div>`).join('');
-
-  document.getElementById('fecharContaTitle').textContent = '💰 Fechar Conta — ' + mesaNome;
-  document.getElementById('fecharContaBody').innerHTML = `
-    <div class="section-lbl" style="margin-top:0">Resumo do consumo</div>
-    <div style="max-height:30vh;overflow-y:auto;margin-bottom:4px">${itensHtml || '<div style="color:var(--text3);text-align:center;padding:1rem">Nenhum item</div>'}</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:2px solid var(--border2);margin-bottom:16px">
-      <span style="font-weight:700;font-size:14px;color:var(--text)">Total</span>
-      <span style="font-weight:700;font-size:22px;color:var(--orange)">R$&nbsp;${total.toFixed(2).replace('.',',')}</span>
-    </div>
-    <div class="section-lbl">Forma de pagamento</div>
-    <div style="display:flex;gap:8px;margin-bottom:18px" id="fcPagBtns">
-      ${['Pix','Dinheiro','Crédito','Débito'].map(p => `<button class="pag-btn" onclick="selecionarPagamento('${p}','fcPagBtns',this)">${p}</button>`).join('')}
-    </div>
-    <button onclick="pedirConfirmacaoFechamento('${mesaId}','${mesaNome}')" style="width:100%;padding:13px;background:#34d399;border:none;color:#0a1a0f;font-size:14px;font-weight:700;border-radius:9px;cursor:pointer;font-family:inherit">✓ Confirmar Fechamento</button>
-  `;
-  document.getElementById('fecharContaModal').classList.add('show');
-}
-
 function selecionarPagamento(pagamento, containerId, btn) {
   console.log('[selecionarPagamento] pagamento:', pagamento, '| container:', containerId);
   _fecharContaPagamento = pagamento;
@@ -11843,107 +11793,8 @@ function fecharFecharContaModal() {
   document.getElementById('fecharContaModal').classList.remove('show');
 }
 
-function pedirConfirmacaoFechamento(mesaId, mesaNome) {
-  console.log('[pedirConfirmacaoFechamento] mesaId:', mesaId, '| pagamento:', _fecharContaPagamento);
-  if (!_fecharContaPagamento) { notify('Selecione a forma de pagamento', 'warning'); return; }
-  const m = mesasData[mesaId] || {};
-  const total = m.total || 0;
-  const pagamento = _fecharContaPagamento;
-  const totalFmt = total.toFixed(2).replace('.', ',');
-  const todosItens = [];
-  Object.values(_getComandasFromMesa(m)).forEach(c => {
-    (c.itens || []).forEach(it => todosItens.push({ ...it }));
-  });
-  const bodyHtml =
-    '<div class="detail-row"><span class="detail-key">Mesa</span><span class="detail-val">' + mesaNome + '</span></div>' +
-    '<div class="detail-row"><span class="detail-key">Total</span><span class="detail-val" style="color:var(--orange);font-size:18px">R$ ' + totalFmt + '</span></div>' +
-    '<div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">' + pagamento + '</span></div>';
-  mostrarConfirmModal('Fechar conta?', bodyHtml, () => confirmarFecharConta(mesaId, mesaNome, todosItens, total, pagamento, totalFmt));
-}
-
-async function confirmarFecharConta(mesaId, mesaNome, todosItens, total, pagamento, totalFmt) {
-  fecharConfirmModal();
-  try {
-    const now = new Date();
-    // Grava SEMPRE a chave canônica minúscula sem acento: os botões deste modal são
-    // rotulados 'Pix'/'Crédito'/'Débito' e gravar assim quebrava o Fechamento de Caixa
-    // (renderCaixa procura 'credito'/'debito' e 'crédito' não bate).
-    const formaCanon = _mesaNormForma(pagamento) || pagamento;
-    await db.collection(`clientes/${slug}/fechamentos`).add({
-      mesa: mesaId, mesaNome, itens: todosItens, total, pagamento: formaCanon,
-      data: now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-      hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
-      tipo: 'total',
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    // Forma de volta nos pedidos + finaliza (este fluxo não finalizava, o que deixava o
-    // pedido "ativo" para sempre e o exporia a receber a forma de uma sessão futura).
-    const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
-    const formaDe = _mesaAlocarFormas(ativos, [{ forma: formaCanon, valor: total }], { fecharTudo: true });
-    await Promise.all(ativos.map(p => db.collection(`clientes/${slug}/pedidos`).doc(p.id)
-      .update(_mesaUpdatePedido(p, formaDe, { status: 'finalizado' }))
-      .then(() => { const f = formaDe.get(p.id); const l = pedidos.find(x => x.id === p.id); if (f && l) l.pagamento = f; })
-      .catch(e => console.warn('[fechar conta] pedido', p.id, e))));
-    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'livre', pedidos: [], comandas: {}, total: 0 });
-    fecharFecharContaModal();
-    closeOrderModal();
-    notify('Conta fechada! R$ ' + totalFmt + ' — ' + pagamento);
-    console.log('[confirmarFecharConta] Sucesso!');
-  } catch(e) {
-    console.error('[confirmarFecharConta] Erro:', e);
-    notify('Erro ao fechar conta: ' + e.message, 'error');
-  }
-}
-
 // =================== DIVIDIR CONTA ===================
 let _dividirMesaId = '', _dividirMesaNome = '', _dividirPagamento = '';
-
-function abrirDividirConta(mesaId, mesaNome) {
-  _dividirMesaId = mesaId;
-  _dividirMesaNome = mesaNome;
-  _dividirPagamento = '';
-  db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ status: 'fechando' }, { merge: true })
-    .catch(e => console.warn('[mesa status fechando]', e));
-  const m = mesasData[mesaId] || {};
-
-  const todosItens = [];
-  Object.entries(_getComandasFromMesa(m)).forEach(([cId, c]) => {
-    (c.itens || []).forEach((it, itIdx) => {
-      todosItens.push({ ...it, comandaId: cId, itIdx, uid: cId.replace(/[^a-z0-9]/gi,'-') + '-' + itIdx });
-    });
-  });
-
-  const itensHtml = todosItens.length === 0
-    ? '<div style="color:var(--text3);text-align:center;padding:1.5rem">Nenhum item na mesa</div>'
-    : todosItens.map(it => `
-        <label class="fc-item-row" style="cursor:pointer" for="dc-${it.uid}">
-          <input type="checkbox" id="dc-${it.uid}" class="fc-item-check"
-            data-comandaid="${it.comandaId}" data-itidx="${it.itIdx}"
-            data-valor="${((it.preco||0) * (it.qty||1)).toFixed(4)}"
-            onchange="atualizarTotalDividir()">
-          <div style="flex:1;min-width:0">
-            <div class="fc-item-nome">${it.qty}× ${it.nome}</div>
-            ${it.obs ? `<div class="fc-item-obs">📝 ${it.obs}</div>` : ''}
-          </div>
-          <div class="fc-item-val">R$&nbsp;${((it.preco||0)*(it.qty||1)).toFixed(2).replace('.',',')}</div>
-        </label>`).join('');
-
-  document.getElementById('dividirContaTitle').textContent = '👥 Dividir Conta — ' + mesaNome;
-  document.getElementById('dividirContaBody').innerHTML = `
-    <div class="section-lbl" style="margin-top:0">Marque os itens desta pessoa</div>
-    <div style="max-height:32vh;overflow-y:auto;margin-bottom:12px">${itensHtml}</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border);margin-bottom:14px">
-      <span style="font-size:13px;color:var(--text2)">Subtotal selecionado</span>
-      <span id="dcSubtotal" style="font-size:17px;font-weight:700;color:var(--orange)">R$&nbsp;0,00</span>
-    </div>
-    <div class="section-lbl">Forma de pagamento</div>
-    <div style="display:flex;gap:8px;margin-bottom:18px" id="dcPagBtns">
-      ${['Pix','Dinheiro','Crédito','Débito'].map(p => `<button class="pag-btn" onclick="selecionarPagamentoDC('${p}',this)">${p}</button>`).join('')}
-    </div>
-    <button onclick="pedirConfirmacaoPagamentoPessoa()" style="width:100%;padding:13px;background:var(--orange);border:none;color:#fff;font-size:14px;font-weight:700;border-radius:9px;cursor:pointer;font-family:inherit">✓ Confirmar pagamento desta pessoa</button>
-  `;
-  document.getElementById('dividirContaModal').classList.add('show');
-}
 
 function selecionarPagamentoDC(pagamento, btn) {
   console.log('[selecionarPagamentoDC] pagamento:', pagamento);
@@ -11959,111 +11810,20 @@ function atualizarTotalDividir() {
   if (el) el.textContent = 'R$ ' + sub.toFixed(2).replace('.',',');
 }
 
-function pedirConfirmacaoPagamentoPessoa() {
-  console.log('[pedirConfirmacaoPagamentoPessoa] mesaId:', _dividirMesaId, '| pagamento:', _dividirPagamento);
-  const mesaId  = _dividirMesaId;
-  const mesaNome = _dividirMesaNome;
-  if (!_dividirPagamento) { notify('Selecione a forma de pagamento', 'warning'); return; }
-  const checks = Array.from(document.querySelectorAll('#dividirContaBody .fc-item-check:checked'));
-  if (checks.length === 0) { notify('Marque ao menos um item', 'warning'); return; }
-  const subtotal    = checks.reduce((s, c) => s + parseFloat(c.dataset.valor || 0), 0);
-  const pagamento   = _dividirPagamento;
-  const subtotalFmt = subtotal.toFixed(2).replace('.', ',');
-
-  const remover = {};
-  checks.forEach(c => {
-    const cId   = c.dataset.comandaid;
-    const itIdx = parseInt(c.dataset.itidx);
-    if (!remover[cId]) remover[cId] = new Set();
-    remover[cId].add(itIdx);
-  });
-
-  const m = mesasData[mesaId] || {};
-  const newComandas = JSON.parse(JSON.stringify(_getComandasFromMesa(m)));
-  const itensPagos = [];
-
-  checks.forEach(c => {
-    const cId   = c.dataset.comandaid;
-    const itIdx = parseInt(c.dataset.itidx);
-    const it    = newComandas[cId]?.itens?.[itIdx];
-    if (it) itensPagos.push({ ...it });
-  });
-
-  Object.entries(remover).forEach(([cId, idxSet]) => {
-    if (!newComandas[cId]) return;
-    newComandas[cId] = { ...newComandas[cId], itens: newComandas[cId].itens.filter((_, i) => !idxSet.has(i)) };
-    newComandas[cId].total = subtotalItens(newComandas[cId].itens);
-    if (newComandas[cId].itens.length === 0) delete newComandas[cId];
-  });
-
-  const novoTotal  = Object.values(newComandas).reduce((s, c) => s + (c.total || 0), 0);
-  const novoStatus = Object.keys(newComandas).length === 0 ? 'livre' : 'ocupada';
-
-  const bodyHtml =
-    '<div class="detail-row"><span class="detail-key">Mesa</span><span class="detail-val">' + mesaNome + '</span></div>' +
-    '<div class="detail-row"><span class="detail-key">Subtotal</span><span class="detail-val" style="color:var(--orange);font-size:18px">R$ ' + subtotalFmt + '</span></div>' +
-    '<div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">' + pagamento + '</span></div>';
-  mostrarConfirmModal('Confirmar pagamento?', bodyHtml, () => confirmarPagamentoPessoa(mesaId, mesaNome, itensPagos, subtotal, pagamento, subtotalFmt, newComandas, novoTotal, novoStatus));
-}
-
-async function confirmarPagamentoPessoa(mesaId, mesaNome, itensPagos, subtotal, pagamento, subtotalFmt, newComandas, novoTotal, novoStatus) {
-  fecharConfirmModal();
-  try {
-    const now = new Date();
-    const formaCanon = _mesaNormForma(pagamento) || pagamento;   // botões são 'Pix'/'Crédito'/'Débito'
-    await db.collection(`clientes/${slug}/fechamentos`).add({
-      mesa: mesaId, mesaNome, itens: itensPagos, total: subtotal, pagamento: formaCanon,
-      data: now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-      hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
-      tipo: 'parcial',
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    // Pagamento PARCIAL: preenche a forma só até o valor recebido agora (fecharTudo=false),
-    // então cada parcela vai preenchendo os pedidos ainda sem forma. Na parcela que ZERA a
-    // conta (novoStatus 'livre') preenche o que sobrou e finaliza os pedidos.
-    const encerra = novoStatus === 'livre';
-    const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
-    const formaDe = _mesaAlocarFormas(ativos, [{ forma: formaCanon, valor: subtotal }], { fecharTudo: encerra });
-    await Promise.all(ativos.map(p => {
-      const upd = _mesaUpdatePedido(p, formaDe, encerra ? { status: 'finalizado' } : {});
-      if (!Object.keys(upd).length) return Promise.resolve();
-      return db.collection(`clientes/${slug}/pedidos`).doc(p.id).update(upd)
-        .then(() => { const f = formaDe.get(p.id); const l = pedidos.find(x => x.id === p.id); if (f && l) l.pagamento = f; })
-        .catch(e => console.warn('[dividir conta] pedido', p.id, e));
-    }));
-    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({ comandas: newComandas, total: novoTotal, status: novoStatus }, { merge: true });
-    fecharDividirContaModal();
-    if (novoStatus === 'livre') closeOrderModal();
-    notify('R$ ' + subtotalFmt + ' recebido — ' + pagamento);
-    console.log('[confirmarPagamentoPessoa] Sucesso!');
-  } catch(e) {
-    console.error('[confirmarPagamentoPessoa] Erro:', e);
-    notify('Erro ao confirmar pagamento: ' + e.message, 'error');
-  }
-}
-
 function fecharDividirContaModal() {
   document.getElementById('dividirContaModal').classList.remove('show');
 }
 
 let _pedidoMesaId = null, _pedidoMesaNome = null, _pedidoMesaCart = [], _editandoComandaId = null, _pmBusca = '';
 
-// Retorna mapa de comandas: { [id]: {itens, total, hora, status} }
-// Suporta formato legado (pedidos array) para mesas abertas antes da migração
-function _getComandasFromMesa(m) {
-  if (m.comandas && Object.keys(m.comandas).length > 0) return m.comandas;
-  const result = {};
-  (m.pedidos || []).forEach((ped, idx) => {
-    result['leg-' + idx] = { itens: ped.itens || [], total: ped.subtotal || 0, hora: ped.hora || '', status: 'ativo' };
-  });
-  return result;
-}
-
-// Comandas exibidas no "Ver mesa": comandas lançadas no painel (doc de estado) +
-// pedidos ATIVOS do cliente (coleção pedidos) derivados como comandas read-only ('ped-<id>').
+// ⚠️ FONTE ÚNICA (desde 04/10/2026): o item de mesa existe SÓ na coleção `pedidos`. Antes, o lançamento
+// pelo salão gravava os itens também como comanda no doc da mesa, e o QR do cardápio numa lista `pedidos`
+// do doc — e a conta somava as duas cópias: a Heineken da mesa 7 (04/10) aparecia 2×, e a auditoria de
+// 125 dias achou 3 contas com um pedido inteiro cobrado duas vezes (R$ 112). O doc da mesa guarda só
+// ESTADO (status + conta: pagamentos, itens pagos). Cada pedido ativo vira uma "comanda" 'ped-<id>' —
+// a chave dos itens pagos (`ped-<id>#<idx>`) já era essa.
 function _comandasDaMesa(mesaId) {
-  const m = mesasData[mesaId] || {};
-  const out = { ..._getComandasFromMesa(m) };
+  const out = {};
   _pedidosDaMesa(mesaId)
     .filter(_mesaPedidoAtivo)
     .forEach(p => {
@@ -12101,7 +11861,7 @@ function renderPedidoMesaModal() {
   });
   if (_termo) prods = prods.filter(p => _norm(p.name || p.nome || '').includes(_termo));
 
-  document.getElementById('pedidoMesaModalTitle').textContent = _editandoComandaId ? '✏️ Editar Comanda — ' + _pedidoMesaNome : '+ Pedido — ' + _pedidoMesaNome;
+  document.getElementById('pedidoMesaModalTitle').textContent = '+ Pedido — ' + _pedidoMesaNome;
 
   const listHtml = prods.length === 0
     ? `<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:13px">${_termo ? 'Nenhum produto encontrado' : 'Nenhum produto disponível'}</div>`
@@ -12146,9 +11906,9 @@ function renderPedidoMesaModal() {
         <span style="font-weight:700;font-size:13px;color:var(--text)">Total do pedido</span>
         <span style="font-weight:700;font-size:17px;color:var(--orange)">R$ ${cartTotal.toFixed(2).replace('.',',')}</span>
       </div>
-      <button onclick="confirmarPedidoMesa()"
+      <button onclick="confirmarPedidoMesa(this)"
         style="width:100%;margin-top:8px;padding:13px;background:var(--orange);border:none;color:#fff;font-size:14px;font-weight:700;border-radius:9px;cursor:pointer;font-family:inherit">
-        ${_editandoComandaId ? '✓ Salvar alterações' : '✓ Confirmar pedido'}
+        ${_pedidoMesaEnviando ? '⏳ Lançando…' : '✓ Confirmar pedido'}
       </button>
     </div>`;
   }
@@ -12318,83 +12078,68 @@ function fecharProdDetalhe() {
   document.getElementById('prodDetalheModal').classList.remove('show');
 }
 
-async function confirmarPedidoMesa() {
+// Trava de duplo clique — o mesmo padrão do "Fechar conta" (_mesasFechando): sem ela, dois toques rápidos
+// lançavam o pedido duas vezes (duas comandas + dois cards na cozinha).
+let _pedidoMesaEnviando = false;
+async function confirmarPedidoMesa(btn) {
+  if (_pedidoMesaEnviando) { notify('Lançando o pedido… aguarde.', 'warning'); return; }
   if (_pedidoMesaCart.length === 0) { notify('Adicione ao menos um item'); return; }
+  _pedidoMesaEnviando = true;
+  const btnTxt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; btn.style.pointerEvents = 'none'; btn.textContent = '⏳ Lançando…'; }
+  try {
+    const hora     = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
+    const subtotal = subtotalItens(_pedidoMesaCart);
+    const itens    = _pedidoMesaCart.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, adicionais: i.adicionais, obs: i.obs }));
 
-  const m         = mesasData[_pedidoMesaId] || {};
-  const hora      = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
-  const subtotal  = subtotalItens(_pedidoMesaCart);
-  const itens     = _pedidoMesaCart.map(i => ({ id: i.id, nome: i.nome, preco: i.preco, qty: i.qty, adicionais: i.adicionais, obs: i.obs }));
-  const isEditing = !!_editandoComandaId;
-  const comandaId = isEditing ? _editandoComandaId : String(Date.now());
-  const orig      = (m.comandas || {})[comandaId] || {};
+    // FONTE ÚNICA: o pedido é o ÚNICO registro do item (ver _comandasDaMesa). Nada de comanda no doc da mesa.
+    const contadorRef = db.doc(`clientes/${slug}/config/contador`);
+    const novoId = await db.runTransaction(t => t.get(contadorRef).then(doc => {
+      const novo = (doc.exists ? (doc.data().ultimoPedido || 0) : 0) + 1;
+      t.set(contadorRef, { ultimoPedido: novo }, { merge: true });
+      return novo;
+    }));
+    const pedidoMesa = {
+      id:          String(novoId),
+      ts:          Date.now(),
+      hora,
+      data:        new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      tipo:        'mesa',
+      mesa:        _pedidoMesaId,
+      mesaNome:    _pedidoMesaNome,
+      origem:      'salao',
+      itens,
+      subtotal,
+      taxaEntrega: 0,
+      total:       subtotal,
+      status:      'producao',
+      pagamento:   'mesa',
+      entrega:     'local',
+      cliente:     { nome: _pedidoMesaNome },
+    };
+    await salvarPedidoFb(pedidoMesa);
+    // Só ESTADO no doc da mesa. Se falhar, a mesa aparece ocupada mesmo assim (o card lê os pedidos).
+    db.collection(`clientes/${slug}/mesas`).doc(_pedidoMesaId).set({ status: 'ocupada' }, { merge: true })
+      .catch(e => console.warn('[confirmarPedidoMesa] status da mesa:', e.message));
+    imprimirComandaMesa({ itens, total: subtotal, hora, status: 'ativo' }, _pedidoMesaNome);
 
-  const novaComanda = { itens, total: subtotal, hora: isEditing ? (orig.hora || hora) : hora, status: 'ativo' };
-  const allComandas = { ...(m.comandas || {}), [comandaId]: novaComanda };
-  const newTotal    = Object.values(allComandas).reduce((s, c) => s + (c.total || 0), 0);
-
-  await db.collection(`clientes/${slug}/mesas`).doc(_pedidoMesaId).set(
-    { status: 'ocupada', total: newTotal, comandas: allComandas },
-    { merge: true }
-  );
-
-  if (!isEditing) {
-    // Cria card direto em "Em Produção" no kanban
-    try {
-      const contadorRef = db.doc(`clientes/${slug}/config/contador`);
-      const novoId = await db.runTransaction(t => {
-        return t.get(contadorRef).then(doc => {
-          const atual = doc.exists ? (doc.data().ultimoPedido || 0) : 0;
-          const novo  = atual + 1;
-          t.set(contadorRef, { ultimoPedido: novo }, { merge: true });
-          return novo;
-        });
-      });
-      const pedidoMesa = {
-        id:          String(novoId),
-        ts:          Date.now(),
-        hora,
-        data:        new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-        tipo:        'mesa',
-        mesa:        _pedidoMesaId,
-        mesaNome:    _pedidoMesaNome,
-        origem:      'salao',
-        itens,
-        subtotal,
-        taxaEntrega: 0,
-        total:       subtotal,
-        status:      'producao',
-        pagamento:   'mesa',
-        entrega:     'local',
-        cliente:     { nome: _pedidoMesaNome },
-      };
-      console.log('[confirmarPedidoMesa] salvando card no kanban:', JSON.stringify(pedidoMesa));
-      await salvarPedidoFb(pedidoMesa);
-      console.log('[confirmarPedidoMesa] card criado! id=' + novoId + ' status=producao');
-    } catch (e) {
-      console.error('[confirmarPedidoMesa] ERRO ao criar card no kanban:', e);
-      notify('Comanda salva, mas erro ao criar card no kanban: ' + e.message, 'warning');
-    }
-    imprimirComandaMesa(novaComanda, _pedidoMesaNome);
+    _pedidoMesaCart = [];
+    _editandoComandaId = null;
+    document.getElementById('pedidoMesaModal').classList.remove('show');
+    notify('✓ Pedido #' + novoId + ' lançado em ' + _pedidoMesaNome);
+  } catch (e) {
+    // Nada foi lançado como comanda: o carrinho fica como está para tentar de novo.
+    console.error('[confirmarPedidoMesa]', e);
+    notify('Não consegui lançar o pedido: ' + (e.message || e) + '. Confira o kanban antes de tentar de novo.', 'error');
+  } finally {
+    _pedidoMesaEnviando = false;
+    if (btn && btn.isConnected) { btn.disabled = false; btn.style.opacity = ''; btn.style.pointerEvents = ''; btn.textContent = btnTxt; }
   }
-
-  const msg = isEditing ? '✓ Comanda atualizada' : '✓ Pedido lançado em ' + _pedidoMesaNome;
-  _pedidoMesaCart   = [];
-  _editandoComandaId = null;
-  document.getElementById('pedidoMesaModal').classList.remove('show');
-  notify(msg);
 }
 
 function fecharPedidoMesaModal() {
   document.getElementById('pedidoMesaModal').classList.remove('show');
   _editandoComandaId = null;
-}
-
-function imprimirComandaPorId(mesaId, comandaId, mesaNome) {
-  const m       = mesasData[mesaId] || {};
-  const comanda = _getComandasFromMesa(m)[comandaId];
-  if (!comanda) { notify('Comanda não encontrada', 'warning'); return; }
-  imprimirComandaMesa(comanda, mesaNome);
 }
 
 // Conferência: imprime o RESUMO agregado da mesa INTEIRA (todas as comandas),
@@ -12412,66 +12157,6 @@ function imprimirConferenciaMesa(mesaId, mesaNome) {
   const total = _contaTotais(mesaId).total;
   try { _dispararHtml(gerarHtmlComandaMesa({ id: 'CONFERÊNCIA', itens, total }, mesaNome)); }
   catch (e) { console.error('[CONFERÊNCIA]', e); notify('Erro ao imprimir conferência: ' + e.message, 'error'); }
-}
-
-function abrirEditarComanda(mesaId, mesaNome, comandaId) {
-  const m       = mesasData[mesaId] || {};
-  const comanda = _getComandasFromMesa(m)[comandaId];
-  if (!comanda) { notify('Comanda não encontrada', 'warning'); return; }
-
-  _pedidoMesaId      = mesaId;
-  _pedidoMesaNome    = mesaNome;
-  _editandoComandaId = comandaId;
-  _pedidoMesaCart    = (comanda.itens || []).map(it => {
-    const item = {
-      id:        it.id,
-      nome:      it.nome,
-      preco:     it.preco  || 0,
-      qty:       it.qty    || 1,
-      adicionais:(it.adicionais || []).map(a => ({ ...a })),
-      obs:       it.obs    || '',
-    };
-    return { ...item, total: totalItem(item) };
-  });
-
-  _pmBusca = '';
-  renderPedidoMesaModal();
-  document.getElementById('pedidoMesaModal').classList.add('show');
-  const _bi = document.getElementById('pmBuscaInput');
-  if (_bi) { _bi.value = ''; setTimeout(() => _bi.focus(), 60); }
-  const _bc = document.getElementById('pmBuscaClear');
-  if (_bc) _bc.style.display = 'none';
-}
-
-async function cancelarComanda(mesaId, mesaNome, comandaId) {
-  const m       = mesasData[mesaId] || {};
-  const comanda = _getComandasFromMesa(m)[comandaId];
-  if (!comanda) return;
-
-  const itensHtml = (comanda.itens || []).map(it =>
-    `<div style="font-size:13px;color:var(--text);padding:3px 0">${it.qty}× ${it.nome}</div>`
-  ).join('');
-
-  mostrarConfirmModal(
-    'Cancelar comanda?',
-    `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">Os itens serão removidos da conta da mesa.</div>${itensHtml}`,
-    async () => {
-      fecharConfirmModal();
-      // Lê todas as comandas (incluindo legado) e remove a selecionada
-      const newComandas = { ..._getComandasFromMesa(m) };
-      delete newComandas[comandaId];
-      const newTotal  = Object.values(newComandas).reduce((s, c) => s + (c.total || 0), 0);
-      const hasMore   = Object.keys(newComandas).length > 0;
-      const newStatus = hasMore ? (m.status === 'fechando' ? 'fechando' : 'ocupada') : 'livre';
-      // Escreve no novo formato e apaga pedidos legados
-      await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set(
-        { comandas: newComandas, pedidos: [], total: newTotal, status: newStatus },
-        { merge: true }
-      );
-      if (!hasMore) closeOrderModal();
-      notify('Comanda cancelada');
-    }
-  );
 }
 
 // =================== QR CODE MESA ===================

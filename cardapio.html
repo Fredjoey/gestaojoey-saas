@@ -2462,24 +2462,13 @@ function finalizarPedido() {
     });
 }
 
+// Pedido pelo QR da mesa: só marca a mesa como OCUPADA. Os itens vivem SÓ no pedido (fonte única, desde
+// 04/10/2026) — antes eles eram copiados para uma lista `pedidos` no doc da mesa, e o salão somava a cópia
+// junto com o pedido (item cobrado 2×).
 function atualizarMesaComPedido(pedido, mesaNum) {
-  const mesaRef = db.doc(`clientes/${slug}/mesas/mesa-${mesaNum}`);
-  const itensMesa = (pedido.itens || []).map(i => ({
-    id: i.id,
-    nome: i.nome,
-    preco: i.preco,
-    qty: i.qty,
-    adicionais: (i.adicionais || []).map(a => ({ id: a.id, nome: a.nome, preco: a.preco || 0, qty: a.qty || 1, ...(a.grupo ? { grupo: a.grupo } : {}) })),
-    obs: i.obs || ''
-  }));
-  const subtotal = pedido.subtotal || 0;
-  mesaRef.get().then(doc => {
-    const m = doc.exists ? doc.data() : {};
-    const pedidosMesa = [...(m.pedidos || [])];
-    pedidosMesa.push({ itens: itensMesa, subtotal, obs: '', hora: pedido.hora, pedidoId: pedido.id });
-    const total = pedidosMesa.reduce((s, p) => s + (p.subtotal || 0), 0);
-    return mesaRef.set({ status: 'ocupada', pedidos: pedidosMesa, total }, { merge: true });
-  }).catch(e => console.warn('[mesa sync]', e));
+  db.doc(`clientes/${slug}/mesas/mesa-${mesaNum}`)
+    .set({ status: 'ocupada' }, { merge: true })
+    .catch(e => console.warn('[mesa sync]', e));
 }
 
 function enviarWhatsApp(pedido) {

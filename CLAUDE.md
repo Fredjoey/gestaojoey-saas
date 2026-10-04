@@ -98,6 +98,30 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
 - Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
   pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
 
+## ⚠️ Mesas: o PEDIDO é a fonte única (desde 04/10/2026)
+
+O item de mesa existe **só na coleção `pedidos`**. O doc `mesas/{id}` guarda só **estado**: `status` e `conta`
+(`pagamentos`, `itensPagos`, `divisao`). Os campos `comandas`, `pedidos` (lista) e `total` não são mais
+gravados nem lidos (a migração de 04/10 tirou dos 15 docs).
+
+- **Por quê**: o lançamento do salão (`confirmarPedidoMesa`) gravava os itens como comanda no doc da mesa E
+  como pedido; o QR do cardápio (`atualizarMesaComPedido`) copiava para a lista `pedidos` do doc. A conta
+  (`_comandasDaMesa`) somava as duas cópias — premissa errada no comentário "as fontes são disjuntas". Mesa 7
+  em 04/10: Heineken 2×. Auditoria de 125 dias: 3 contas com pedido inteiro cobrado duas vezes (R$ 112;
+  teto R$ 601) e ~R$ 3.600 cobrados em comanda que nunca virou pedido (fora do faturamento/DRE).
+- **Quem grava**: salão → só o pedido (+ `status:'ocupada'` na mesa); cardápio QR → só `status:'ocupada'`;
+  garçom → só o pedido. Cancelar pedido e "Fechar conta" zeram a mesa para `{status:'livre'[, conta]}`.
+- **Quem lê**: card do salão, "🧾 Conta", conferência (painel), app do garçom (`garcom.html`) e a Joey IA
+  (`statusMesas`/`consumoMesa`, gestaojoey-admin) — todos pelos pedidos ativos da mesa, com a regra
+  `_pedidosDaMesa` (id do cadastro, número, ou `mesa-<n>`). Item pago continua `ped-<id>#<idx>`.
+- **Trava de duplo clique** em `confirmarPedidoMesa` (`_pedidoMesaEnviando` + botão desabilitado), o mesmo
+  padrão do `contaFechar` (`_mesasFechando`). Falha ao lançar não grava nada; o carrinho fica para tentar de novo.
+- Removido o código morto que ainda gravava comanda (sem nenhum chamador): editar/cancelar/imprimir comanda,
+  remover pedido da mesa, o modal antigo de fechar conta e o "dividir conta" antigo.
+- ⚠️ **Defeito conhecido, não corrigido**: a Mesa 1 está cadastrada com id `cTllcOFyh3ZLCcxZ18Q4` (as outras são
+  `mesa-2`…`mesa-7`), e o QR dela grava `mesa:"1"`. O salão casa pelo id → os pedidos do QR da Mesa 1 nunca
+  entram no card nem são finalizados (53 em "entregue", R$ 2.284, de 26/06 a 03/10).
+
 ## ⚠️ Inbox: TODO texto de fora passa por `_esc()` (desde 04/10/2026)
 
 Mensagem (cliente, IA, atendente), nome do contato (o `pushName` que o CLIENTE escolhe) e "última mensagem"

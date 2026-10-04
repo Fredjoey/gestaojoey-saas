@@ -467,22 +467,19 @@ function _pedidosDaMesa(mesaId){
   const num = String(mesaId).replace(/^mesa-/,'');
   return pedidos.filter(p=>{ const pm=String(p.mesa||''); return pm && (pm===mesaId || pm===num || pm==='mesa-'+num); });
 }
-function _getComandasFromMesa(m){
-  if (m.comandas && Object.keys(m.comandas).length>0) return m.comandas;
-  const r={}; (m.pedidos||[]).forEach((ped,idx)=>{ r['leg-'+idx]={itens:ped.itens||[],total:ped.subtotal||0,hora:ped.hora||'',status:'ativo'}; }); return r;
-}
+// FONTE ÚNICA (desde 04/10/2026, igual ao painel): o item de mesa existe SÓ nos pedidos. As comandas e a
+// lista `pedidos` do doc da mesa eram CÓPIAS dos mesmos itens e a conta somava as duas (item 2×).
 function _comandasDaMesa(mesaId){
-  const m = mesasData[mesaId]||{};
-  const out = { ..._getComandasFromMesa(m) };
+  const out = {};
   _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo).forEach(p=>{ out['ped-'+p.id]={itens:p.itens||[],total:(p.total!=null?p.total:p.subtotal)||0,hora:p.hora||'',status:'ativo',_pedidoId:p.id}; });
   return out;
 }
 function _mesaEstado(m, mesaId){
   const ativos = _pedidosDaMesa(mesaId).filter(_mesaPedidoAtivo);
   const totalPedidos = ativos.reduce((s,p)=>s+(Number(p.total)||0),0);
-  const ocupada = ativos.length>0 || Object.keys(_getComandasFromMesa(m)).length>0;
+  const ocupada = ativos.length>0;
   const status = ocupada ? (m.status==='fechando'?'fechando':'ocupada') : 'livre';
-  const total = totalPedidos + (Number(m.total)||0);
+  const total = totalPedidos;
   return { status, total, ocupada };
 }
 
@@ -838,7 +835,7 @@ async function fecharContaFinal(){
     await Promise.all(ativos.map(p=>db.collection(`clientes/${slug}/pedidos`).doc(p.id)
       .update(_mesaUpdatePedido(p,formaDe,{status:'finalizado'}))
       .catch(e=>console.warn('[fechar]',p.id,e))));
-    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({status:'livre',comandas:{},pedidos:[],total:0,conta:{pagamentos:[],itensPagos:[],divisao:null}},{merge:false});
+    await db.collection(`clientes/${slug}/mesas`).doc(mesaId).set({status:'livre',conta:{pagamentos:[],itensPagos:[],divisao:null}},{merge:false});
     fechar('contaSheet'); fechar('mesaSheet');
     toast('Conta da '+mesaNome+' fechada! Recebido '+fmt(pago));
   }catch(e){ console.error('[fecharConta]',e); toast('Erro ao fechar: '+e.message); }
