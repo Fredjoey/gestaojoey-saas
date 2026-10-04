@@ -98,6 +98,23 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
 - Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
   pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
 
+## Faixa "cliente esperando a equipe" (desde 04/10/2026)
+
+Nível 1 do alerta de conversa sem resposta (o nível 2, WhatsApp aos 5 min, é do joeyapi — `src/alertaEquipe.js`, com o
+desenho completo no CLAUDE.md de lá). Caso: sábado 03/10, quatro clientes ouviram "já chamei a equipe" e ninguém respondeu.
+
+- `_esperaDaConversa(conv)` — **portada** do `esperaDaConversa` do joeyapi; mudou lá, muda aqui. Espera = `aguardandoDesde`
+  (a IA transferiu) ou `alertaEquipe.em` (a IA avisou sem transferir) sem mensagem `autor:'humano'` depois. Termina com
+  resposta humana, "Devolver ao bot" ou "resolvido"; **não** termina quando a IA volta sozinha; some depois de 12h.
+- Aos **2 min**: `#esperaFaixa`, fixa no topo (z-index 1000, acima do painel do WhatsApp, abaixo dos modais), visível em
+  qualquer aba. 1 cliente → nome, tempo e a última mensagem dele + [Abrir]; vários → contagem + [Ver ▾] com a lista.
+  [Abrir] = `abrirWppPanel()` + `wppSelecionarConv(id)`. Recalcula a cada 15s em memória (nenhuma leitura nova).
+- **Som**: um toque curto, diferente do de mensagem nova, **uma vez por espera**. Esperas já vencidas quando o painel abre
+  não tocam (a faixa já está na tela).
+- Abrir uma conversa grava `vistaEquipeEm` — é o que cancela o WhatsApp dos 5 min. A faixa continua até alguém RESPONDER.
+- `config/loja.equipeAlertas` (`[{nome, tel}]`) — quem recebe o WhatsApp; sem tela de edição; está na lista de preservação
+  do `salvarConfig`.
+
 ## "📍 Enviar localização" no balão do pedido (desde 03/10/2026)
 
 No mapa de pedidos, o balão de cada pino tem botões que mandam a **localização nativa do WhatsApp** (a bolha com

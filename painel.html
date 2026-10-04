@@ -510,6 +510,14 @@ body.suporte-on #botAlertBanner{top:36px}
 .wpp-s-bot{background:#2e2114;color:#c98a4a}
 .wpp-s-humano{background:#13332a;color:#7BC47F}
 .wpp-s-aguardando{background:#33270c;color:#e0a23c}
+/* Faixa "cliente esperando a equipe" (nível 1 do alerta — ver _esperaDaConversa) */
+#esperaFaixa{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:1000;display:none;width:min(680px,calc(100vw - 24px));background:#7f1d1d;color:#fff;border:1px solid #ef4444;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.5);font-size:13px}
+#esperaFaixa .ef-linha{display:flex;align-items:center;gap:10px;padding:9px 12px}
+#esperaFaixa .ef-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#esperaFaixa button{flex-shrink:0;background:#fff;color:#7f1d1d;border:0;border-radius:7px;padding:5px 12px;font-weight:700;font-size:12px;cursor:pointer}
+#esperaFaixa .ef-lista{border-top:1px solid rgba(255,255,255,.2);max-height:50vh;overflow:auto}
+#esperaFaixa .ef-item{display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid rgba(255,255,255,.08)}
+#esperaFaixa .ef-item:first-child{border-top:0}
 .wpp-s-alerta{font-size:11px;font-weight:700;padding:2px 8px;border-radius:7px;white-space:nowrap;flex-shrink:0;background:#3a1d0c;color:#ff9a3c}
 .wpp-alerta-ia{margin:8px 14px 0;padding:8px 12px;background:rgba(255,140,40,.12);border:1px solid rgba(255,140,40,.4);border-radius:8px;font-size:12px;color:#ffb36b;flex-shrink:0}
 .wpp-chat{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -6074,6 +6082,8 @@ function salvarConfig() {
     ...(config.estado !== undefined ? { estado: config.estado } : {}),
     // Quem recebe a localização da entrega pelo mapa ([{nome, tel}]) — sem isto o set total apagaria.
     ...(config.equipeLocalizacao !== undefined ? { equipeLocalizacao: config.equipeLocalizacao } : {}),
+    // Quem recebe no WhatsApp o aviso de cliente esperando a equipe ([{nome, tel}]; joeyapi/alertaEquipe.js).
+    ...(config.equipeAlertas !== undefined ? { equipeAlertas: config.equipeAlertas } : {}),
   };
   saveConfig();
   // PIN do App Garçom (se preenchido) -> salvo server-side em doc privado
@@ -9057,6 +9067,7 @@ function iniciarListenersFirestore() {
     _wppDetectarNovas(novas);
     _wppDetectarAlertasIA(novas);
     _wppConversas = novas;
+    _esperaRender();
     _wppAtualizarBadge();
     _wppAtualizarTitulo();
     _wppRenderLista();
@@ -9084,6 +9095,87 @@ function _wppDetectarAlertasIA(convs) {
     _wppAlertasVistos.set(c.id, em);
   });
 }
+// ── Cliente esperando a equipe — nível 1 (faixa vermelha aos 2 min) ────────────────────────────
+// PORTADA de joeyapi/src/alertaEquipe.js (esperaDaConversa): mudou lá, muda aqui. O caso: sábado
+// 03/10, quatro clientes ouviram "já chamei a equipe" e ninguém respondeu.
+// Espera = a IA transferiu (aguardandoDesde) ou avisou a equipe (alertaEquipe.em) e nenhuma PESSOA
+// respondeu depois. Termina com mensagem autor 'humano', "Devolver ao bot" ou "resolvido". NÃO termina
+// quando a IA volta a atender sozinha (30 min). Some depois de 12h.
+const ESPERA_FAIXA_MS = 2 * 60 * 1000;
+const ESPERA_MAX_MS = 12 * 60 * 60 * 1000;
+function _esperaDaConversa(c, agora) {
+  if (!c) return null;
+  const msgs = (Array.isArray(c.mensagens) ? c.mensagens : []).filter(m => m && Number(m.ts) > 0);
+  const humanoDepois = t => msgs.some(m => m.tipo === 'enviada' && m.autor === 'humano' && Number(m.ts) > t);
+  const abertas = [];
+  const tAg = Number(c.aguardandoDesde) || 0;
+  const devolvido = c.liberadoPor === 'painel' && (Number(c.liberadoEm) || 0) > tAg;
+  if (tAg && !devolvido && !humanoDepois(tAg)) abertas.push({ desde: tAg, tipo: 'transferencia', motivo: '' });
+  const tAl = Number(c.alertaEquipe && c.alertaEquipe.em) || 0;
+  if (tAl && !humanoDepois(tAl)) abertas.push({ desde: tAl, tipo: 'aviso', motivo: String(c.alertaEquipe.motivo || '') });
+  return abertas.filter(e => agora - e.desde < ESPERA_MAX_MS).sort((a, b) => a.desde - b.desde)[0] || null;
+}
+// O que o cliente pediu: a última mensagem dele (ou o motivo do aviso da IA).
+function _esperaResumo(c, e) {
+  const rec = (Array.isArray(c.mensagens) ? c.mensagens : []).filter(m => m && m.tipo === 'recebida').sort((a, b) => a.ts - b.ts).at(-1);
+  const t = rec && rec.texto ? `"${rec.texto}"` : (e.motivo || '');
+  return String(t).replace(/\s+/g, ' ').slice(0, 90);
+}
+// Som: UMA vez por espera, ao passar dos 2 min — diferente do som de mensagem nova, e nunca repetido
+// (som que repete as pessoas desligam). Esperas que já estavam vencidas quando o painel abriu não tocam.
+let _esperaSomFeito = null;
+function _esperaTocarSom() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.22].forEach((t0, i) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(i ? 520 : 660, ctx.currentTime + t0);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime + t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t0 + 0.2);
+      osc.start(ctx.currentTime + t0); osc.stop(ctx.currentTime + t0 + 0.2);
+    });
+  } catch (e) {}
+}
+let _esperaListaAberta = false;
+function _esperaRender() {
+  const el = document.getElementById('esperaFaixa');
+  if (!el) return;
+  const agora = Date.now();
+  const lista = _wppConversas
+    .map(c => ({ c, e: _esperaDaConversa(c, agora) }))
+    .filter(x => x.e && agora - x.e.desde >= ESPERA_FAIXA_MS)
+    .sort((a, b) => a.e.desde - b.e.desde);
+  const primeira = _esperaSomFeito === null;
+  if (primeira) _esperaSomFeito = new Set();
+  let tocar = false;
+  lista.forEach(x => { const k = `${x.c.id}:${x.e.desde}`; if (!_esperaSomFeito.has(k)) { _esperaSomFeito.add(k); if (!primeira) tocar = true; } });
+  if (tocar) _esperaTocarSom();
+  if (!lista.length) { el.style.display = 'none'; el.innerHTML = ''; _esperaListaAberta = false; return; }
+  const min = e => Math.max(1, Math.floor((agora - e.desde) / 60000));
+  const nome = c => _esc(c.nome || c.id);
+  const abrir = c => `<button onclick="_esperaAbrir('${_esc(c.id)}')">Abrir</button>`;
+  if (lista.length === 1) {
+    const { c, e } = lista[0];
+    el.innerHTML = `<div class="ef-linha"><span class="ef-txt">🔴 <b>${nome(c)}</b> espera a equipe há ${min(e)} min — ${_esc(_esperaResumo(c, e))}</span>${abrir(c)}</div>`;
+  } else {
+    el.innerHTML = `<div class="ef-linha"><span class="ef-txt">🔴 <b>${lista.length} clientes</b> esperando a equipe — o mais antigo há ${min(lista[0].e)} min</span>`
+      + `<button onclick="_esperaListaAberta=!_esperaListaAberta;_esperaRender()">${_esperaListaAberta ? 'Fechar ▴' : 'Ver ▾'}</button></div>`
+      + (_esperaListaAberta ? `<div class="ef-lista">${lista.map(({ c, e }) =>
+          `<div class="ef-item"><span class="ef-txt"><b>${nome(c)}</b> · ${min(e)} min · ${_esc(_esperaResumo(c, e))}</span>${abrir(c)}</div>`).join('')}</div>` : '');
+  }
+  el.style.display = 'block';
+}
+function _esperaAbrir(id) {
+  _esperaListaAberta = false;
+  abrirWppPanel();
+  wppSelecionarConv(id);
+  _esperaRender();
+}
+// O tempo passa sem o Firestore mudar: recalcula a cada 15s (só memória, nenhuma leitura nova).
+setInterval(() => { if (_wppConversas.length) _esperaRender(); }, 15000);
+
 async function wppResolverAlerta(numero) {
   await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ alertaEquipe: firebase.firestore.FieldValue.delete() }, { merge: true });
   notify('✓ Alerta resolvido');
@@ -13083,6 +13175,10 @@ function wppSelecionarConv(id) {
   if (!conv) return;
   // Marca como lida
   _wppVistas.add(_wppChaveVista(conv));
+  // Alguém da equipe ABRIU: vale para todos os aparelhos e cancela o aviso por WhatsApp aos 5 min
+  // (joeyapi/alertaEquipe.js). A faixa vermelha continua até alguém RESPONDER.
+  db.collection(`clientes/${slug}/conversas`).doc(id).set({ vistaEquipeEm: Date.now() }, { merge: true })
+    .catch(e => console.warn('[ESPERA] vistaEquipeEm:', e.message));
   document.getElementById('wpp-panel').classList.add('com-chat');
   const chat = document.getElementById('wppChat');
   chat.style.display = 'flex';
@@ -13381,6 +13477,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <!-- ====== PAINEL WHATSAPP ====== -->
 <div id="wpp-overlay" onclick="fecharWppPanel()"></div>
+<div id="esperaFaixa" role="alert"></div>
 <div id="wpp-panel">
   <div class="wpp-head">
     <span style="font-size:18px">💬</span>
