@@ -98,6 +98,16 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
 - Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
   pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
 
+## ⚠️ Inbox: TODO texto de fora passa por `_esc()` (desde 04/10/2026)
+
+Mensagem (cliente, IA, atendente), nome do contato (o `pushName` que o CLIENTE escolhe) e "última mensagem"
+entravam crus no `innerHTML` do inbox: um cliente podia mandar `<img src=x onerror=…>` e o código rodava no
+navegador de quem atende, logado como admin. Medido num harness com as funções reais: **6 execuções antes, 0
+depois**. Regra: no inbox, nada vindo do Firestore entra em HTML sem `_esc()`; id em `onclick` passa por
+`_wppIdJs` (só `[\w@.-]`). Nenhuma das 11.636 mensagens gravadas tinha HTML — o escape não muda nada visível.
+⚠️ **Fora do inbox ainda há texto do cliente cru** (ex.: `obs` dos itens e `ref` do endereço na comanda/impressão,
+que é aberta com `window.open('')` na MESMA origem do painel) — varredura dedicada pendente.
+
 ## Mensagens automáticas no inbox — "🤖 Automático" (desde 04/10/2026)
 
 Confirmado (+ resumo), saiu para entrega, pronto para retirada, cancelado, Pix novo, parabéns, o aviso ao motoboy

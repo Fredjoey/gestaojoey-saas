@@ -13135,6 +13135,12 @@ function fecharWppPanel() {
   if (typeof _aplicarGateJoeyIA === 'function') _aplicarGateJoeyIA();
 }
 
+// ⚠️ ESCAPE NO INBOX (04/10/2026): texto de mensagem, nome e "última mensagem" vêm do CLIENTE (pushName e
+// o que ele digitou) e entravam CRUS no innerHTML — um cliente podia mandar código que rodava no navegador de
+// quem atende, logado como admin. Tudo que vem de fora passa por _esc(); id em onclick passa por _wppIdJs
+// (só os caracteres de um id de conversa: dígitos, letras, @ . _ -).
+const _wppIdJs = (id) => String(id == null ? '' : id).replace(/[^\w@.\-]/g, '');
+
 function wppFiltrar(v) {
   _wppBuscaTermo = (v || '').trim().toLowerCase();
   _wppRenderLista();
@@ -13172,19 +13178,19 @@ function _wppRenderLista() {
     const ts = c.ultimaAtividade
       ? new Date(c.ultimaAtividade).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
       : '';
-    return `<div class="wpp-conv-item${ativo}" onclick="wppSelecionarConv('${c.id}')">
-      <div class="wpp-conv-avatar" style="background:${_wppAvatarCor(c.nome || c.id)}">${_wppIniciais(c.nome || c.id)}</div>
+    return `<div class="wpp-conv-item${ativo}" onclick="wppSelecionarConv('${_wppIdJs(c.id)}')">
+      <div class="wpp-conv-avatar" style="background:${_wppAvatarCor(c.nome || c.id)}">${_esc(_wppIniciais(c.nome || c.id))}</div>
       <div class="wpp-conv-main">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="display:flex;align-items:center;gap:0;min-width:0">
-            <div class="wpp-conv-nome" style="${naoLida ? 'color:var(--text)' : ''}">${c.nome || c.id}</div>
+            <div class="wpp-conv-nome" style="${naoLida ? 'color:var(--text)' : ''}">${_esc(c.nome || c.id)}</div>
             ${_wppFinalTel(c) ? `<span style="flex-shrink:0;font-size:11px;color:var(--text3);margin-left:6px;white-space:nowrap" title="Final do telefone">•${_wppFinalTel(c)}</span>` : ''}
             ${naoLida ? '<span class="wpp-unread-dot"></span>' : ''}
           </div>
           <div style="font-size:10px;color:var(--text3);white-space:nowrap;margin-left:6px">${ts}</div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;gap:8px">
-          <div class="wpp-conv-ultima" style="${naoLida ? 'color:var(--text);font-weight:500' : ''}">${c.ultimaMensagem || ''}</div>
+          <div class="wpp-conv-ultima" style="${naoLida ? 'color:var(--text);font-weight:500' : ''}">${_esc(c.ultimaMensagem || '')}</div>
           ${sl}
         </div>
       </div>
@@ -13285,16 +13291,16 @@ function _wppRenderChat(conv) {
     ? ` · <span class="wpp-tel" title="Copiar número" onclick="wppCopiarTel('${_telDigits}', this)">${_telFmt}</span>`
     : '';
   head.innerHTML = `
-    <div class="wpp-avatar">${_wppIniciais(conv.nome || conv.id)}</div>
+    <div class="wpp-avatar">${_esc(_wppIniciais(conv.nome || conv.id))}</div>
     <div style="flex:1;min-width:0">
-      <div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${conv.nome || conv.id}</div>
+      <div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(conv.nome || conv.id)}</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.35">${statusTxt}${_telHtml}</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
       ${isHumano
-        ? `<button class="wpp-btn-devolver" onclick="wppDevolverBot('${conv.id}')">🤖 Devolver ao bot</button>`
-        : `<button class="wpp-btn-assumir" onclick="wppAssumirAtendimento('${conv.id}')">Assumir</button>`}
-      <button class="wpp-btn-apagar" onclick="wppApagarConversa('${conv.id}')">🗑️</button>
+        ? `<button class="wpp-btn-devolver" onclick="wppDevolverBot('${_wppIdJs(conv.id)}')">🤖 Devolver ao bot</button>`
+        : `<button class="wpp-btn-assumir" onclick="wppAssumirAtendimento('${_wppIdJs(conv.id)}')">Assumir</button>`}
+      <button class="wpp-btn-apagar" onclick="wppApagarConversa('${_wppIdJs(conv.id)}')">🗑️</button>
     </div>
   `;
   // Alerta da IA (avisar_equipe) — banner próprio acima do aviso de pausa/humano.
@@ -13330,7 +13336,7 @@ function _wppRenderChat(conv) {
     }
     _avisoEl.style.display = 'block';
   } else if (_iaPausada) {
-    _avisoEl.innerHTML = `⏸ A equipe respondeu aqui — a IA fica quieta nesta conversa até ${_hhmmPausa} (renova a cada mensagem sua).<button class="wpp-retomar-ia" onclick="wppRetomarIA('${conv.id}')">Retomar agora</button>`;
+    _avisoEl.innerHTML = `⏸ A equipe respondeu aqui — a IA fica quieta nesta conversa até ${_hhmmPausa} (renova a cada mensagem sua).<button class="wpp-retomar-ia" onclick="wppRetomarIA('${_wppIdJs(conv.id)}')">Retomar agora</button>`;
     _avisoEl.style.display = 'block';
     // Re-renderiza quando a pausa vence (o snapshot não muda sozinho só porque o tempo passou).
     clearTimeout(window._wppPausaTimer);
@@ -13361,7 +13367,7 @@ function _wppRenderChat(conv) {
       let divisor = '';
       if (dia && dia !== _diaAnt) { divisor = `<div class="wpp-dia"><span>${_wppDiaLabel(m.ts)}</span></div>`; _diaAnt = dia; }
       if (m.autor === 'sistema') return divisor + _wppBolhaAuto(m, ts);
-      return `${divisor}<div class="wpp-msg ${tipo}">${m.texto}<div class="wpp-msg-ts">${autorTag}${ts}${check}</div></div>`;
+      return `${divisor}<div class="wpp-msg ${tipo}">${_esc(m.texto == null ? '' : m.texto)}<div class="wpp-msg-ts">${autorTag}${ts}${check}</div></div>`;
     }).join('');
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -13451,7 +13457,7 @@ async function wppEnviar() {
     const div = document.createElement('div');
     div.className = 'wpp-msg enviada';
     div.dataset.tsOtimista = agora;
-    div.innerHTML = `${texto}<div class="wpp-msg-ts">${tsLabel}</div>`;
+    div.innerHTML = `${_esc(texto)}<div class="wpp-msg-ts">${tsLabel}</div>`;
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
