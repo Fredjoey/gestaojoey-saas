@@ -98,6 +98,20 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
 - Custo: 1 map load por `new Map`; cada mapa é criado **uma vez por sessão** e reaproveitado (o snapshot dos
   pedidos redesenha os marcadores, não o mapa). Uso estimado bem abaixo dos 10 mil grátis/mês.
 
+## Motoboy de plantão no dia (desde 04/10/2026)
+
+`ativo` (cadastro) = trabalha aqui; inativo some de tudo. **Plantão** = quem está trabalhando HOJE: campo
+`motoboys/{id}.plantaoEm` (ms), que vale só no **dia de trabalho** corrente — das **05:00 às 05:00** de SP
+(`_inicioDiaTrabalho`). Ninguém zera nada: a marcação de ontem fica antes das 05:00 de hoje e deixa de contar.
+Corte às 05:00 para uma entrega depois da meia-noite não tirar o motoboy do plantão no meio do turno.
+
+- Faixa `#plantaoBar` no topo do kanban (só joey): um chip por motoboy ativo, toque liga/desliga
+  (`togglePlantao`). Sem ninguém marcado, ela fica laranja e pergunta "Quem está de plantão hoje?".
+- "Atribuir entregador" e "trocar" (`_mbOpts`) mostram **só quem está de plantão**. Ninguém marcado →
+  mostram todos os ativos com o aviso "escolher já marca", e `atribuirMotoboy` grava o `plantaoEm` de quem
+  foi escolhido (decisão do Fred: não travar o atendimento por esquecimento).
+- Painel aberto de um dia para o outro: um relógio de 60 s refaz a faixa e as listas na virada das 05:00.
+
 ## ⚠️ Mesas: o PEDIDO é a fonte única (desde 04/10/2026)
 
 O item de mesa existe **só na coleção `pedidos`**. O doc `mesas/{id}` guarda só **estado**: `status` e `conta`

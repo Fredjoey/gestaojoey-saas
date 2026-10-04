@@ -785,6 +785,7 @@ body.suporte-on #botAlertBanner{top:36px}
         <button class="filter-btn" onclick="abrirMapaPedidos()" style="margin-left:auto" title="Ver pedidos de entrega no mapa">🗺️ Ver no mapa</button>
       </div>
       <div id="aniversariantesBar"></div>
+      <div id="plantaoBar"></div>
       <div class="kanban-board" id="kanbanBoard"></div>
       <div class="sr-wrap" id="busca-results" style="display:none"></div>
     </div>
@@ -3720,13 +3721,69 @@ async function _aplicarTrocaPagamento(id, nova) {
 // Reusa o cadastro de motoboys (clientes/joey/motoboys). Atribuir num pedido 'pronto' = enviá-lo
 // p/ entrega (integra com o status de saída existente). Grava só: entregadorId, entregadorNome,
 // saiuParaEntregaEm. Reatribuir atualiza; remover apaga os 3 campos.
-let _motoboysAtivos = []; // [{id, nome}] — entregadores ativos (listener; só joey)
+let _motoboysAtivos = []; // [{id, nome, plantaoEm}] — entregadores ativos (listener; só joey)
+
+// ── PLANTÃO DO DIA (desde 04/10/2026) ───────────────────────────────────────────────────────────
+// `ativo` (cadastro) = trabalha aqui; inativo some de tudo. `plantaoEm` (ms) = marcado de plantão — vale só
+// no DIA DE TRABALHO corrente, que vai das 05:00 às 05:00 de SP. Ninguém zera nada à noite: a marcação de
+// ontem fica antes das 05:00 de hoje e simplesmente deixa de contar. Corte às 05:00 (não à meia-noite)
+// para uma entrega depois da meia-noite não tirar o motoboy do plantão no meio do turno.
+const _PLANTAO_CORTE_MIN = 5 * 60;
+function _inicioDiaTrabalho(agora) {
+  const DIA = 86400000, SP = 3 * 3600000, local = agora - SP;
+  let c = Math.floor(local / DIA) * DIA + _PLANTAO_CORTE_MIN * 60000;
+  if (c > local) c -= DIA;
+  return c + SP;
+}
+function _emPlantao(m, agora = Date.now()) { return Number(m && m.plantaoEm) >= _inicioDiaTrabalho(agora); }
+// Quem aparece para atribuir: os de plantão. Ninguém marcado → todos os ativos, e escolher já marca
+// (decisão do Fred: não travar o atendimento por esquecimento).
+function _motoboysParaAtribuir() {
+  const plantao = _motoboysAtivos.filter(m => _emPlantao(m));
+  return plantao.length ? { lista: plantao, semPlantao: false } : { lista: _motoboysAtivos, semPlantao: true };
+}
+function _renderPlantaoBar() {
+  const el = document.getElementById('plantaoBar');
+  if (!el) return;
+  if (slug !== 'joey' || !_motoboysAtivos.length) { el.innerHTML = ''; return; }
+  const ninguem = !_motoboysAtivos.some(m => _emPlantao(m));
+  const chip = m => {
+    const on = _emPlantao(m);
+    return `<button onclick="togglePlantao('${m.id}')" title="${on ? 'Tirar do plantão de hoje' : 'Marcar de plantão hoje'}"
+      style="padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+      ${on ? 'background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.45)' : 'background:transparent;color:var(--text3);border:1px solid var(--border2)'}">${on ? '✓ ' : ''}${_escMb(m.nome)}</button>`;
+  };
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 12px;font-size:12px;
+      ${ninguem ? 'background:rgba(245,158,11,.10);border-bottom:1px solid rgba(245,158,11,.35);color:#f59e0b' : 'color:var(--text2)'}">
+    <span style="font-weight:700">🛵 ${ninguem ? 'Quem está de plantão hoje?' : 'Plantão hoje:'}</span>${_motoboysAtivos.map(chip).join('')}</div>`;
+}
+async function togglePlantao(id) {
+  const m = _motoboysAtivos.find(x => x.id === id);
+  if (!m) return;
+  const entrar = !_emPlantao(m);
+  const FV = firebase.firestore.FieldValue;
+  m.plantaoEm = entrar ? Date.now() : null;                       // otimista; o listener reconcilia
+  _renderPlantaoBar(); renderKanban();
+  try {
+    await db.collection(`clientes/${slug}/motoboys`).doc(id).update({ plantaoEm: entrar ? m.plantaoEm : FV.delete() });
+  } catch (e) { notify('Erro ao marcar plantão: ' + e.message, 'warning'); }
+}
+// O painel fica aberto de um dia para o outro: na virada das 05:00 a faixa e as listas se refazem sozinhas.
+let _plantaoDia = _inicioDiaTrabalho(Date.now());
+setInterval(() => {
+  const d = _inicioDiaTrabalho(Date.now());
+  if (d !== _plantaoDia) { _plantaoDia = d; _renderPlantaoBar(); if (typeof renderKanban === 'function') renderKanban(); }
+}, 60000);
 function _fmtHoraSaida(ts) {
   const d = ts && ts.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
   if (!d || isNaN(d)) return '';
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace(':', 'h');
 }
-function _mbOpts() { return _motoboysAtivos.map(m => `<option value="${m.id}">${_escMb(m.nome)}</option>`).join(''); }
+function _mbOpts() {
+  const { lista, semPlantao } = _motoboysParaAtribuir();
+  return (semPlantao ? '<option value="" disabled>— ninguém de plantão: escolher já marca —</option>' : '')
+    + lista.map(m => `<option value="${m.id}">${_escMb(m.nome)}</option>`).join('');
+}
 // Linha discreta quando já há entregador: "🛵 João · saiu 19h32" + trocar/remover.
 function entregadorLinhaHtml(p) {
   if (p.entrega !== 'delivery' || !p.entregadorId) return '';
@@ -3763,6 +3820,11 @@ async function atribuirMotoboy(pedidoId, motoboyId) {
   if (!m) { notify('Entregador não encontrado.', 'warning'); return; }
   const p = pedidos.find(x => x.id === pedidoId);
   const upd = { entregadorId: motoboyId, entregadorNome: m.nome, atribuidoEm: firebase.firestore.FieldValue.serverTimestamp() };
+  if (!_emPlantao(m)) {                                            // ninguém marcado → escolher já marca o plantão
+    m.plantaoEm = Date.now(); _renderPlantaoBar();
+    db.collection(`clientes/${slug}/motoboys`).doc(motoboyId).update({ plantaoEm: m.plantaoEm })
+      .catch(e => console.warn('[plantão] não marquei', motoboyId, e.message));
+  }
   if (p) { p.entregadorId = motoboyId; p.entregadorNome = m.nome; p.atribuidoEm = Date.now(); } // otimista; NÃO muda status
   renderKanban();
   try {
@@ -9053,8 +9115,9 @@ function iniciarListenersFirestore() {
   // Motoboys ATIVOS p/ o seletor de entregador no card (Fase 2 entrega — SÓ joey).
   if (slug === 'joey') {
     db.collection(`clientes/${slug}/motoboys`).where('ativo', '==', true).onSnapshot(snap => {
-      _motoboysAtivos = snap.docs.map(d => ({ id: d.id, nome: (d.data().nome || '').trim() }))
+      _motoboysAtivos = snap.docs.map(d => ({ id: d.id, nome: (d.data().nome || '').trim(), plantaoEm: Number(d.data().plantaoEm) || null }))
         .sort((a, b) => a.nome.localeCompare(b.nome));
+      _renderPlantaoBar();
       renderKanban();
     }, err => console.error('[motoboys] listener:', err.message));
   }
