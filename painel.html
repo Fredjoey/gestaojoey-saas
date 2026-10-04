@@ -9100,9 +9100,17 @@ function _wppDetectarAlertasIA(convs) {
 // 03/10, quatro clientes ouviram "já chamei a equipe" e ninguém respondeu.
 // Espera = a IA transferiu (aguardandoDesde) ou avisou a equipe (alertaEquipe.em) e nenhuma PESSOA
 // respondeu depois. Termina com mensagem autor 'humano', "Devolver ao bot" ou "resolvido". NÃO termina
-// quando a IA volta a atender sozinha (30 min). Some depois de 12h.
+// quando a IA volta a atender sozinha (30 min). Some no FIM DO TURNO (23:50 de SP): espera de um turno
+// que acabou não aparece no seguinte — em 04/10 de madrugada a faixa mostrava os avisos de sábado.
 const ESPERA_FAIXA_MS = 2 * 60 * 1000;
 const ESPERA_MAX_MS = 12 * 60 * 60 * 1000;
+// As últimas 23:50 de SP até `agora` (SP = UTC−3 fixo). A faixa recalcula a cada 15s, então limpa sozinha.
+function _esperaCorteDoTurno(agora) {
+  const DIA = 86400000, SP = 3 * 3600000, local = agora - SP;
+  let c = Math.floor(local / DIA) * DIA + (23 * 60 + 50) * 60000;
+  if (c > local) c -= DIA;
+  return c + SP;
+}
 function _esperaDaConversa(c, agora) {
   if (!c) return null;
   const msgs = (Array.isArray(c.mensagens) ? c.mensagens : []).filter(m => m && Number(m.ts) > 0);
@@ -9113,7 +9121,8 @@ function _esperaDaConversa(c, agora) {
   if (tAg && !devolvido && !humanoDepois(tAg)) abertas.push({ desde: tAg, tipo: 'transferencia', motivo: '' });
   const tAl = Number(c.alertaEquipe && c.alertaEquipe.em) || 0;
   if (tAl && !humanoDepois(tAl)) abertas.push({ desde: tAl, tipo: 'aviso', motivo: String(c.alertaEquipe.motivo || '') });
-  return abertas.filter(e => agora - e.desde < ESPERA_MAX_MS).sort((a, b) => a.desde - b.desde)[0] || null;
+  const corte = _esperaCorteDoTurno(agora);
+  return abertas.filter(e => e.desde >= corte && agora - e.desde < ESPERA_MAX_MS).sort((a, b) => a.desde - b.desde)[0] || null;
 }
 // O que o cliente pediu: a última mensagem dele (ou o motivo do aviso da IA).
 function _esperaResumo(c, e) {

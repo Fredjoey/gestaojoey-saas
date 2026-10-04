@@ -105,7 +105,9 @@ desenho completo no CLAUDE.md de lá). Caso: sábado 03/10, quatro clientes ouvi
 
 - `_esperaDaConversa(conv)` — **portada** do `esperaDaConversa` do joeyapi; mudou lá, muda aqui. Espera = `aguardandoDesde`
   (a IA transferiu) ou `alertaEquipe.em` (a IA avisou sem transferir) sem mensagem `autor:'humano'` depois. Termina com
-  resposta humana, "Devolver ao bot" ou "resolvido"; **não** termina quando a IA volta sozinha; some depois de 12h.
+  resposta humana, "Devolver ao bot" ou "resolvido"; **não** termina quando a IA volta sozinha; **some no fim do turno,
+  às 23:50 de SP** (`_esperaCorteDoTurno`) — espera de um turno que acabou não aparece no seguinte (em 04/10 de madrugada
+  a faixa mostrava os 5 avisos de sábado, o mais antigo com 332 min).
 - Aos **2 min**: `#esperaFaixa`, fixa no topo (z-index 1000, acima do painel do WhatsApp, abaixo dos modais), visível em
   qualquer aba. 1 cliente → nome, tempo e a última mensagem dele + [Abrir]; vários → contagem + [Ver ▾] com a lista.
   [Abrir] = `abrirWppPanel()` + `wppSelecionarConv(id)`. Recalcula a cada 15s em memória (nenhuma leitura nova).
