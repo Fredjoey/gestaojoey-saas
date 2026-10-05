@@ -1016,6 +1016,8 @@ function carregarDadosPainel() {
       if (_st?.ativo !== true) return;
       // Estoque do dia: campo number em catalogoStatus.estoque. null/ausente = ilimitado; <=0 some do cardápio.
       if (typeof _st.estoque === 'number' && _st.estoque <= 0) return;
+      // Só mesa: catalogoStatus.soMesa=true → aparece só para quem entrou pelo QR da mesa (?mesa=X).
+      if (_st.soMesa === true && !sessionStorage.getItem('mesaAtiva')) return;
       CARDAPIO.push({
         id:         r.id,
         nome:       r.name || r.nome || '—',
