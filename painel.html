@@ -2157,7 +2157,7 @@ body.suporte-on #botAlertBanner{top:36px}
     <div style="margin-bottom:14px">
       <div class="fl" style="margin-bottom:6px;color:var(--orange)">Tipo</div>
       <div style="display:flex;gap:8px">
-        <button class="np-tipo-btn active" id="npTipoParaLevar" onclick="npSetTipo('retirada',this)">🥡 Para Levar</button>
+        <button class="np-tipo-btn active" id="npTipoParaLevar" onclick="npSetTipo('retirada',this)">🥡 Retirada</button>
         <button class="np-tipo-btn" id="npTipoDelivery" onclick="npSetTipo('delivery',this)">🛵 Delivery</button>
         <button class="np-tipo-btn" id="npTipoLocal" onclick="npSetTipo('local',this)">🍽️ No Local</button>
       </div>
@@ -4730,7 +4730,7 @@ function gerarHtmlPedidoProducao(p) {
 
   let tipo = 'NO LOCAL';
   if (p.entrega === 'delivery')      tipo = 'DELIVERY';
-  else if (p.entrega === 'retirada') tipo = 'PARA LEVAR';
+  else if (p.entrega === 'retirada') tipo = 'RETIRADA';
 
   const itensHtml = (p.itens || []).map(i => {
     const unitPrice = precoUnitario(i);

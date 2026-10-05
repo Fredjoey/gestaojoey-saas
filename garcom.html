@@ -207,7 +207,7 @@ button{font-family:inherit}
   </div>
   <div class="content" id="content"></div>
   <div class="bottombar">
-    <button class="btn-balcao" onclick="abrirBalcao()">🥡 Para Levar / Balcão</button>
+    <button class="btn-balcao" onclick="abrirBalcao()">🥡 Retirada / Balcão</button>
   </div>
 </div>
 
@@ -515,7 +515,7 @@ function renderComandas(){
   if (!ativos.length){ c.innerHTML=`<div class="empty">Nenhuma comanda aberta.</div>`; return; }
   c.innerHTML = ativos.map(p=>{
     const itens=(p.itens||[]).map(i=>`${i.qty}× ${_esc(i.nome)}`).join(', ');
-    const tag = p.tipo==='mesa'||p.mesa ? (p.mesaNome||('Mesa '+String(p.mesa||'').replace('mesa-',''))) : (p.entrega==='retirada'?'Para levar':(p.entrega==='delivery'?'Delivery':'Balcão'));
+    const tag = p.tipo==='mesa'||p.mesa ? (p.mesaNome||('Mesa '+String(p.mesa||'').replace('mesa-',''))) : (p.entrega==='retirada'?'Retirada':(p.entrega==='delivery'?'Delivery':'Balcão'));
     return `<div class="cmd">
       <div class="cmd-top"><div class="cmd-tit">#${p.id} <span class="cmd-badge">${_esc(tag)}</span></div><div class="cmd-tot">${fmt(p.total)}</div></div>
       <div class="cmd-itens">${itens}</div>
@@ -560,7 +560,7 @@ let _modo='mesa'; // mesa | balcao
 let _cart=[];     // itens do pedido sendo montado
 function abrirCardapio(modo){
   _modo = modo;
-  document.getElementById('cardapioT').textContent = modo==='mesa' ? ('Adicionar — '+_mesaNome) : 'Para Levar / Balcão';
+  document.getElementById('cardapioT').textContent = modo==='mesa' ? ('Adicionar — '+_mesaNome) : 'Retirada / Balcão';
   const pb=document.getElementById('prodBusca'); if(pb) pb.value='';
   renderProdList();
   document.getElementById('cardapioSheet').classList.add('show');
