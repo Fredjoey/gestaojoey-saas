@@ -8514,7 +8514,21 @@ function epAdicionarItem(id) {
   const existente = _epCart.find(i => String(i.id) === String(id) && !i.adicionais?.length && !i.obs);
   if (existente) { existente.qty++; }
   else _epCart.push({ id: p.id, nome: p.name||p.nome||'—', preco: p.price||p.preco||0, qty: 1, obs: '', adicionais: [], emoji: EMOJI_CAT_PAINEL[p.categoria||'Outros']||'🍽️' });
+  // O item novo entra no FIM da lista, que com os adicionais abertos fica fora da
+  // tela — parecia que o clique não tinha feito nada. Fecha a busca, rola até o
+  // item e pisca ele.
+  const idx = existente ? _epCart.indexOf(existente) : _epCart.length - 1;
+  document.getElementById('epBusca').value = '';
+  document.getElementById('epResultados').innerHTML = '';
   epRenderCart();
+  const el = document.getElementById('epItem_' + idx);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'box-shadow .3s, border-color .3s';
+    el.style.borderColor = 'var(--orange)';
+    el.style.boxShadow = '0 0 0 2px var(--orange)';
+    setTimeout(() => { el.style.borderColor = ''; el.style.boxShadow = ''; }, 1500);
+  }
 }
 
 function epAjustarQty(idx, delta) {
@@ -8573,7 +8587,7 @@ function epRenderCart() {
         }).join('')}
       </div>` : '';
 
-    return `<div style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px">
+    return `<div id="epItem_${idx}" style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;margin-bottom:8px">
       <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
         <span style="font-size:1.1rem;flex-shrink:0;padding-top:1px">${item.emoji||'🍽️'}</span>
         <div style="flex:1;min-width:0">
