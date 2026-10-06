@@ -3935,6 +3935,113 @@
             abrirPainelReceitasCategoria(catNome, Number(painel.dataset.catId));
         }
 
+        // ── Ficha técnica para impressão (06/10/2026) ───────────────────────────────
+        // Abre uma janela com a ficha da receita: versão Cozinha (sem valores, usa a
+        // "medida na cozinha" de cada ingrediente quando preenchida) ou Completa
+        // (quantidade técnica, custo por linha, CMV). Papel A4 ou térmica 80mm.
+        // "Baixar PDF" usa o diálogo de impressão do navegador (Salvar como PDF).
+        function _fichaEsc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+        function _fichaNum(n) {
+            const v = Number(n) || 0;
+            return (Math.round(v * 1000) / 1000).toString().replace('.', ',');
+        }
+        function _fichaQtdTecnica(ing) {
+            const data = ingredientsData[ing.name] || {};
+            if (data.unit === 'kg') return _fichaNum(ing.quantity) + ' g';
+            if (data.unit === 'ml') return _fichaNum(ing.quantity) + ' ml';
+            return _fichaNum(ing.quantity) + ' ' + (ing.unit || data.unit || '');
+        }
+        function imprimirFichaTecnica(recipeId) {
+            const recipe = recipes.find(r => r.id === recipeId);
+            if (!recipe) return;
+            const w = window.open('', '_blank');
+            if (!w) { alert('O navegador bloqueou a janela da ficha. Libere pop-ups para este site.'); return; }
+            const brl = v => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
+            const loja = (document.title || '').replace(/^Sistema\s*/i, '').trim();
+            const hoje = new Date().toLocaleDateString('pt-BR');
+            const ings = (recipe.ingredients || []).map(ing => ({
+                nome: ing.name,
+                tecnica: _fichaQtdTecnica(ing),
+                medida: ing.medidaCozinha || '',
+                custo: calculateIngredientCost(ing.name, ing.quantity)
+            }));
+            const custo = ings.reduce((a, i) => a + i.custo, 0);
+            const preco = Number(recipe.price) || 0;
+            const rend = recipe.yield || 1;
+            let versao = 'cozinha', papel = 'a4';
+
+            function folha() {
+                const dono = versao === 'completa', term = papel === 'term';
+                const linhas = ings.map((i, k) => {
+                    const qtd = (!dono && i.medida)
+                        ? `${_fichaEsc(i.medida)} <span class="k">(${_fichaEsc(i.tecnica)})</span>`
+                        : _fichaEsc(i.tecnica);
+                    return `<tr><td class="k">${k + 1}</td><td>${_fichaEsc(i.nome)}</td><td class="q">${qtd}</td>${dono ? `<td class="n">${brl(i.custo)}</td>` : ''}</tr>`;
+                }).join('');
+                const resumo = dono ? `<div class="cost">
+                        <div><small>Custo</small><b>${brl(custo)}</b></div>
+                        <div><small>Preço</small><b>${brl(preco)}</b></div>
+                        <div><small>CMV</small><b>${preco ? (custo / preco * 100).toFixed(1).replace('.', ',') + '%' : '—'}</b></div>
+                        <div><small>Lucro bruto</small><b>${brl(preco - custo)}</b></div></div>` : '';
+                return `<div class="sheet${term ? ' term' : ''}">
+                    <div class="sh-head"><div class="brand">${_fichaEsc(loja.toUpperCase())}<small>FICHA TÉCNICA</small></div>
+                    <div class="dt">${dono ? 'VERSÃO COMPLETA' : 'COZINHA'}<br>${hoje}</div></div>
+                    <div class="title">${_fichaEsc(recipe.name)}</div>
+                    <div class="meta">${_fichaEsc(recipe.categoria || '')} · rende ${_fichaNum(rend)} ${Number(rend) === 1 ? 'unidade' : 'unidades'}</div>
+                    <table><tr><th>#</th><th>Ingrediente</th><th>${dono ? 'Quantidade' : 'Quanto vai'}</th>${dono ? '<th class="n">Custo</th>' : ''}</tr>${linhas}</table>
+                    ${resumo}
+                    <div class="box"><h4>Modo de montagem</h4><div class="lines">${'<div></div>'.repeat(term ? 3 : 5)}</div></div>
+                    <div class="foot"><span>Gestão Joey</span><span>Conferir com o sistema se a receita mudar</span></div></div>`;
+            }
+            const css = `*{box-sizing:border-box}body{margin:0;background:#3b3b3b;font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+                .bar{position:sticky;top:0;display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:#1a1a1a;color:#eee;padding:12px 16px;border-bottom:1px solid #333}
+                .lbl{font-size:11px;color:#888;text-transform:uppercase}.seg{display:flex;background:#111;border-radius:8px;padding:3px}
+                .seg button{background:none;border:0;color:#aaa;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+                .seg button.on{background:#E87722;color:#111}.btn{border:0;border-radius:7px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer}
+                .b1{background:#3a3a3a;color:#fff}.b2{background:#E87722;color:#111}.dica{font-size:11px;color:#888;width:100%}
+                .stage{display:flex;justify-content:center;padding:28px}
+                .sheet{background:#fff;color:#1a1a1a;width:210mm;min-height:297mm;padding:16mm 16mm;font-size:13px}
+                .sheet.term{width:80mm;min-height:0;padding:4mm 3mm;font-family:Consolas,monospace;font-size:12px}
+                .sh-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #E87722;padding-bottom:10px}
+                .brand{font-weight:900;font-size:22px;letter-spacing:.04em}.brand small{display:block;color:#888;font-size:10px;letter-spacing:.12em;margin-top:2px}
+                .dt{text-align:right;font-size:11px;color:#888}.title{font-size:28px;font-weight:800;margin:18px 0 4px}.meta{color:#666;font-size:12px}
+                table{width:100%;border-collapse:collapse;margin-top:16px}th{text-align:left;font-size:10px;color:#888;text-transform:uppercase;border-bottom:1px solid #ddd;padding:6px 4px}
+                td{padding:9px 4px;border-bottom:1px solid #eee}td.n,th.n{text-align:right;white-space:nowrap}td.q{font-weight:700}.k{font-size:11px;color:#999;font-weight:400}
+                .cost{margin-top:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.cost div{background:#f6f2ee;border-radius:8px;padding:10px}
+                .cost small{display:block;font-size:10px;color:#888;text-transform:uppercase}.cost b{font-size:16px}
+                .box{margin-top:20px;border:1px dashed #ccc;border-radius:8px;padding:12px 14px}.box h4{margin:0 0 8px;font-size:11px;color:#888;text-transform:uppercase}
+                .lines div{border-bottom:1px solid #e5e5e5;height:24px}.foot{margin-top:22px;font-size:10px;color:#aaa;display:flex;justify-content:space-between;gap:8px}
+                .term .sh-head{border-bottom:1px dashed #000}.term .brand{font-size:16px}.term .title{font-size:18px;margin:8px 0 2px}.term table{margin-top:8px}
+                .term td,.term th{padding:4px 2px}.term .cost{grid-template-columns:1fr 1fr}.term .cost div{background:none;border:1px dashed #999;padding:5px}
+                @media print{body{background:#fff}.bar{display:none}.stage{padding:0;display:block}.sheet{width:auto;min-height:0}}`;
+            function desenhar() {
+                const d = w.document;
+                d.getElementById('fichaStage').innerHTML = folha();
+                d.getElementById('fichaPage').textContent = '@page{margin:' + (papel === 'term' ? '0' : '10mm') + ';size:' + (papel === 'term' ? '80mm auto' : 'A4') + '}';
+                d.querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === versao));
+                d.querySelectorAll('[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === papel));
+            }
+            w.document.open();
+            w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Ficha técnica · ${_fichaEsc(recipe.name)}</title>
+                <style>${css}</style><style id="fichaPage"></style></head><body>
+                <div class="bar">
+                  <span class="lbl">Versão</span><div class="seg"><button data-v="cozinha">Cozinha (sem valores)</button><button data-v="completa">Completa (com custo)</button></div>
+                  <span class="lbl">Papel</span><div class="seg"><button data-p="a4">A4</button><button data-p="term">Térmica 80mm</button></div>
+                  <div style="margin-left:auto;display:flex;gap:8px"><button class="btn b1" id="fichaImprimir">🖨️ Imprimir</button><button class="btn b2" id="fichaPdf">📄 Baixar PDF</button></div>
+                  <div class="dica" id="fichaDica" style="display:none">No quadro de impressão, escolha <b>Salvar como PDF</b> em "Destino".</div>
+                </div>
+                <div class="stage" id="fichaStage"></div></body></html>`);
+            w.document.close();
+            w.document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { versao = b.dataset.v; desenhar(); });
+            w.document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { papel = b.dataset.p; desenhar(); });
+            w.document.getElementById('fichaImprimir').onclick = () => w.print();
+            w.document.getElementById('fichaPdf').onclick = () => { w.document.getElementById('fichaDica').style.display = 'block'; setTimeout(() => w.print(), 300); };
+            desenhar();
+        }
+        window.imprimirFichaTecnica = imprimirFichaTecnica;
+
         function showRecipeDetails(recipeId) {
             const recipe = recipes.find(r => r.id === recipeId);
             if (!recipe) return;
@@ -3948,6 +4055,11 @@
                     totalCost += calculateIngredientCost(ing.name, ing.quantity);
                 });
                 return totalCost;
+            }
+
+            function updateEditingIngredientMedida(idx, valor) {
+                const v = String(valor || '').trim();
+                if (v) editingIngredients[idx].medidaCozinha = v; else delete editingIngredients[idx].medidaCozinha;
             }
 
             function updateEditingIngredient(idx, newQuantity) {
@@ -4145,9 +4257,13 @@
                                                 <input type="number" id="input-${idx}" value="${ing.quantity}" step="0.01" min="0"
                                                        onchange="updateEditingIngredient(${idx}, this.value)"
                                                        style="padding:7px; border:1px solid #444; border-radius:4px; width:100%; font-size:13px;">
+                                                <div style="font-size:11px; color:#666; text-transform:uppercase; font-weight:600; margin:6px 0 4px;">Medida na cozinha <span style="text-transform:none; font-weight:400;">(opcional · sai na ficha impressa)</span></div>
+                                                <input type="text" id="medida-${idx}" value="${_fichaEsc(ing.medidaCozinha || '')}" placeholder="ex.: 2 folhas, 1 colher"
+                                                       onchange="updateEditingIngredientMedida(${idx}, this.value)"
+                                                       style="padding:7px; border:1px solid #444; border-radius:4px; width:100%; font-size:13px;">
                                             ` : `
                                                 <div style="font-weight: 500; color: #e8e8e8; font-size: 13px;">${ing.name}</div>
-                                                <div style="font-size: 12px; color: #777;">${costDetail}</div>
+                                                <div style="font-size: 12px; color: #777;">${costDetail}</div>${ing.medidaCozinha ? `<div style="font-size:11px; color:#e0a030;">🍳 ${_fichaEsc(ing.medidaCozinha)}</div>` : ''}
                                             `}
                                         </div>
                                         <div style="text-align: center; border-right: 1px solid #444; padding-right: 12px;">
@@ -4216,6 +4332,7 @@
                     } else {
                         modalFooter.innerHTML = `
                             <button class="secondary" onclick="this.closest('.modal').parentElement.removeChild(this.closest('.modal'))">Fechar</button>
+                            <button style="background:#E87722; color:#111;" onclick="imprimirFichaTecnica(${recipe.id})">🖨️ Imprimir ficha</button>
                             <button style="background: #3498db;" onclick="isEditModeBtn()">✏️ Editar Receita</button>
                         `;
                     }
@@ -4243,7 +4360,8 @@
                     </div>
                     <div id="modalFooter" class="modal-footer">
                         <button class="secondary" onclick="this.closest('.modal').parentElement.removeChild(this.closest('.modal'))">Fechar</button>
-                        <button style="background: #3498db;" onclick="isEditModeBtn()">✏️ Editar Receita</button>
+                        <button style="background:#E87722; color:#111;" onclick="imprimirFichaTecnica(${recipe.id})">🖨️ Imprimir ficha</button>
+                            <button style="background: #3498db;" onclick="isEditModeBtn()">✏️ Editar Receita</button>
                     </div>
                 </div>
             `;
@@ -4252,6 +4370,7 @@
 
             // Funções globais para o modal
             window.updateEditingIngredient = updateEditingIngredient;
+            window.updateEditingIngredientMedida = updateEditingIngredientMedida;
             window.updateEditingIngredientName = updateEditingIngredientName;
             window.deleteEditingIngredient = deleteEditingIngredient;
             window.addNewIngredientBtn = addNewIngredient;
