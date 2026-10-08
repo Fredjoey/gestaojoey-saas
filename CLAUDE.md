@@ -132,9 +132,15 @@ gravados nem lidos (a migração de 04/10 tirou dos 15 docs).
   padrão do `contaFechar` (`_mesasFechando`). Falha ao lançar não grava nada; o carrinho fica para tentar de novo.
 - Removido o código morto que ainda gravava comanda (sem nenhum chamador): editar/cancelar/imprimir comanda,
   remover pedido da mesa, o modal antigo de fechar conta e o "dividir conta" antigo.
-- ⚠️ **Defeito conhecido, não corrigido**: a Mesa 1 está cadastrada com id `cTllcOFyh3ZLCcxZ18Q4` (as outras são
-  `mesa-2`…`mesa-7`), e o QR dela grava `mesa:"1"`. O salão casa pelo id → os pedidos do QR da Mesa 1 nunca
-  entram no card nem são finalizados (53 em "entregue", R$ 2.284, de 26/06 a 03/10).
+- **Mesa 1 — corrigido em 07/10/2026.** Recadastrada em 19/05 com id aleatório `cTllcOFyh3ZLCcxZ18Q4` (o "Nova mesa"
+  usava `.add()`); o QR impresso, de quando era `mesa-1`, grava `mesa:"1"` → o salão nunca casava e 53 pedidos do QR
+  (R$ 2.284, 26/06 a 03/10) ficaram em "entregue". Correção por script, nesta ordem: os 53 → `finalizado` +
+  `arquivado` com `finalizadoPor:'correcao-mesa1'` (sem fechamento: pagos no salão, forma não registrada; já estavam
+  no faturamento) → cadastro virou `mesas-config/mesa-1` (`recadastradaDe`) → as 17 vendas e 1 fechamento com o id
+  antigo foram para `mesa:'mesa-1'` (`mesaAntes`). `mesas/cTllcOFyh3ZLCcxZ18Q4` (livre, conta vazia) ficou órfão.
+  ⚠️ A ordem importa: casar a mesa antes de finalizar faria os 53 aparecerem como conta aberta.
+- **"Nova mesa" grava `mesa-<n>`** (`_mesaNovoId`), nunca id aleatório: "Mesa 8" → `mesa-8`; outro nome (ou número
+  tomado) → o próximo `n` livre no cadastro E sem pedido no histórico (não herdar vendas de mesa apagada).
 
 ## ⚠️ Inbox: TODO texto de fora passa por `_esc()` (desde 04/10/2026)
 

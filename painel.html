@@ -11430,6 +11430,19 @@ function fecharModalMesa() {
   _mesaEditId = null;
 }
 
+// Id da mesa nova. "Mesa 8" → mesa-8 (o número do QR bate com o nome), se estiver livre. Senão (outro nome,
+// ou mesa-8 já tomado) → o próximo número livre: fora do cadastro (ativas e desativadas) E sem pedido no
+// histórico — senão a mesa nova herdaria as vendas de uma mesa apagada com o mesmo número.
+function _mesaNovoId(nome) {
+  const usado = n => mesasConfig.some(m => m.id === 'mesa-' + n)
+    || pedidos.some(p => { const pm = String(p.mesa || ''); return pm === String(n) || pm === 'mesa-' + n; });
+  const doNome = /^mesa\s*(\d+)$/i.exec(String(nome).trim());
+  if (doNome && !mesasConfig.some(m => m.id === 'mesa-' + Number(doNome[1]))) return 'mesa-' + Number(doNome[1]);
+  let n = 1;
+  while (usado(n)) n++;
+  return 'mesa-' + n;
+}
+
 async function salvarMesa() {
   const nome   = document.getElementById('mesaNome').value.trim();
   const capRaw = document.getElementById('mesaCapacidade').value.trim();
@@ -11450,10 +11463,18 @@ async function salvarMesa() {
       notify('Mesa atualizada!');
     } else {
       const maxOrdem = mesasConfig.reduce((mx, m) => Math.max(mx, m.ordem || 0), 0);
-      await db.collection(`clientes/${slug}/mesas-config`).add({
-        nome, capacidade, localizacao: loc, ativa: true,
-        ordem: maxOrdem + 1,
-        criadaEm: firebase.firestore.FieldValue.serverTimestamp()
+      // id = mesa-<n>, nunca aleatório: o QR leva o número (?mesa=<n>) e o salão casa pedido↔mesa pelo id
+      // (_pedidosDaMesa). Com .add() o id era aleatório — a Mesa 1 recadastrada em 19/05 ganhou
+      // cTllcOFyh3ZLCcxZ18Q4, o QR impresso gravava "1" e 53 pedidos ficaram presos em "entregue".
+      const id = _mesaNovoId(nome);
+      const ref = db.collection(`clientes/${slug}/mesas-config`).doc(id);
+      await db.runTransaction(async (tx) => {
+        if ((await tx.get(ref)).exists) throw new Error(`o id ${id} já existe — tente de novo`);
+        tx.set(ref, {
+          nome, capacidade, localizacao: loc, ativa: true,
+          ordem: maxOrdem + 1,
+          criadaEm: firebase.firestore.FieldValue.serverTimestamp()
+        });
       });
       notify('Mesa criada!');
     }
