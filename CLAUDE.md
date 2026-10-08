@@ -157,6 +157,14 @@ e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`envi
 - Não marca a conversa como não lida (`_wppChaveVista` ignora as automáticas) e não toca som.
 - O aviso de "humano" diz **30 min** (era 6h; a regra do joeyapi mudou em 04/10) e não conta automática como equipe.
 
+## Inbox: "equipe atendendo" no cabeçalho + bolha de campanha (desde 07/10/2026)
+
+- Conversa em `status:'humano'` (v2): o aviso longo que ficava DENTRO da conversa (`#wppAviso`) saiu. O cabeçalho mostra
+  "👤 Equipe atendendo · IA volta após HH:MM" (30 min depois da última mensagem da equipe) e a explicação inteira fica no
+  `title`. O `#wppAviso` só aparece para a pausa antiga (`pausaIaAte`), numa linha com "Retomar agora".
+- Campanha do celular (joeyapi `src/campanha.js`: mesmo conteúdo para 3+ contatos em 10 min) chega como `autor:'sistema'`,
+  `auto.tipo:'campanha'` → bolha "📣 Campanha · não trava a IA". Não trava a IA nem conta como resposta à faixa abaixo.
+
 ## Faixa "cliente esperando a equipe" (desde 04/10/2026)
 
 Nível 1 do alerta de conversa sem resposta (o nível 2, WhatsApp aos 5 min, é do joeyapi — `src/alertaEquipe.js`, com o

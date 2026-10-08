@@ -13058,7 +13058,21 @@ function _wppRenderChat(conv) {
   const _pausaAte = Number(conv.pausaIaAte) || 0;
   const _iaPausada = !isHumano && _iaFeatures.iaV2 === true && _pausaAte > Date.now();
   const _hhmmPausa = _iaPausada ? new Date(_pausaAte).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
-  const statusTxt = conv.status === 'humano' ? '👤 Atendimento humano'
+  // A equipe assumiu (v2): a IA solta sozinha quando o cliente escrever 30 min depois da última mensagem
+  // DA EQUIPE (joeyapi: liberaPorInatividade, HUMANO_LIBERA_MS). Automática (autor 'sistema') não conta.
+  // Fica no cabeçalho, numa linha — o texto longo que ficava na conversa virou o title.
+  let _liberaHHMM = '';
+  if (conv.status === 'humano' && _iaFeatures.iaV2 === true) {
+    const _saidas = (Array.isArray(conv.mensagens) ? conv.mensagens : []).filter(m => m && m.tipo === 'enviada' && m.autor !== 'sistema');
+    const _equipe = _saidas.filter(m => m.autor !== 'ia');
+    const _ultTs = Math.max(0, ...(_equipe.length ? _equipe : _saidas).map(m => Number(m.ts) || 0));
+    if (_ultTs) _liberaHHMM = new Date(_ultTs + 30 * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  }
+  const _statusTitle = conv.status === 'humano' && _iaFeatures.iaV2 === true
+    ? 'A IA fica quieta até alguém tocar em "Devolver ao bot"' + (_liberaHHMM ? ` ou o cliente escrever depois das ${_liberaHHMM} (30 min sem a equipe responder).` : '.')
+    : '';
+  const statusTxt = conv.status === 'humano'
+                    ? (_iaFeatures.iaV2 === true ? `👤 Equipe atendendo${_liberaHHMM ? ` · IA volta após ${_liberaHHMM}` : ''}` : '👤 Atendimento humano')
                   : conv.status === 'aguardando' ? '⚠️ Aguardando'
                   : _iaPausada ? `⏸ IA pausada até ${_hhmmPausa}`
                   : '🤖 Bot ativo';
@@ -13071,7 +13085,7 @@ function _wppRenderChat(conv) {
     <div class="wpp-avatar">${_esc(_wppIniciais(conv.nome || conv.id))}</div>
     <div style="flex:1;min-width:0">
       <div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(conv.nome || conv.id)}</div>
-      <div style="font-size:11px;color:var(--text2);line-height:1.35">${statusTxt}${_telHtml}</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.35"><span${_statusTitle ? ` title="${_esc(_statusTitle)}" style="cursor:help"` : ''}>${statusTxt}</span>${_telHtml}</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
       ${isHumano
@@ -13099,21 +13113,10 @@ function _wppRenderChat(conv) {
   }
   const _avisoEl = document.getElementById('wppAviso');
   if (conv.status === 'humano') {
-    if (_iaFeatures.iaV2 === true) {
-      // A IA v2 solta sozinha 30 min depois da última mensagem DA EQUIPE (joeyapi: liberaPorInatividade,
-      // HUMANO_LIBERA_MS). Automática (autor 'sistema') não conta como equipe.
-      const _saidas = (Array.isArray(conv.mensagens) ? conv.mensagens : []).filter(m => m && m.tipo === 'enviada' && m.autor !== 'sistema');
-      const _equipe = _saidas.filter(m => m.autor !== 'ia');
-      const _ultTs = Math.max(0, ...(_equipe.length ? _equipe : _saidas).map(m => Number(m.ts) || 0));
-      const _libera = _ultTs ? new Date(_ultTs + 30 * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
-      _avisoEl.textContent = `👤 A equipe assumiu — a IA fica quieta até alguém tocar em "🤖 Devolver ao bot"`
-        + (_libera ? ` ou o cliente escrever depois de 30 min sem a equipe responder aqui (a partir das ${_libera}).` : '.');
-    } else {
-      _avisoEl.textContent = '👤 Atendimento humano ativo — bot silenciado para este número';
-    }
-    _avisoEl.style.display = 'block';
+    // Atendimento humano: só o cabeçalho avisa (statusTxt) — nada dentro da conversa.
+    _avisoEl.style.display = 'none';
   } else if (_iaPausada) {
-    _avisoEl.innerHTML = `⏸ A equipe respondeu aqui — a IA fica quieta nesta conversa até ${_hhmmPausa} (renova a cada mensagem sua).<button class="wpp-retomar-ia" onclick="wppRetomarIA('${_wppIdJs(conv.id)}')">Retomar agora</button>`;
+    _avisoEl.innerHTML = `⏸ IA pausada até ${_hhmmPausa}<button class="wpp-retomar-ia" onclick="wppRetomarIA('${_wppIdJs(conv.id)}')">Retomar agora</button>`;
     _avisoEl.style.display = 'block';
     // Re-renderiza quando a pausa vence (o snapshot não muda sozinho só porque o tempo passou).
     clearTimeout(window._wppPausaTimer);
@@ -13163,7 +13166,9 @@ function _wppBolhaAuto(m, ts) {
   const corte = txt.indexOf('\n\n');
   const topo = corte > 0 ? txt.slice(0, corte) : txt;
   const resto = corte > 0 ? txt.slice(corte + 2) : '';
-  return `<div class="wpp-msg enviada wpp-auto"><div class="wpp-auto-tag">🤖 Automático · ${rot}</div>`
+  // Campanha do celular (joeyapi campanha.js): a equipe mandou, mas para vários contatos — não é atendimento.
+  const tag = a.tipo === 'campanha' ? '📣 Campanha · não trava a IA' : `🤖 Automático · ${rot}`;
+  return `<div class="wpp-msg enviada wpp-auto"><div class="wpp-auto-tag">${tag}</div>`
     + `<div class="wpp-auto-txt">${_esc(topo)}</div>`
     + (resto ? `<details class="wpp-auto-mais"><summary>ver resumo</summary><div class="wpp-auto-txt">${_esc(resto)}</div></details>` : '')
     + `<div class="wpp-msg-ts">${ts}</div></div>`;
