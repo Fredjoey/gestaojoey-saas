@@ -167,7 +167,11 @@ e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`envi
   (`liberaPorInatividade`). O 1º rótulo ("IA volta após HH:MM") passava a ideia contrária — Gabriela, 07/10.
 - Selo "⚠ Atenção" da lista: segue a regra da faixa (`_esperaDaConversa`) — some quando a equipe responde depois do
   `alertaEquipe` ou no fim do turno. Antes só saía com "Resolvido" (Beatriz, 07/10: atendida em 9 s, selo aceso 2 h).
-  O banner "A IA pediu atenção" dentro da conversa continua até "Resolvido".
+  O banner "A IA pediu atenção" dentro da conversa continua até "Resolvido" — ou até o fato mudar (abaixo).
+- **Aviso resolvido pelo fato** (`_wppAlertaResolvidoPeloFato`, PORTADA de joeyapi `alertaEquipe.alertaResolvidoPeloFato`):
+  aviso da IA com `alertaEquipe.{pedidoId, caso}` some do banner, do selo e da faixa quando o pedido anda
+  (`naoSaiu` → saiu/pronto p/ retirada/cancelado; `saiu` → finalizado/cancelado), pela automática na conversa ou pelo
+  pedido em `pedidos` (já em memória). Caso Yasmim, 07/10: "ainda não saiu" na tela com o "saiu para entrega" logo abaixo.
 - Campanha do celular (joeyapi `src/campanha.js`: mesmo conteúdo para 3+ contatos em 10 min) chega como `autor:'sistema'`,
   `auto.tipo:'campanha'` → bolha "📣 Campanha · não trava a IA". Não trava a IA nem conta como resposta à faixa abaixo.
 

@@ -9213,6 +9213,27 @@ function _esperaCorteDoTurno(agora) {
   if (c > local) c -= DIA;
   return c + SP;
 }
+// Aviso da IA que perdeu o motivo porque o pedido andou — PORTADA de joeyapi alertaEquipe.alertaResolvidoPeloFato
+// (mudou lá, muda aqui). Só avisos com alertaEquipe.{pedidoId, caso} (IA desde 07/10, avisar_equipe sobre_status):
+// 'naoSaiu' → saiu / pronto p/ retirada / cancelado; 'saiu' → chegou (finalizado) / cancelado. Prova: a automática
+// do mesmo pedido na conversa (só 'naoSaiu') ou o pedido em `pedidos` (já em memória — nenhuma leitura nova).
+// Caso Yasmim, 07/10: "ainda não saiu" às 20:45, pedido saiu às 21:17, aviso seguiu na tela até "Resolvido".
+const _WPP_RESOLVE_NAO_SAIU = ['prontoDelivery', 'prontoRetirada', 'cancelado'];
+function _wppAlertaResolvidoPeloFato(c) {
+  const al = c && c.alertaEquipe;
+  const pid = al && al.pedidoId != null ? String(al.pedidoId) : '';
+  if (!pid || !al.caso) return false;
+  const tAl = Number(al.em) || 0;
+  const msgs = Array.isArray(c.mensagens) ? c.mensagens : [];
+  if (al.caso === 'naoSaiu' && msgs.some(m => m && m.autor === 'sistema' && m.auto && String(m.auto.pedidoId) === pid
+    && Number(m.ts) > tAl && _WPP_RESOLVE_NAO_SAIU.includes(m.auto.tipo))) return true;
+  const p = (typeof pedidos !== 'undefined' ? pedidos : []).find(x => x && String(x.id) === pid);
+  if (!p) return false;
+  const st = String(p.status || '');
+  if (al.caso === 'naoSaiu') return !!p.saiuParaEntregaEm || ['entregue', 'finalizado', 'cancelado'].includes(st) || (p.entrega !== 'delivery' && st === 'pronto');
+  if (al.caso === 'saiu') return st === 'finalizado' || st === 'cancelado' || (p.entrega !== 'delivery' && st === 'entregue');
+  return false;
+}
 function _esperaDaConversa(c, agora) {
   if (!c) return null;
   const msgs = (Array.isArray(c.mensagens) ? c.mensagens : []).filter(m => m && Number(m.ts) > 0);
@@ -9222,7 +9243,7 @@ function _esperaDaConversa(c, agora) {
   const devolvido = c.liberadoPor === 'painel' && (Number(c.liberadoEm) || 0) > tAg;
   if (tAg && !devolvido && !humanoDepois(tAg)) abertas.push({ desde: tAg, tipo: 'transferencia', motivo: '' });
   const tAl = Number(c.alertaEquipe && c.alertaEquipe.em) || 0;
-  if (tAl && !humanoDepois(tAl)) abertas.push({ desde: tAl, tipo: 'aviso', motivo: String(c.alertaEquipe.motivo || '') });
+  if (tAl && !humanoDepois(tAl) && !_wppAlertaResolvidoPeloFato(c)) abertas.push({ desde: tAl, tipo: 'aviso', motivo: String(c.alertaEquipe.motivo || '') });
   const corte = _esperaCorteDoTurno(agora);
   return abertas.filter(e => e.desde >= corte && agora - e.desde < ESPERA_MAX_MS).sort((a, b) => a.desde - b.desde)[0] || null;
 }
@@ -13113,7 +13134,8 @@ function _wppRenderChat(conv) {
     _alertaEl.id = 'wppAlertaIA'; _alertaEl.className = 'wpp-alerta-ia';
     document.getElementById('wppAviso').before(_alertaEl);
   }
-  if (conv.alertaEquipe && conv.alertaEquipe.em) {
+  // Some sozinho quando o fato que o gerou mudou (pedido saiu…) — senão afirma o contrário da automática logo abaixo.
+  if (conv.alertaEquipe && conv.alertaEquipe.em && !_wppAlertaResolvidoPeloFato(conv)) {
     const _hA = new Date(conv.alertaEquipe.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
     _alertaEl.textContent = `⚠ A IA pediu atenção (${_hA}): ${conv.alertaEquipe.motivo || ''} `;
     const b = document.createElement('button'); b.className = 'wpp-retomar-ia'; b.textContent = 'Resolvido';
