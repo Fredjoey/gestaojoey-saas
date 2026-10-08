@@ -160,8 +160,14 @@ e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`envi
 ## Inbox: "equipe atendendo" no cabeçalho + bolha de campanha (desde 07/10/2026)
 
 - Conversa em `status:'humano'` (v2): o aviso longo que ficava DENTRO da conversa (`#wppAviso`) saiu. O cabeçalho mostra
-  "👤 Equipe atendendo · IA volta após HH:MM" (30 min depois da última mensagem da equipe) e a explicação inteira fica no
-  `title`. O `#wppAviso` só aparece para a pausa antiga (`pausaIaAte`), numa linha com "Retomar agora".
+  "👤 Equipe atendendo · IA responde se o cliente escrever após HH:MM" (30 min depois da última mensagem da equipe) e, passado
+  o horário, "· IA responde na próxima mensagem do cliente"; a explicação inteira fica no `title`. O `#wppAviso` só aparece
+  para a pausa antiga (`pausaIaAte`), numa linha com "Retomar agora".
+- ⚠️ **A IA não volta sozinha no horário**: o joeyapi só solta a trava quando chega mensagem do cliente
+  (`liberaPorInatividade`). O 1º rótulo ("IA volta após HH:MM") passava a ideia contrária — Gabriela, 07/10.
+- Selo "⚠ Atenção" da lista: segue a regra da faixa (`_esperaDaConversa`) — some quando a equipe responde depois do
+  `alertaEquipe` ou no fim do turno. Antes só saía com "Resolvido" (Beatriz, 07/10: atendida em 9 s, selo aceso 2 h).
+  O banner "A IA pediu atenção" dentro da conversa continua até "Resolvido".
 - Campanha do celular (joeyapi `src/campanha.js`: mesmo conteúdo para 3+ contatos em 10 min) chega como `autor:'sistema'`,
   `auto.tipo:'campanha'` → bolha "📣 Campanha · não trava a IA". Não trava a IA nem conta como resposta à faixa abaixo.
 

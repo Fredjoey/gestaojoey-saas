@@ -12941,11 +12941,15 @@ function _wppRenderLista() {
     el.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:13px">Nenhuma conversa encontrada.</div>';
     return;
   }
+  const _agoraLista = Date.now();
   el.innerHTML = _lista.map(c => {
     const ativo = c.id === _wppConvAtiva ? ' ativo' : '';
     const naoLida = _wppTemNaoLida(c);
     // alertaEquipe: a IA v2 pediu atenção (ex.: "cadê meu pedido" em produção) sem transferir a conversa.
-    const sl = c.alertaEquipe && c.alertaEquipe.em
+    // O selo segue a MESMA regra da faixa e do WhatsApp dos 5 min (_esperaDaConversa): some quando a equipe
+    // responde depois do alerta (ou no fim do turno). Antes ficava aceso até "Resolvido" — em 07/10 a Beatriz
+    // foi atendida em 9 s e o selo ficou 2 h na lista.
+    const sl = _esperaDaConversa({ ...c, aguardandoDesde: 0 }, _agoraLista)
       ? '<span class="wpp-s-alerta" title="A IA pediu atenção da equipe">⚠ Atenção</span>'
       : c.status === 'humano'
       ? '<span class="wpp-s-humano">Humano</span>'
@@ -13061,18 +13065,26 @@ function _wppRenderChat(conv) {
   // A equipe assumiu (v2): a IA solta sozinha quando o cliente escrever 30 min depois da última mensagem
   // DA EQUIPE (joeyapi: liberaPorInatividade, HUMANO_LIBERA_MS). Automática (autor 'sistema') não conta.
   // Fica no cabeçalho, numa linha — o texto longo que ficava na conversa virou o title.
-  let _liberaHHMM = '';
+  let _liberaHHMM = '', _liberaTs = 0;
   if (conv.status === 'humano' && _iaFeatures.iaV2 === true) {
     const _saidas = (Array.isArray(conv.mensagens) ? conv.mensagens : []).filter(m => m && m.tipo === 'enviada' && m.autor !== 'sistema');
     const _equipe = _saidas.filter(m => m.autor !== 'ia');
     const _ultTs = Math.max(0, ...(_equipe.length ? _equipe : _saidas).map(m => Number(m.ts) || 0));
-    if (_ultTs) _liberaHHMM = new Date(_ultTs + 30 * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+    if (_ultTs) _liberaTs = _ultTs + 30 * 60 * 1000;
+    if (_ultTs) _liberaHHMM = new Date(_liberaTs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
   }
   const _statusTitle = conv.status === 'humano' && _iaFeatures.iaV2 === true
     ? 'A IA fica quieta até alguém tocar em "Devolver ao bot"' + (_liberaHHMM ? ` ou o cliente escrever depois das ${_liberaHHMM} (30 min sem a equipe responder).` : '.')
     : '';
+  // ⚠️ A IA NÃO volta sozinha no horário: o joeyapi só solta a trava quando chega mensagem do cliente
+  // (liberaPorInatividade roda no processamento da mensagem). O rótulo diz isso — "IA volta após HH:MM" mentia.
+  const _liberado = _liberaTs && Date.now() >= _liberaTs;
   const statusTxt = conv.status === 'humano'
-                    ? (_iaFeatures.iaV2 === true ? `👤 Equipe atendendo${_liberaHHMM ? ` · IA volta após ${_liberaHHMM}` : ''}` : '👤 Atendimento humano')
+                    ? (_iaFeatures.iaV2 === true
+                        ? '👤 Equipe atendendo' + (!_liberaTs ? ''
+                          : _liberado ? ' · IA responde na próxima mensagem do cliente'
+                          : ` · IA responde se o cliente escrever após ${_liberaHHMM}`)
+                        : '👤 Atendimento humano')
                   : conv.status === 'aguardando' ? '⚠️ Aguardando'
                   : _iaPausada ? `⏸ IA pausada até ${_hhmmPausa}`
                   : '🤖 Bot ativo';
@@ -13115,6 +13127,11 @@ function _wppRenderChat(conv) {
   if (conv.status === 'humano') {
     // Atendimento humano: só o cabeçalho avisa (statusTxt) — nada dentro da conversa.
     _avisoEl.style.display = 'none';
+    clearTimeout(window._wppLiberaTimer);
+    if (_liberaTs && !_liberado) window._wppLiberaTimer = setTimeout(() => {
+      const c = _wppConversas.find(x => x.id === _wppConvAtiva);
+      if (c && c.id === conv.id) _wppRenderChat(c);
+    }, Math.min(_liberaTs - Date.now() + 1000, 2147483000));
   } else if (_iaPausada) {
     _avisoEl.innerHTML = `⏸ IA pausada até ${_hhmmPausa}<button class="wpp-retomar-ia" onclick="wppRetomarIA('${_wppIdJs(conv.id)}')">Retomar agora</button>`;
     _avisoEl.style.display = 'block';
