@@ -174,7 +174,7 @@ e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`envi
 - **Prazo único `IA_LIBERA_MS` = 15 min** (08/10/2026), o MESMO do joeyapi (`HUMANO_LIBERA_MS`) — mudou lá, muda aqui.
   `_wppLiberaTs(c)` é a única conta (cabeçalho e lista): última mensagem DA EQUIPE + prazo (sem nenhuma — "Assumir"
   sem escrever — a última que saiu da loja, como o servidor). Não usa `humanoEm`: o "Assumir" não grava.
-- Selo da lista: passado o prazo, conversa `humano` mostra **"Bot (na próxima)"** em vez de "Humano" — o `status` no banco
+- Selo da lista: passado o prazo, conversa `humano` mostra **"Bot"** (igual ao das outras, mesmo estilo; o "na próxima" fica só no cabeçalho) em vez de "Humano" — o `status` no banco
   só muda quando o cliente escreve (Larissa/Polly/Eliane, 08/10: "Humano" horas depois). A lista se refaz sozinha no
   próximo vencimento. "Aguardando" não muda. O job agendado que devolvia ao bot NÃO volta (gestaojoey-admin, 04/10).
 - Selo "⚠ Atenção" da lista: segue a regra da faixa (`_esperaDaConversa`) — some quando a equipe responde depois do

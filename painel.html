@@ -13007,7 +13007,7 @@ function _wppRenderLista() {
       // Passado o prazo, a IA já responde na próxima mensagem do cliente (o status só muda quando ela chega):
       // "Humano" ali mentia — Larissa/Polly/Eliane, 08/10, "Humano" horas depois.
       : c.status === 'humano' && _wppLiberaTs(c) && _agoraLista >= _wppLiberaTs(c)
-      ? '<span class="wpp-s-bot" title="A IA responde na próxima mensagem do cliente">Bot (na próxima)</span>'
+      ? '<span class="wpp-s-bot">Bot</span>'   // igual ao selo de Bot; o cabeçalho explica o 'na próxima'
       : c.status === 'humano'
       ? '<span class="wpp-s-humano">Humano</span>'
       : c.status === 'aguardando'
