@@ -177,6 +177,10 @@ e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`envi
 - Selo da lista: passado o prazo, conversa `humano` mostra **"Bot"** (igual ao das outras, mesmo estilo; o "na próxima" fica só no cabeçalho) em vez de "Humano" — o `status` no banco
   só muda quando o cliente escreve (Larissa/Polly/Eliane, 08/10: "Humano" horas depois). A lista se refaz sozinha no
   próximo vencimento. "Aguardando" não muda. O job agendado que devolvia ao bot NÃO volta (gestaojoey-admin, 04/10).
+- **`_wppHumanoAtivo(c)` é o ÚNICO intérprete de `status:'humano'` na tela** (humano E dentro do prazo): selo, badge do
+  botão do WhatsApp (`_wppTemNaoLida`) e título da aba (`_wppAtualizarTitulo`). Badge e título também se refazem no vencimento.
+  Exceção de propósito: o cabeçalho da conversa aberta lê o status cru e explica ("IA responde na próxima…"), e o botão
+  "Devolver ao bot" segue valendo ali. 08/10: o badge mostrava 4 conversas que a lista já mostrava como Bot.
 - Selo "⚠ Atenção" da lista: segue a regra da faixa (`_esperaDaConversa`) — some quando a equipe responde depois do
   `alertaEquipe` ou no fim do turno. Antes só saía com "Resolvido" (Beatriz, 07/10: atendida em 9 s, selo aceso 2 h).
   O banner "A IA pediu atenção" dentro da conversa usa a MESMA regra da faixa (`_wppHumanoDepois`): some quando

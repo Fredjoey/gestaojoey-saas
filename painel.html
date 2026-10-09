@@ -12894,7 +12894,7 @@ function _wppChaveVista(c) {
 
 function _wppTemNaoLida(c) {
   if (c.id === _wppConvAtiva) return false;
-  if (c.status !== 'aguardando' && c.status !== 'humano') return false;
+  if (c.status !== 'aguardando' && !_wppHumanoAtivo(c)) return false;
   return !_wppVistas.has(_wppChaveVista(c));
 }
 
@@ -12933,7 +12933,7 @@ function _wppAtualizarBadge() {
 
 function _wppAtualizarTitulo() {
   const pendentes = _wppConversas.filter(c =>
-    c.status === 'aguardando' || c.status === 'humano'
+    c.status === 'aguardando' || _wppHumanoAtivo(c)
   ).length;
   document.title = pendentes > 0
     ? `🔔 (${pendentes}) Joey — Painel`
@@ -12994,7 +12994,7 @@ function _wppRenderLista() {
   const _agoraLista = Date.now();
   clearTimeout(window._wppListaLiberaTimer);
   const _proxLibera = Math.min(Infinity, ..._lista.map(_wppLiberaTs).filter(t => t > _agoraLista));
-  if (_proxLibera !== Infinity) window._wppListaLiberaTimer = setTimeout(_wppRenderLista, Math.min(_proxLibera - _agoraLista + 1000, 2147483000));
+  if (_proxLibera !== Infinity) window._wppListaLiberaTimer = setTimeout(() => { _wppRenderLista(); _wppAtualizarBadge(); _wppAtualizarTitulo(); }, Math.min(_proxLibera - _agoraLista + 1000, 2147483000));
   el.innerHTML = _lista.map(c => {
     const ativo = c.id === _wppConvAtiva ? ' ativo' : '';
     const naoLida = _wppTemNaoLida(c);
@@ -13006,9 +13006,7 @@ function _wppRenderLista() {
       ? '<span class="wpp-s-alerta" title="A IA pediu atenção da equipe">⚠ Atenção</span>'
       // Passado o prazo, a IA já responde na próxima mensagem do cliente (o status só muda quando ela chega):
       // "Humano" ali mentia — Larissa/Polly/Eliane, 08/10, "Humano" horas depois.
-      : c.status === 'humano' && _wppLiberaTs(c) && _agoraLista >= _wppLiberaTs(c)
-      ? '<span class="wpp-s-bot">Bot</span>'   // igual ao selo de Bot; o cabeçalho explica o 'na próxima'
-      : c.status === 'humano'
+      : _wppHumanoAtivo(c, _agoraLista)
       ? '<span class="wpp-s-humano">Humano</span>'
       : c.status === 'aguardando'
       ? '<span class="wpp-s-aguardando">Aguardando</span>'
@@ -13123,6 +13121,15 @@ function _wppLiberaTs(c) {
   const equipe = saidas.filter(m => m.autor !== 'ia');
   const ult = Math.max(0, ...(equipe.length ? equipe : saidas).map(m => Number(m.ts) || 0));
   return ult ? ult + IA_LIBERA_MS : 0;
+}
+// A conversa está COM A EQUIPE agora? status 'humano' E dentro do prazo. Passado o prazo, a IA já responde na
+// próxima mensagem do cliente (o banco só vira 'bot' quando ela chega) — para a tela, é Bot. ÚNICO lugar que
+// interpreta 'humano': selo, badge do botão e título da aba (08/10: badge mostrava 4 já liberadas).
+// Exceção de propósito: o cabeçalho da conversa aberta lê o status cru e explica ("IA responde na próxima…").
+function _wppHumanoAtivo(c, agora) {
+  if (!c || c.status !== 'humano') return false;
+  const lib = _wppLiberaTs(c);
+  return !(lib && (agora || Date.now()) >= lib);
 }
 
 function _wppRenderChat(conv) {
