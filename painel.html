@@ -9202,7 +9202,7 @@ function _wppDetectarAlertasIA(convs) {
 // 03/10, quatro clientes ouviram "já chamei a equipe" e ninguém respondeu.
 // Espera = a IA transferiu (aguardandoDesde) ou avisou a equipe (alertaEquipe.em) e nenhuma PESSOA
 // respondeu depois. Termina com mensagem autor 'humano', "Devolver ao bot" ou "resolvido". NÃO termina
-// quando a IA volta a atender sozinha (30 min). Some no FIM DO TURNO (23:50 de SP): espera de um turno
+// quando a IA volta a atender sozinha (15 min). Some no FIM DO TURNO (23:50 de SP): espera de um turno
 // que acabou não aparece no seguinte — em 04/10 de madrugada a faixa mostrava os avisos de sábado.
 const ESPERA_FAIXA_MS = 2 * 60 * 1000;
 const ESPERA_MAX_MS = 12 * 60 * 60 * 1000;
@@ -12992,6 +12992,9 @@ function _wppRenderLista() {
     return;
   }
   const _agoraLista = Date.now();
+  clearTimeout(window._wppListaLiberaTimer);
+  const _proxLibera = Math.min(Infinity, ..._lista.map(_wppLiberaTs).filter(t => t > _agoraLista));
+  if (_proxLibera !== Infinity) window._wppListaLiberaTimer = setTimeout(_wppRenderLista, Math.min(_proxLibera - _agoraLista + 1000, 2147483000));
   el.innerHTML = _lista.map(c => {
     const ativo = c.id === _wppConvAtiva ? ' ativo' : '';
     const naoLida = _wppTemNaoLida(c);
@@ -13001,6 +13004,10 @@ function _wppRenderLista() {
     // foi atendida em 9 s e o selo ficou 2 h na lista.
     const sl = _esperaDaConversa({ ...c, aguardandoDesde: 0 }, _agoraLista)
       ? '<span class="wpp-s-alerta" title="A IA pediu atenção da equipe">⚠ Atenção</span>'
+      // Passado o prazo, a IA já responde na próxima mensagem do cliente (o status só muda quando ela chega):
+      // "Humano" ali mentia — Larissa/Polly/Eliane, 08/10, "Humano" horas depois.
+      : c.status === 'humano' && _wppLiberaTs(c) && _agoraLista >= _wppLiberaTs(c)
+      ? '<span class="wpp-s-bot" title="A IA responde na próxima mensagem do cliente">Bot (na próxima)</span>'
       : c.status === 'humano'
       ? '<span class="wpp-s-humano">Humano</span>'
       : c.status === 'aguardando'
@@ -13103,28 +13110,37 @@ function _wppDiaLabel(ts) {
   return dia;
 }
 
+// Prazo da trava de humano — o MESMO do joeyapi (HUMANO_LIBERA_MS, atendimentoV2.js; mudou lá, muda aqui).
+// 08/10/2026: 15 min (era 30).
+const IA_LIBERA_MS = 15 * 60 * 1000;
+// A partir de quando a IA volta a responder (na PRÓXIMA mensagem do cliente — não há relógio no servidor):
+// IA_LIBERA_MS depois da última mensagem DA EQUIPE (sem nenhuma — 'Assumir' sem escrever — a última que saiu
+// da loja), como o liberaPorInatividade do joeyapi. Automática (autor 'sistema') não conta. 0 = não se aplica.
+// Não usa humanoEm: o "Assumir" grava status sem humanoEm, e o servidor conta pelas mensagens.
+function _wppLiberaTs(c) {
+  if (!c || c.status !== 'humano' || _iaFeatures.iaV2 !== true) return 0;
+  const saidas = (Array.isArray(c.mensagens) ? c.mensagens : []).filter(m => m && m.tipo === 'enviada' && m.autor !== 'sistema');
+  const equipe = saidas.filter(m => m.autor !== 'ia');
+  const ult = Math.max(0, ...(equipe.length ? equipe : saidas).map(m => Number(m.ts) || 0));
+  return ult ? ult + IA_LIBERA_MS : 0;
+}
+
 function _wppRenderChat(conv) {
   // Marca como lida sempre que rerrenderiza a conversa ativa
   if (conv.id === _wppConvAtiva) _wppVistas.add(_wppChaveVista(conv));
   const head = document.getElementById('wppChatHead');
   const isHumano = conv.status === 'humano' || conv.status === 'aguardando';
-  // IA v2 (config/features.iaV2): mensagem da equipe pausa a IA por 30 min nesta conversa (pausaIaAte).
+  // LEGADO: pausa por relógio (pausaIaAte, 30 min) — era a regra da v2 até 03/10; hoje só a gravam os tenants SEM v2
+  // (wppEnviar). A trava da v2 é status 'humano' + IA_LIBERA_MS (_wppLiberaTs), não isto.
   const _pausaAte = Number(conv.pausaIaAte) || 0;
   const _iaPausada = !isHumano && _iaFeatures.iaV2 === true && _pausaAte > Date.now();
   const _hhmmPausa = _iaPausada ? new Date(_pausaAte).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
-  // A equipe assumiu (v2): a IA solta sozinha quando o cliente escrever 30 min depois da última mensagem
-  // DA EQUIPE (joeyapi: liberaPorInatividade, HUMANO_LIBERA_MS). Automática (autor 'sistema') não conta.
-  // Fica no cabeçalho, numa linha — o texto longo que ficava na conversa virou o title.
-  let _liberaHHMM = '', _liberaTs = 0;
-  if (conv.status === 'humano' && _iaFeatures.iaV2 === true) {
-    const _saidas = (Array.isArray(conv.mensagens) ? conv.mensagens : []).filter(m => m && m.tipo === 'enviada' && m.autor !== 'sistema');
-    const _equipe = _saidas.filter(m => m.autor !== 'ia');
-    const _ultTs = Math.max(0, ...(_equipe.length ? _equipe : _saidas).map(m => Number(m.ts) || 0));
-    if (_ultTs) _liberaTs = _ultTs + 30 * 60 * 1000;
-    if (_ultTs) _liberaHHMM = new Date(_liberaTs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
-  }
+  // A equipe assumiu (v2): a IA solta sozinha quando o cliente escrever IA_LIBERA_MS depois da última mensagem
+  // DA EQUIPE (_wppLiberaTs — a mesma conta do selo da lista). Fica no cabeçalho, numa linha; o texto longo é o title.
+  const _liberaTs = _wppLiberaTs(conv);
+  const _liberaHHMM = _liberaTs ? new Date(_liberaTs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
   const _statusTitle = conv.status === 'humano' && _iaFeatures.iaV2 === true
-    ? 'A IA fica quieta até alguém tocar em "Devolver ao bot"' + (_liberaHHMM ? ` ou o cliente escrever depois das ${_liberaHHMM} (30 min sem a equipe responder).` : '.')
+    ? 'A IA fica quieta até alguém tocar em "Devolver ao bot"' + (_liberaHHMM ? ` ou o cliente escrever depois das ${_liberaHHMM} (${IA_LIBERA_MS / 60000} min sem a equipe responder).` : '.')
     : '';
   // ⚠️ A IA NÃO volta sozinha no horário: o joeyapi só solta a trava quando chega mensagem do cliente
   // (liberaPorInatividade roda no processamento da mensagem). O rótulo diz isso — "IA volta após HH:MM" mentia.
@@ -13320,8 +13336,9 @@ async function wppEnviar() {
   try {
     // autor:'humano' → a IA v2 lê isto como ATENDENTE (decisão tomada, não contradiz).
     // IA v2: a equipe escreveu → TRAVA a IA (status 'humano') até alguém devolver ("🤖 Devolver ao
-    // bot") ou 6h sem mensagem da equipe (o joeyapi solta sozinho). Era uma pausa de 30 min, e
-    // em 02/10 a IA voltou no meio do atendimento (DM Soluções) e numa conversa pessoal da equipe.
+    // bot") ou o cliente escrever IA_LIBERA_MS (15 min) depois da última mensagem da equipe — o joeyapi
+    // solta ao processar essa mensagem (não há relógio). Era uma pausa de 30 min por relógio, e em 02/10
+    // a IA voltou no meio do atendimento (DM Soluções) e numa conversa pessoal da equipe.
     // Sem v2 continua só o pausaIaAte, que o bot legado ignora — outros tenants não mudam.
     const _trava = _iaFeatures.iaV2 === true
       ? { status: 'humano', humanoEm: agora }

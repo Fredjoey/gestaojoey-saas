@@ -161,16 +161,22 @@ e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`envi
 - Bolha própria (`_wppBolhaAuto`): cinza tracejada, etiqueta "🤖 Automático · Pedido confirmado #36001", texto
   escapado, e o que vem depois da 1ª linha em branco (o resumo do pedido) **recolhido** em "ver resumo".
 - Não marca a conversa como não lida (`_wppChaveVista` ignora as automáticas) e não toca som.
-- O aviso de "humano" diz **30 min** (era 6h; a regra do joeyapi mudou em 04/10) e não conta automática como equipe.
+- O prazo da trava de "humano" é **15 min** desde 08/10 (era 30; 6h antes de 04/10) e não conta automática como equipe.
 
 ## Inbox: "equipe atendendo" no cabeçalho + bolha de campanha (desde 07/10/2026)
 
 - Conversa em `status:'humano'` (v2): o aviso longo que ficava DENTRO da conversa (`#wppAviso`) saiu. O cabeçalho mostra
-  "👤 Equipe atendendo · IA responde se o cliente escrever após HH:MM" (30 min depois da última mensagem da equipe) e, passado
+  "👤 Equipe atendendo · IA responde se o cliente escrever após HH:MM" (15 min depois da última mensagem da equipe) e, passado
   o horário, "· IA responde na próxima mensagem do cliente"; a explicação inteira fica no `title`. O `#wppAviso` só aparece
   para a pausa antiga (`pausaIaAte`), numa linha com "Retomar agora".
 - ⚠️ **A IA não volta sozinha no horário**: o joeyapi só solta a trava quando chega mensagem do cliente
   (`liberaPorInatividade`). O 1º rótulo ("IA volta após HH:MM") passava a ideia contrária — Gabriela, 07/10.
+- **Prazo único `IA_LIBERA_MS` = 15 min** (08/10/2026), o MESMO do joeyapi (`HUMANO_LIBERA_MS`) — mudou lá, muda aqui.
+  `_wppLiberaTs(c)` é a única conta (cabeçalho e lista): última mensagem DA EQUIPE + prazo (sem nenhuma — "Assumir"
+  sem escrever — a última que saiu da loja, como o servidor). Não usa `humanoEm`: o "Assumir" não grava.
+- Selo da lista: passado o prazo, conversa `humano` mostra **"Bot (na próxima)"** em vez de "Humano" — o `status` no banco
+  só muda quando o cliente escreve (Larissa/Polly/Eliane, 08/10: "Humano" horas depois). A lista se refaz sozinha no
+  próximo vencimento. "Aguardando" não muda. O job agendado que devolvia ao bot NÃO volta (gestaojoey-admin, 04/10).
 - Selo "⚠ Atenção" da lista: segue a regra da faixa (`_esperaDaConversa`) — some quando a equipe responde depois do
   `alertaEquipe` ou no fim do turno. Antes só saía com "Resolvido" (Beatriz, 07/10: atendida em 9 s, selo aceso 2 h).
   O banner "A IA pediu atenção" dentro da conversa usa a MESMA regra da faixa (`_wppHumanoDepois`): some quando
