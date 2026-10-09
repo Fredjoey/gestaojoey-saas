@@ -173,7 +173,11 @@ e a localização passam `registrar: { tipo, pedidoId, nome }` ao `/send` (`envi
   (`liberaPorInatividade`). O 1º rótulo ("IA volta após HH:MM") passava a ideia contrária — Gabriela, 07/10.
 - Selo "⚠ Atenção" da lista: segue a regra da faixa (`_esperaDaConversa`) — some quando a equipe responde depois do
   `alertaEquipe` ou no fim do turno. Antes só saía com "Resolvido" (Beatriz, 07/10: atendida em 9 s, selo aceso 2 h).
-  O banner "A IA pediu atenção" dentro da conversa continua até "Resolvido" — ou até o fato mudar (abaixo).
+  O banner "A IA pediu atenção" dentro da conversa usa a MESMA regra da faixa (`_wppHumanoDepois`): some quando
+  alguém da equipe responde, sem precisar de "Resolvido" — ou quando o fato muda (abaixo). Antes olhava só o fato,
+  e por isso ficava aceso depois de a equipe já ter resolvido (Larissa, 08/10: respondida 21:11-21:13, aviso vivo
+  às 21:41). Cuidado: o caso `saiu` só se resolve pelo fato com `finalizado`, e o botão "Entreguei" do motoboy não
+  é usado na prática — então, para esse caso, quem apaga o aviso é a resposta da equipe.
 - **Aviso resolvido pelo fato** (`_wppAlertaResolvidoPeloFato`, PORTADA de joeyapi `alertaEquipe.alertaResolvidoPeloFato`):
   aviso da IA com `alertaEquipe.{pedidoId, caso}` some do banner, do selo e da faixa quando o pedido anda
   (`naoSaiu` → saiu/pronto p/ retirada/cancelado; `saiu` → finalizado/cancelado), pela automática na conversa ou pelo

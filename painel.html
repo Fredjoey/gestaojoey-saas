@@ -9234,10 +9234,18 @@ function _wppAlertaResolvidoPeloFato(c) {
   if (al.caso === 'saiu') return st === 'finalizado' || st === 'cancelado' || (p.entrega !== 'delivery' && st === 'entregue');
   return false;
 }
+// Alguem da equipe respondeu depois de `t`? Vale para a FAIXA e para o aviso dentro da conversa --
+// os dois tinham regras diferentes, e o aviso seguia na tela depois de a equipe ja ter resolvido
+// (Larissa, 08/10: equipe respondeu 21:11-21:13, o aviso continuava as 21:41).
+function _wppHumanoDepois(c, t) {
+  const msgs = Array.isArray(c && c.mensagens) ? c.mensagens : [];
+  const t0 = Number(t) || 0;
+  return msgs.some(m => m && m.tipo === 'enviada' && m.autor === 'humano' && Number(m.ts) > t0);
+}
 function _esperaDaConversa(c, agora) {
   if (!c) return null;
   const msgs = (Array.isArray(c.mensagens) ? c.mensagens : []).filter(m => m && Number(m.ts) > 0);
-  const humanoDepois = t => msgs.some(m => m.tipo === 'enviada' && m.autor === 'humano' && Number(m.ts) > t);
+  const humanoDepois = t => _wppHumanoDepois(c, t);
   const abertas = [];
   const tAg = Number(c.aguardandoDesde) || 0;
   const devolvido = c.liberadoPor === 'painel' && (Number(c.liberadoEm) || 0) > tAg;
@@ -13155,8 +13163,10 @@ function _wppRenderChat(conv) {
     _alertaEl.id = 'wppAlertaIA'; _alertaEl.className = 'wpp-alerta-ia';
     document.getElementById('wppAviso').before(_alertaEl);
   }
-  // Some sozinho quando o fato que o gerou mudou (pedido saiu…) — senão afirma o contrário da automática logo abaixo.
-  if (conv.alertaEquipe && conv.alertaEquipe.em && !_wppAlertaResolvidoPeloFato(conv)) {
+  // Some sozinho quando ALGUEM DA EQUIPE RESPONDE (mesma regra da faixa) ou quando o fato que o gerou
+  // mudou (pedido saiu...) — senao afirma o contrario da automatica logo abaixo.
+  if (conv.alertaEquipe && conv.alertaEquipe.em && !_wppAlertaResolvidoPeloFato(conv)
+      && !_wppHumanoDepois(conv, conv.alertaEquipe.em)) {
     const _hA = new Date(conv.alertaEquipe.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
     _alertaEl.textContent = `⚠ A IA pediu atenção (${_hA}): ${conv.alertaEquipe.motivo || ''} `;
     const b = document.createElement('button'); b.className = 'wpp-retomar-ia'; b.textContent = 'Resolvido';
