@@ -67,6 +67,19 @@ Lembre que `gestao-joey.html` existe em **duas cópias** que precisam ficar idê
 
 O resto (regras de Storage, parser, Cloud Functions, `external_reference`) está documentado no `CLAUDE.md` do **gestaojoey-admin**.
 
+## Jogo da cobrinha — REMOVIDO em 08/10/2026
+
+O "🐍 Joga enquanto espera" (tela de pedido confirmado do cardápio, só joey, desde 25/06) saiu: JS, CSS, overlay
+`#gameOverlay`, botão e o campo "Frase do prêmio do jogo" do painel (~308 linhas do `cardapio.html`, ~9% do arquivo).
+
+- **Motivo (medido em 08/10):** ~3% de adesão — 6/9/7 jogadores com recorde em jul/ago/set contra ~250 clientes/mês do
+  cardápio; 21 jogadores distintos em 3 meses; 1 único voltou em outro mês. Nenhum prêmio registrado no sistema.
+- **Dados preservados:** `clientes/joey/ranking_cobrinha` (34 docs, jun–out) NÃO foi apagada. `config/loja.premioJogo`
+  também fica — sem tela, mas na lista de preservação do `salvarConfig` (o set total apagaria).
+- **Regra do Firestore mantida** (`gestaojoey-admin/firestore.rules`, com comentário): removê-la é mudança de segurança,
+  a fazer separado. Sem o jogo, nada mais grava lá.
+- Os botões da tela de confirmado já eram de largura total, empilhados — sem o do jogo não sobrou vão.
+
 ## Mapas do painel — Google Maps JS (desde 03/10/2026)
 
 Os 3 mapas do `painel.html` (mapa de pedidos, posição da loja em Configurações, portaria do bairro) usam
