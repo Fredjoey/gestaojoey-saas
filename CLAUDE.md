@@ -165,6 +165,16 @@ depois**. Regra: no inbox, nada vindo do Firestore entra em HTML sem `_esc()`; i
 ⚠️ **Fora do inbox ainda há texto do cliente cru** (ex.: `obs` dos itens e `ref` do endereço na comanda/impressão,
 que é aberta com `window.open('')` na MESMA origem do painel) — varredura dedicada pendente.
 
+## Áudio do cliente no inbox — selo "🎤 áudio" (desde 10/10/2026)
+Nota de voz do cliente chega TRANSCRITA (joeyapi/`src/transcrever.js`, Whisper). A mensagem grava
+`audio: true`, e o balão mostra o selo `🎤 áudio` (`.wpp-audio-tag`) acima do texto.
+
+Por que o selo importa: o texto no balão NÃO é o que o cliente digitou — é o que a máquina ouviu.
+Transcrição erra número ("dois" → "doze") e nome parecido, e a IA já respondeu com base nela. Quem
+atende precisa saber que está lendo uma leitura, não a palavra do cliente.
+
+Antes de 10/10 o áudio nem chegava aqui: o bot ignorava em silêncio (caso Marcia, 10/10).
+
 ## Mensagens automáticas no inbox — "🤖 Automático" (desde 04/10/2026)
 
 Confirmado (+ resumo), saiu para entrega, pronto para retirada, cancelado, Pix novo, parabéns, o aviso ao motoboy
