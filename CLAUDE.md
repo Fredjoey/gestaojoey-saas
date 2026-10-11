@@ -165,6 +165,23 @@ depois**. Regra: no inbox, nada vindo do Firestore entra em HTML sem `_esc()`; i
 ⚠️ **Fora do inbox ainda há texto do cliente cru** (ex.: `obs` dos itens e `ref` do endereço na comanda/impressão,
 que é aberta com `window.open('')` na MESMA origem do painel) — varredura dedicada pendente.
 
+## Faixa de espera — botão "✓ já resolvi" (desde 10/10/2026)
+Cada linha da faixa vermelha tem um **✓** que tira aquela espera da tela. Grava
+`esperaResolvidaEm` na conversa; `_esperaDaConversa` ignora espera que começou ANTES dessa marca.
+Vale para os dois tipos (transferência e aviso da IA).
+
+Por que foi preciso: a regra automática só fecha a espera quando uma PESSOA escreve ao cliente. Mas
+há caso em que o assunto morre sem ninguém precisar escrever — Juliana, 10/10: a IA transferiu às
+22:13 ("já chamei alguém da equipe") e o pedido #36144 saiu confirmado às 22:14. A Isabela viu que
+estava resolvido e não tinha como dizer isso; a faixa ficou. Pedido dela.
+
+- Não escreve ao cliente, não devolve a conversa ao bot, não apaga o alerta — só registra o instante.
+  O histórico fica no Firestore para auditoria.
+- Espera NOVA (transferência ou aviso depois da marca) volta a aparecer normalmente.
+- Some da tela na hora; se a gravação falhar, a faixa VOLTA e avisa — nunca some em silêncio.
+- ⚠️ Mensagem automática NÃO resolve sozinha: o cliente ouviu "já chamei alguém" e pode estar
+  esperando uma pessoa de verdade. Quem decide que acabou é a equipe, clicando.
+
 ## Áudio do cliente no inbox — selo "🎤 áudio" (desde 10/10/2026)
 Nota de voz do cliente chega TRANSCRITA (joeyapi/`src/transcrever.js`, Whisper). A mensagem grava
 `audio: true`, e o balão mostra o selo `🎤 áudio` (`.wpp-audio-tag`) acima do texto.

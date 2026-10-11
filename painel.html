@@ -515,6 +515,8 @@ body.suporte-on #botAlertBanner{top:36px}
 #esperaFaixa .ef-linha{display:flex;align-items:center;gap:10px;padding:9px 12px}
 #esperaFaixa .ef-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #esperaFaixa button{flex-shrink:0;background:#fff;color:#7f1d1d;border:0;border-radius:7px;padding:5px 12px;font-weight:700;font-size:12px;cursor:pointer}
+#esperaFaixa button.ef-ok{background:rgba(255,255,255,.18);color:#fff;padding:5px 10px;font-size:13px;line-height:1}
+#esperaFaixa button.ef-ok:hover{background:rgba(255,255,255,.32)}
 #esperaFaixa .ef-lista{border-top:1px solid rgba(255,255,255,.2);max-height:50vh;overflow:auto}
 #esperaFaixa .ef-item{display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid rgba(255,255,255,.08)}
 #esperaFaixa .ef-item:first-child{border-top:0}
@@ -9253,7 +9255,13 @@ function _esperaDaConversa(c, agora) {
   const tAl = Number(c.alertaEquipe && c.alertaEquipe.em) || 0;
   if (tAl && !humanoDepois(tAl) && !_wppAlertaResolvidoPeloFato(c)) abertas.push({ desde: tAl, tipo: 'aviso', motivo: String(c.alertaEquipe.motivo || '') });
   const corte = _esperaCorteDoTurno(agora);
-  return abertas.filter(e => e.desde >= corte && agora - e.desde < ESPERA_MAX_MS).sort((a, b) => a.desde - b.desde)[0] || null;
+  // "Ja resolvi" da equipe (botao da faixa). A regra automatica so fecha a espera quando uma PESSOA
+  // escreve ao cliente — mas ha caso em que o assunto morre sem ninguem precisar escrever: Juliana,
+  // 10/10, a IA transferiu as 22:13 e o pedido saiu confirmado as 22:14. A Isabela viu que estava
+  // resolvido e nao tinha como dizer isso. Espera que comecou ANTES desta marca nao aparece mais;
+  // uma espera NOVA (transferencia ou aviso depois da marca) volta a aparecer normalmente.
+  const resolvida = Number(c.esperaResolvidaEm) || 0;
+  return abertas.filter(e => e.desde >= corte && e.desde > resolvida && agora - e.desde < ESPERA_MAX_MS).sort((a, b) => a.desde - b.desde)[0] || null;
 }
 // O que o cliente pediu: a última mensagem dele (ou o motivo do aviso da IA).
 function _esperaResumo(c, e) {
@@ -9296,14 +9304,16 @@ function _esperaRender() {
   const min = e => Math.max(1, Math.floor((agora - e.desde) / 60000));
   const nome = c => _esc(c.nome || c.id);
   const abrir = c => `<button onclick="_esperaAbrir('${_esc(c.id)}')">Abrir</button>`;
+  // "Ja resolvi": tira da faixa sem escrever ao cliente e sem devolver a conversa ao bot.
+  const feito = c => `<button class="ef-ok" title="Ja resolvido — tirar da faixa" onclick="_esperaResolver('${_esc(c.id)}')">&#10003;</button>`;
   if (lista.length === 1) {
     const { c, e } = lista[0];
-    el.innerHTML = `<div class="ef-linha"><span class="ef-txt">🔴 <b>${nome(c)}</b> espera a equipe há ${min(e)} min — ${_esc(_esperaResumo(c, e))}</span>${abrir(c)}</div>`;
+    el.innerHTML = `<div class="ef-linha"><span class="ef-txt">🔴 <b>${nome(c)}</b> espera a equipe há ${min(e)} min — ${_esc(_esperaResumo(c, e))}</span>${abrir(c)}${feito(c)}</div>`;
   } else {
     el.innerHTML = `<div class="ef-linha"><span class="ef-txt">🔴 <b>${lista.length} clientes</b> esperando a equipe — o mais antigo há ${min(lista[0].e)} min</span>`
       + `<button onclick="_esperaListaAberta=!_esperaListaAberta;_esperaRender()">${_esperaListaAberta ? 'Fechar ▴' : 'Ver ▾'}</button></div>`
       + (_esperaListaAberta ? `<div class="ef-lista">${lista.map(({ c, e }) =>
-          `<div class="ef-item"><span class="ef-txt"><b>${nome(c)}</b> · ${min(e)} min · ${_esc(_esperaResumo(c, e))}</span>${abrir(c)}</div>`).join('')}</div>` : '');
+          `<div class="ef-item"><span class="ef-txt"><b>${nome(c)}</b> · ${min(e)} min · ${_esc(_esperaResumo(c, e))}</span>${abrir(c)}${feito(c)}</div>`).join('')}</div>` : '');
   }
   el.style.display = 'block';
 }
@@ -9315,6 +9325,22 @@ function _esperaAbrir(id) {
 }
 // O tempo passa sem o Firestore mudar: recalcula a cada 15s (só memória, nenhuma leitura nova).
 setInterval(() => { if (_wppConversas.length) _esperaRender(); }, 15000);
+
+// Marca a espera como resolvida pela EQUIPE. Nao escreve ao cliente, nao devolve a conversa ao bot,
+// nao apaga nada: so registra o instante. O historico do alerta continua no Firestore para auditoria.
+async function _esperaResolver(id) {
+  const c = _wppConversas.find(x => x && x.id === id);
+  if (c) c.esperaResolvidaEm = Date.now();   // some da tela agora, sem esperar o Firestore voltar
+  _esperaRender();
+  try {
+    await db.collection(`clientes/${slug}/conversas`).doc(id).set({ esperaResolvidaEm: Date.now() }, { merge: true });
+  } catch (e) {
+    console.error('[espera] resolver:', e);
+    notify('Não consegui marcar como resolvido — tente de novo.', 'error');
+    if (c) delete c.esperaResolvidaEm;       // falhou: a faixa VOLTA, nao some em silencio
+    _esperaRender();
+  }
+}
 
 async function wppResolverAlerta(numero) {
   await db.collection(`clientes/${slug}/conversas`).doc(numero).set({ alertaEquipe: firebase.firestore.FieldValue.delete() }, { merge: true });
