@@ -289,6 +289,16 @@ textarea.fi{resize:vertical;min-height:60px}
 .tempo-edit-icon{margin-left:auto;font-size:10px;color:var(--text3);opacity:0;transition:opacity .15s}
 .tempo-item:hover .tempo-edit-icon{opacity:1}
 .bot-item{flex:1;background:var(--bg3);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-left:1px solid var(--border);}
+/* iFood: loja (módulo Merchant) — só aparece com loja iFood ligada (config/ifoodLoja.ligado) */
+.ifl-sel{font-size:12px;font-weight:700;white-space:nowrap}
+.ifl-btn{padding:8px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+.ifl-btn:disabled{opacity:.45;cursor:not-allowed}
+.ifl-btn-pri{background:#e74c3c;border-color:#e74c3c;color:#fff}
+.ifl-box{background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.ifl-h{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 8px}
+.ifl-tab{width:100%;border-collapse:collapse;font-size:12px}
+.ifl-tab td,.ifl-tab th{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left}
+.ifl-dif{color:#f59e0b;font-weight:700}
 .bot-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
 .bot-toggle{padding:5px 14px;border-radius:999px;border:1px solid;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .2s;}
 .auto-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
@@ -758,6 +768,10 @@ body.suporte-on #botAlertBanner{top:36px}
       <div><div class="tempo-label">No local</div><div class="tempo-val" id="tempoLocal">15-20 min</div></div>
       <span class="tempo-edit-icon">✏️</span>
     </div>
+    <div class="bot-item" id="ifoodLojaItem" style="display:none;cursor:pointer" onclick="abrirIfoodLoja()" title="Loja no iFood: status, pausa e horários">
+      <div><div class="tempo-label">Loja no iFood</div><div id="ifoodLojaLabel" class="ifl-sel">—</div></div>
+      <button class="ifl-btn" id="ifoodLojaBtn" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();ifoodLojaBotaoTopo()">⏸ Pausar</button>
+    </div>
     <div class="bot-item">
       <div><div id="autoAceitarLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🤖 Auto-aceitar: OFF</div></div>
       <label class="auto-switch">
@@ -1190,6 +1204,7 @@ body.suporte-on #botAlertBanner{top:36px}
             <div>
               <div style="font-size:13px;font-weight:600;color:var(--text)" id="statusLojaLabel">Aberto agora</div>
               <div style="font-size:11px;color:var(--text2);margin-top:2px">Clientes podem fazer pedidos</div>
+              <div id="cfgIfoodNota" style="display:none;font-size:11px;color:#f59e0b;margin-top:4px">🛵 iFood ligado: salvar como <b>Fechado</b> pausa o iFood até reabrir; salvar <b>Aberto</b> tira a pausa.</div>
             </div>
             <label style="position:relative;display:inline-block;width:46px;height:26px;cursor:pointer">
               <input type="checkbox" id="cfgAberto" style="opacity:0;width:0;height:0" onchange="toggleStatusLoja(this)">
@@ -1979,6 +1994,17 @@ body.suporte-on #botAlertBanner{top:36px}
       <button onclick="cancelarIfoodVoltar()" style="padding:9px 16px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">Voltar</button>
       <button id="cancelIfoodBtn" onclick="cancelarIfoodConfirmar()" disabled style="padding:9px 16px;border-radius:8px;border:none;background:#e74c3c;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Pedir cancelamento ao iFood</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ifoodLojaModal" onclick="if(event.target===this)fecharIfoodLoja()">
+  <div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <div class="modal-title">🛵 Loja no iFood</div>
+      <button class="modal-close" onclick="fecharIfoodLoja()">✕</button>
+    </div>
+    <div id="ifoodLojaCorpo"></div>
+    <div id="ifoodLojaMsg" style="font-size:13px;margin-top:10px;min-height:18px"></div>
   </div>
 </div>
 
@@ -9578,10 +9604,243 @@ function _pararTitleFlash() {
 
 _atualizarBtnSom();
 
+// =================== iFood: LOJA (módulo Merchant) ===================
+// O serviço joey-ifood espelha a loja do iFood em config/ifoodLoja (status, pausas, horários) e executa os
+// comandos que o painel grava em config/ifoodComando ({ id, acao: pausar|retomar|horarios, … }). Sem loja
+// iFood ligada (doc ausente ou ligado:false) nada disto aparece. Pausa feita no Gestor de Pedidos/Portal
+// aparece como "feita no iFood" e só sai com o "Retomar mesmo assim" (o painel não briga com o iFood).
+// O "Aberto/Fechado" das Configurações quem leva ao iFood é o SERVIÇO (ouve config/loja.aberto).
+const _IFL_DIAS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY']; // 0 = Dom (igual config.horarios)
+const _IFL_NOME = { SUNDAY:'Dom', MONDAY:'Seg', TUESDAY:'Ter', WEDNESDAY:'Qua', THURSDAY:'Qui', FRIDAY:'Sex', SATURDAY:'Sáb' };
+const _IFL_SITUACAO = {
+  online:  ['🟢', 'Online'],
+  atencao: ['🟡', 'Online (atenção)'],
+  pausado: ['⏸️', 'Pausado'],
+  fechado: ['🌙', 'Fechado (horário)'],
+  offline: ['🔴', 'Offline'],
+  erro:    ['🔴', 'Com problema'],
+};
+let _ifoodLoja = null, _ifoodLojaUnsub = null, _iflCmdPendente = null, _iflToggleVisto, _iflHorariosPrevia = null, _iflTimer = null, _iflConfirmarTodas = false;
+
+const _iflHora = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit' }) : '';
+const _iflDiaHora = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { timeZone:'America/Sao_Paulo', weekday:'short', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+function _iflLigado() { return !!(_ifoodLoja && _ifoodLoja.ligado === true); }
+function _iflAtualizadoMs() { const t = _ifoodLoja && _ifoodLoja.atualizadoEm; return t && t.toMillis ? t.toMillis() : 0; }
+function _iflDesatualizado() { const t = _iflAtualizadoMs(); return !t || Date.now() - t > 5 * 60 * 1000; }
+function _iflPausasAtivas() { return ((_ifoodLoja && _ifoodLoja.pausas) || []).filter(p => p.ativa); }
+// "Até reabrir" = pausa de ~7 dias (o máximo que o iFood aceita).
+function _iflAteReabrir(p) { return !!(p && p.inicio && p.fim && (Date.parse(p.fim) - Date.parse(p.inicio)) > 6 * 86400000); }
+function _iflFimTxt(p) {
+  if (_iflAteReabrir(p)) return 'até reabrir';
+  return Date.parse(p.fim) - Date.now() > 20 * 3600000 ? 'até ' + _iflDiaHora(p.fim) : 'até ' + _iflHora(p.fim);
+}
+
+function _ifoodLojaOuvir() {
+  if (_ifoodLojaUnsub || !slug) return;
+  _ifoodLojaUnsub = db.doc(`clientes/${slug}/config/ifoodLoja`).onSnapshot(snap => {
+    _ifoodLoja = snap.exists ? snap.data() : null;
+    _iflResultados();
+    _ifoodLojaRender();
+  }, e => console.warn('[iFood loja] listener:', e.message));
+  if (!_iflTimer) _iflTimer = setInterval(() => { if (_iflLigado()) _ifoodLojaRender(); }, 30000);
+}
+
+// Resposta do serviço ao NOSSO comando (mesmo id) e ao Aberto/Fechado do painel (campo toggle).
+function _iflResultados() {
+  const c = _ifoodLoja && _ifoodLoja.comando;
+  if (c && _iflCmdPendente && c.id === _iflCmdPendente) {
+    _iflCmdPendente = null;
+    notify('iFood: ' + c.mensagem, c.ok ? 'success' : 'error');
+    _iflMsg(c.mensagem, !!c.ok);
+  }
+  const t = _ifoodLoja && _ifoodLoja.toggle;
+  const tMs = t && t.em && t.em.toMillis ? t.em.toMillis() : 0;
+  if (_iflToggleVisto === undefined) { _iflToggleVisto = tMs; return; } // 1ª leitura: só marca
+  if (tMs && tMs > _iflToggleVisto) {
+    _iflToggleVisto = tMs;
+    const onde = t.origem === 'painel-fechado' ? ' (loja fechada no painel)' : (t.origem === 'painel-aberto' ? ' (loja aberta no painel)' : '');
+    notify('iFood: ' + t.mensagem + onde, t.ok ? 'success' : 'error');
+  }
+}
+
+function _iflMsg(txt, ok) {
+  const el = document.getElementById('ifoodLojaMsg');
+  if (!el) return;
+  el.textContent = txt || '';
+  el.style.color = ok === false ? '#ef4444' : (ok ? '#34d399' : 'var(--text2)');
+}
+const _iflModalAberto = () => document.getElementById('ifoodLojaModal').style.display === 'flex';
+
+function _ifoodLojaRender() {
+  const lig = _iflLigado();
+  const item = document.getElementById('ifoodLojaItem');
+  const nota = document.getElementById('cfgIfoodNota');
+  if (item) item.style.display = lig ? '' : 'none';
+  if (nota) nota.style.display = lig ? '' : 'none';
+  if (!lig) { if (_iflModalAberto()) fecharIfoodLoja(); return; }
+  const L = _ifoodLoja;
+  const [ico, txt] = _IFL_SITUACAO[L.situacao] || ['⚪', '—'];
+  const ativas = _iflPausasAtivas();
+  let label = ico + ' ' + txt;
+  if (L.situacao === 'pausado' && ativas[0]) label += ' ' + _iflFimTxt(ativas[0]);
+  if (L.erro) label = '⚠️ ' + (L.erro.status === 403 ? 'sem acesso (403)' : 'erro ao ler o iFood');
+  if (_iflDesatualizado()) label = '⚠️ sem notícia do serviço';
+  const lbl = document.getElementById('ifoodLojaLabel');
+  if (lbl) { lbl.textContent = label; lbl.title = [L.titulo, L.subtitulo].filter(Boolean).join(' — '); }
+  const btn = document.getElementById('ifoodLojaBtn');
+  if (btn) btn.textContent = ativas.some(p => p.nossa) ? '▶️ Retomar' : '⏸ Pausar';
+  if (_iflModalAberto()) _ifoodLojaModalRender();
+}
+
+function abrirIfoodLoja() {
+  if (!_iflLigado()) return;
+  _iflHorariosPrevia = null;
+  _iflMsg('');
+  document.getElementById('ifoodLojaModal').style.display = 'flex';
+  _ifoodLojaModalRender();
+}
+function fecharIfoodLoja() { document.getElementById('ifoodLojaModal').style.display = 'none'; _iflHorariosPrevia = null; _iflConfirmarTodas = false; }
+
+// Botão da faixa do topo: com pausa NOSSA ativa → retoma; senão abre o modal para escolher o tempo.
+function ifoodLojaBotaoTopo() {
+  if (_iflPausasAtivas().some(p => p.nossa)) return ifoodLojaRetomar(false);
+  abrirIfoodLoja();
+}
+
+function _iflTurnoTxt(t) {
+  const [h, m] = String(t.start || '00:00').split(':').map(Number);
+  const ini = h * 60 + m;
+  const fim = ini + (Number(t.duration) || 0);
+  const f = (x) => String(Math.floor(x / 60) % 24).padStart(2, '0') + ':' + String(x % 60).padStart(2, '0');
+  return f(ini) + '–' + f(fim);
+}
+// A MESMA conversão do serviço (joey-ifood/src/lojaRegras.js turnosDoPainel): 0 = Dom; fecha 00:00 = fim do dia.
+function _iflTurnosDoPainel() {
+  const h = (config && config.horarios) || {};
+  const mm = (x) => { const r = /^(\d{1,2}):(\d{2})/.exec(String(x || '')); return r ? (+r[1]) * 60 + (+r[2]) : null; };
+  const turnos = [];
+  for (let i = 0; i < 7; i++) {
+    const d = h[i] || h[String(i)];
+    if (!d || !d.ativo) continue;
+    const a = mm(d.abre); let f = mm(d.fecha);
+    if (a === null || f === null) return { erro: 'horário inválido em ' + DIAS_SEMANA[i] };
+    if (f === 0) f = 23 * 60 + 59;
+    if (f <= a) return { erro: DIAS_SEMANA[i] + ': fecha antes de abrir (' + d.abre + '–' + d.fecha + ') — ajuste em Configurações' };
+    turnos.push({ dayOfWeek: _IFL_DIAS[i], start: String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0') + ':00', duration: f - a });
+  }
+  if (!turnos.length) return { erro: 'nenhum dia aberto nos horários do Gestão Joey (Configurações)' };
+  return { turnos };
+}
+function _iflPorDia(turnos) {
+  const m = {};
+  (turnos || []).forEach(t => { (m[t.dayOfWeek] = m[t.dayOfWeek] || []).push(_iflTurnoTxt(t)); });
+  return m;
+}
+
+function _ifoodLojaModalRender() {
+  const L = _ifoodLoja || {};
+  const [ico, txt] = _IFL_SITUACAO[L.situacao] || ['⚪', '—'];
+  const ativas = _iflPausasAtivas();
+  const externa = ativas.find(p => !p.nossa);
+  const nossa = ativas.find(p => p.nossa);
+  const fechadoNoPainel = !!(config && config.aberto === false);
+  const pend = !!_iflCmdPendente;
+  const atual = _iflAtualizadoMs();
+  let h = '<div class="ifl-box"><div style="font-size:18px;font-weight:800">' + ico + ' ' + _esc(txt) +
+    (L.situacao === 'pausado' && ativas[0] ? ' <span style="font-size:14px;font-weight:600;color:var(--text2)">' + _esc(_iflFimTxt(ativas[0])) + '</span>' : '') + '</div>';
+  if (L.loja && L.loja.nome) h += '<div style="font-size:12px;color:var(--text3);margin-top:2px">Loja no iFood: ' + _esc(L.loja.nome) + '</div>';
+  if (L.titulo || L.subtitulo) h += '<div style="font-size:13px;color:var(--text2);margin-top:4px">iFood diz: <b>' + _esc(L.titulo || '') + '</b>' + (L.subtitulo ? ' — ' + _esc(L.subtitulo) : '') + '</div>';
+  const vs = (L.validacoes || []).filter(v => v.titulo);
+  if (vs.length) h += '<div style="font-size:12px;color:var(--text2);margin-top:6px">' + vs.map(v => (v.estado === 'OK' ? '✅ ' : '⚠️ ') + _esc(v.titulo) + (v.subtitulo ? ' <span style="opacity:.75">(' + _esc(v.subtitulo) + ')</span>' : '')).join('<br>') + '</div>';
+  if (L.erro) h += '<div style="font-size:12px;color:#ef4444;margin-top:6px">⚠️ ' + _esc(L.erro.mensagem || 'erro ao ler o iFood') + '</div>';
+  h += '<div style="font-size:11px;color:var(--text3);margin-top:6px">' + (atual ? 'Atualizado às ' + _esc(new Date(atual).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })) : 'Sem leitura ainda') +
+    (_iflDesatualizado() ? ' · <span style="color:#f59e0b">sem notícia do serviço há mais de 5 min</span>' : '') + '</div></div>';
+
+  h += '<div class="ifl-h">Pausas no iFood</div>';
+  if (!ativas.length) h += '<div style="font-size:13px;color:var(--text2)">Nenhuma pausa ativa.</div>';
+  ativas.forEach(p => {
+    h += '<div style="font-size:13px;margin-bottom:4px">⏸️ <b>' + _esc(_iflFimTxt(p)) + '</b> — ' +
+      (p.nossa ? 'pelo Gestão Joey' : '<span style="color:#f59e0b">feita no iFood (Gestor de Pedidos/Portal)</span>') +
+      (p.propagando ? ' <span style="color:var(--text3)">(registrando no iFood…)</span>' : '') +
+      '<div style="font-size:11px;color:var(--text3)">' + _esc(p.descricao || '') + '</div></div>';
+  });
+  if (fechadoNoPainel) h += '<div style="font-size:12px;color:#f59e0b;margin:6px 0">🔒 A loja está <b>Fechada</b> no painel (Configurações → Status da Loja): o iFood fica pausado até você abrir lá.</div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">';
+  [[15, '15 min'], [30, '30 min'], [60, '1 hora'], [null, 'Até reabrir']].forEach(([m, t]) => {
+    h += '<button class="ifl-btn" ' + (pend || fechadoNoPainel || externa ? 'disabled' : '') + ' onclick="ifoodLojaPausar(' + (m === null ? 'null' : m) + ')">⏸ ' + t + '</button>';
+  });
+  h += '</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">';
+  h += '<button class="ifl-btn ifl-btn-pri" ' + (pend || !nossa ? 'disabled' : '') + ' onclick="ifoodLojaRetomar(false)">▶️ Retomar iFood</button>';
+  if (externa && !_iflConfirmarTodas) h += '<button class="ifl-btn" ' + (pend ? 'disabled' : '') + ' onclick="_iflConfirmarTodas=true;_ifoodLojaModalRender()">Retomar mesmo assim (tirar a pausa feita no iFood)…</button>';
+  if (externa && _iflConfirmarTodas) h += '<button class="ifl-btn" onclick="_iflConfirmarTodas=false;_ifoodLojaModalRender()">Cancelar</button><button class="ifl-btn ifl-btn-pri" ' + (pend ? 'disabled' : '') + ' onclick="ifoodLojaRetomar(true)">Confirmar: tirar também a pausa feita no iFood</button>';
+  h += '</div>';
+  if (externa) h += '<div style="font-size:11px;color:var(--text3);margin-top:6px">Pausa feita direto no iFood: o painel só mostra — não tira sozinho.</div>';
+
+  h += '<div class="ifl-h">Horários no iFood</div>';
+  const noIfood = _iflPorDia(L.horarios && L.horarios.turnos);
+  const prev = _iflHorariosPrevia;
+  const nosso = prev && prev.turnos ? _iflPorDia(prev.turnos) : null;
+  h += '<table class="ifl-tab"><tr><th>Dia</th><th>iFood agora</th>' + (nosso ? '<th>Gestão Joey</th>' : '') + '</tr>';
+  [1, 2, 3, 4, 5, 6, 0].forEach(i => {
+    const d = _IFL_DIAS[i];
+    const a = (noIfood[d] || []).join(', ') || 'fechado';
+    const b = nosso ? ((nosso[d] || []).join(', ') || 'fechado') : null;
+    h += '<tr><td>' + _IFL_NOME[d] + '</td><td>' + _esc(a) + '</td>' + (nosso ? '<td class="' + (a !== b ? 'ifl-dif' : '') + '">' + _esc(b) + '</td>' : '') + '</tr>';
+  });
+  h += '</table>';
+  if (prev && prev.erro) h += '<div style="font-size:12px;color:#ef4444;margin-top:6px">' + _esc(prev.erro) + '</div>';
+  if (!prev || prev.erro) {
+    h += '<button class="ifl-btn" style="margin-top:8px" ' + (pend ? 'disabled' : '') + ' onclick="ifoodLojaPreviaHorarios()">🕐 Enviar os horários do Gestão Joey para o iFood…</button>';
+  } else {
+    h += '<div style="font-size:12px;color:#f59e0b;margin-top:8px">Isto SUBSTITUI todos os horários da loja no iFood (dia sem horário fica fechado). Em laranja, o que muda.</div>' +
+      '<div style="display:flex;gap:6px;margin-top:6px"><button class="ifl-btn" onclick="_iflHorariosPrevia=null;_ifoodLojaModalRender()">Cancelar</button>' +
+      '<button class="ifl-btn ifl-btn-pri" ' + (pend ? 'disabled' : '') + ' onclick="ifoodLojaEnviarHorarios()">Sobrescrever horários do iFood</button></div>';
+  }
+  document.getElementById('ifoodLojaCorpo').innerHTML = h;
+}
+
+async function _iflComando(cmd) {
+  if (!_iflLigado() || !slug || _iflCmdPendente) return;
+  const id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const u = firebase.auth().currentUser;
+  _iflCmdPendente = id;
+  _iflMsg('Enviando ao iFood…');
+  if (_iflModalAberto()) _ifoodLojaModalRender();
+  try {
+    await db.doc(`clientes/${slug}/config/ifoodComando`).set({ id, ...cmd, por: (u && u.email) || null, em: firebase.firestore.FieldValue.serverTimestamp() });
+  } catch (e) {
+    _iflCmdPendente = null;
+    _iflMsg('Não consegui enviar: ' + e.message, false);
+    notify('iFood: não consegui enviar — ' + e.message, 'error');
+    if (_iflModalAberto()) _ifoodLojaModalRender();
+    return;
+  }
+  setTimeout(() => {
+    if (_iflCmdPendente !== id) return;
+    _iflCmdPendente = null;
+    _iflMsg('Sem resposta do serviço do iFood em 45 s — confira o status antes de tentar de novo.', false);
+    if (_iflModalAberto()) _ifoodLojaModalRender();
+  }, 45000);
+}
+function ifoodLojaPausar(minutos) { _iflComando({ acao: 'pausar', minutos: minutos === null ? null : Number(minutos) }); }
+// "todas" (tirar também a pausa feita no iFood) só chega aqui pelo botão de confirmação do modal.
+function ifoodLojaRetomar(todas) {
+  _iflConfirmarTodas = false;
+  _iflComando({ acao: 'retomar', todas: !!todas });
+}
+function ifoodLojaPreviaHorarios() { _iflHorariosPrevia = _iflTurnosDoPainel(); _ifoodLojaModalRender(); }
+function ifoodLojaEnviarHorarios() {
+  const p = _iflHorariosPrevia;
+  if (!p || !p.turnos) return;
+  _iflHorariosPrevia = null;
+  _iflComando({ acao: 'horarios', turnos: p.turnos });
+}
+
 // =================== LISTENERS FIREBASE (TEMPO REAL) ===================
 let _listenersIniciados = false;
 function iniciarListenersFirestore() {
   carregarAutoAceitar();
+  _ifoodLojaOuvir();     // loja no iFood (status/pausa/horários) — só aparece com loja iFood ligada
   iniciarIaListeners();
   _wacListenerConfig();   // estado conectado do WhatsApp Cloud API (config/whatsappCloud)
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
