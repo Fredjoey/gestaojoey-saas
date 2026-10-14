@@ -79,6 +79,18 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
 - **Auto-aceitar**: o do painel PULA pedido do iFood — quem auto-aceita é o serviço (confirma no iFood e põe em
   produção com `autoAceito`); o painel só imprime a comanda uma vez ao ver o card chegar assim.
 - **Sem eco**: os eventos do iFood mudam o status direto no Firestore; nada disparado por snapshot chama o iFood.
+- **Código de entrega (Fase 2b, em produção desde 14/10/2026 ~12:05, commit `68224a4`)** — só pedido iFood
+  DELIVERY + `ifoodEntregaPor:'MERCHANT'`:
+  - **Painel** (`_ifoodCodigoHtml`/`validarCodigoIfood`): campo "Código de entrega" + "🔑 Validar e entregar" no
+    card em **Prontos** (o serviço despacha antes) e em **Saiu para entrega**. O digitado e o foco sobrevivem ao
+    re-render (`_ifoodCod`, `_ifoodCodigoRefocar` no fim do `renderKanban`). Erro → toast + linha vermelha no card.
+  - **App do motoboy** (`entregador.html`): no pedido iFood de entrega própria o "✅ Entreguei" vira campo +
+    "✅ Validar e entregar", com o erro escrito no card (sem `alert`). Chama a mesma rota com o ID token do
+    entregador (o joey-ifood aceita o token do `entregadorAuth` só nessa rota, só no pedido atribuído a ele).
+    Pedido `pagamento:'ifood'` aparece "📱 Pago no iFood" (antes caía em "Dinheiro · receber"); `credito`/`debito`
+    contam como cartão.
+  - Quem grava `finalizado` + `entregueEm` é o **serviço** (só se o iFood aceitar) — painel e app só refletem o
+    snapshot. O CON chega depois e não muda nada. O "Finalizar pedido" segue só arquivando.
 - Domínio novo servindo o painel → entra também no CORS do joey-ifood (`src/cors.js`), além da chave do Maps.
 
 ## Extrato bancário (⑧ da aba Financeiro do gestao-joey.html) — **só o tenant joey**
