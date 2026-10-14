@@ -91,7 +91,8 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
     contam como cartão.
   - Quem grava `finalizado` + `entregueEm` é o **serviço** (só se o iFood aceitar) — painel e app só refletem o
     snapshot. O CON chega depois e não muda nada. O "Finalizar pedido" segue só arquivando.
-- **Homologação (em produção desde 14/10/2026 ~12:40, commits `6482ad3`…`99be6fa`)** — só pedido iFood:
+- **Homologação (em produção desde 14/10/2026 ~12:40, commits `6482ad3`…`99be6fa`; ✅ APROVADA 100% em 14/10/2026,
+  app "Gestão Joey" — próximos passos no CLAUDE.md do joey-ifood)** — só pedido iFood:
   - **Comanda do iFood** (`gerarHtmlComandaIfood`, no modelo da doc "Detalhes do pedido → Impressão"): os DOIS cupons
     (`gerarHtmlComanda` e `gerarHtmlPedidoProducao`) desviam para ela. Nº iFood, tipo/AGENDADO, 0800 + ID
     (localizador), pedidos na loja, itens com complementos e obs, "Desconto (IFOOD/LOJA)", formas de pagamento
@@ -104,7 +105,8 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
     "Trocar forma", "Editar" e "Pedir novamente". NFC-e já abre com o CPF/CNPJ do pedido iFood.
   - **Cancelado pelo iFood não some**: fica no topo de "Em análise" com o motivo até "✓ Ciente"
     (`ifoodCancelamentoVisto`). Na transição para cancelado: toast + som + push; se já estava em preparo e não foi a
-    loja que pediu, sai o cupom de cancelado.
+    loja que pediu, sai o cupom de cancelado. O "Ciente" NÃO recarrega a página (só grava o campo e redesenha);
+    em modo suporte o tenant fica preso à aba (ver CLAUDE.md do gestaojoey-admin, "MODO SUPORTE").
   - **Plataforma de Negociação** (HSD): faixa no topo do Kanban (`#ifoodNegFaixa`, vale p/ pedido já finalizado) +
     modal `#ifoodNegModal` para aceitar (motivos que o iFood mandou) ou recusar (lista da doc). Rotas
     `negociacao-aceitar`/`negociacao-recusar` do joey-ifood. Contraproposta: só pelo Portal do Parceiro.
