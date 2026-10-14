@@ -112,6 +112,28 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
     `negociacao-aceitar`/`negociacao-recusar` do joey-ifood. Contraproposta: só pelo Portal do Parceiro.
 - Domínio novo servindo o painel → entra também no CORS do joey-ifood (`src/cors.js`), além da chave do Maps.
 
+### Loja no iFood (módulo Merchant) — SÓ NA PRÉVIA em 14/10/2026, NÃO publicado
+
+Status da loja no iFood + pausa + horários, para ter um lugar só (detalhes do serviço: CLAUDE.md do joey-ifood,
+"Módulo Merchant"). **Não usa HTTP**: o painel lê `clientes/{slug}/config/ifoodLoja` (o serviço grava) e grava o
+comando em `config/ifoodComando` (`_iflComando`); o serviço executa e devolve o resultado no mesmo doc.
+- **Só aparece com `config/ifoodLoja.ligado === true`** — tenant sem loja iFood (ou com o módulo desligado no
+  serviço) não muda nada. Item "Loja no iFood" na faixa do topo (`#ifoodLojaItem`: 🟢 Online / ⏸️ Pausado até HH:MM
+  ou até reabrir / 🌙 Fechado (horário) / 🔴 Offline; "⚠️ sem notícia do serviço" com mais de 5 min sem atualizar) +
+  botão (⏸ Pausar abre o modal; ▶️ Retomar se a pausa ativa é nossa). Modal `#ifoodLojaModal`: o que o iFood diz
+  (título + validações), pausas (nossa × "feita no iFood (Gestor de Pedidos/Portal)"), Pausar 15/30/60 min/até
+  reabrir, Retomar, "Retomar mesmo assim" (tira a pausa externa — confirmação DENTRO do modal, sem `confirm()`), e
+  horários do iFood com "Enviar os horários do Gestão Joey…" → prévia dia a dia (diferenças em laranja) →
+  "Sobrescrever horários do iFood" (o PUT substitui tudo). `_iflTurnosDoPainel` = a mesma conversão do serviço.
+- **Aberto/Fechado das Configurações** (`cfgAberto` → `salvarConfig`): quem leva ao iFood é o SERVIÇO (fechar = pausa
+  até reabrir; abrir = tira a pausa). Com loja ligada aparece a nota `#cfgIfoodNota` embaixo do toggle; o painel
+  avisa o resultado por toast (`ifoodLoja.toggle`). Com a loja Fechada no painel os botões de pausa ficam travados.
+- Testado na prévia `ifood-fase2` com o joey-ifood LOCAL (loja de teste, `clienteteste`) em 14/10/2026: vídeos e prints
+  em `Desktop/_resumos-claude/2026-10-14_ifood-merchant-homologacao/`. Na prévia o mapa de "Posição no mapa"
+  mostra "Opa! Algo deu errado" (domínio da prévia fora da chave do Maps) — esperado.
+- **Publicar** só depois de o módulo Merchant estar homologado e ligado no joey-ifood; antes disso publicar não
+  quebra nada (sem `ifoodLoja` o painel não mostra), mas não há o que mostrar.
+
 ## Extrato bancário (⑧ da aba Financeiro do gestao-joey.html) — **só o tenant joey**
 
 Feature **em construção**, travada no slug `joey`: outro tenant não vê a seção, nem o upload, nem a conciliação. **Não altera o cálculo do lucro** — é conferência entre extrato e compras lançadas.
