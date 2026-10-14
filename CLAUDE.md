@@ -57,7 +57,11 @@ Uma ressalva enquanto durar: **as outras 7 functions ainda rodam a revisão de j
 embutida naquele bundle. Cada uma passa a usar ADC no primeiro redeploy — é aí que o
 `storage.objectAdmin` entra em jogo, na `nfceXml`/`nfceXmlZip`, que gravam e leem os XMLs.
 
-## Pedidos do iFood: o painel RESPONDE ao iFood (desde a branch `ifood-fase2`, 14/10/2026)
+## Pedidos do iFood: o painel RESPONDE ao iFood (em produção desde 14/10/2026)
+
+Publicado nos 3 sites do painel em 14/10/2026 ~11:30 (commit `0a336c9`, merge da `ifood-fase2`), depois dos
+testes na prévia (confirmar/pronto/despachar, cancelar, auto-aceitar) e de uma regressão de pedido manual
+(+ Novo Pedido → entregue sem chamar o iFood). Hoje só a loja de teste do `clienteteste` está ligada.
 
 Pedido com `origem:'ifood'` + `ifoodOrderId` é gravado pelo serviço **joey-ifood** (repo `Fredjoey/joey-ifood`,
 Railway, `IFOOD_API` = `https://joey-ifood-production.up.railway.app`). O desenho completo do serviço está no
