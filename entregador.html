@@ -43,6 +43,14 @@
   .btn-ok{background:var(--orange);color:#fff}
   .btn-ok:active{filter:brightness(.9)}
   .btn[disabled]{opacity:.5}
+  /* Código de entrega do iFood (entrega própria): o iFood valida e só então o pedido conclui */
+  .ifood-tag{font-size:11px;font-weight:800;color:#ea1d2c;margin:0 0 4px}
+  .cod{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+  .cod input{width:100%;background:var(--card2);color:var(--text);border:1px solid #5a2a2e;border-radius:12px;padding:14px;font-size:20px;font-weight:800;letter-spacing:6px;text-align:center;font-family:inherit}
+  .cod input::placeholder{letter-spacing:normal;font-size:15px;font-weight:600;color:var(--text3)}
+  .cod .btn-ifood{background:#ea1d2c;color:#fff}
+  .cod .erro{font-size:13.5px;color:#ff7b7b;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:10px;padding:9px 11px;line-height:1.4}
+  .cod .dica{font-size:12px;color:var(--text2);line-height:1.4}
   /* Menu de escolha do app de rota (parte do GPS do motoboy) */
   .rota-sheet{display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);align-items:flex-end;justify-content:center}
   .rota-sheet.show{display:flex}
@@ -100,6 +108,8 @@ const _segs = location.pathname.split('/').filter(Boolean);
 const SLUG = (_segs[0] === 'entregador' ? _segs[1] : _segs[_segs.length - 1]) || '';
 
 let entregadorId = null, _unsub = null;
+// Serviço joey-ifood: valida o código de entrega no iFood (mesma rota do painel; aceita o token do entregador).
+const IFOOD_API = 'https://joey-ifood-production.up.railway.app';
 let tenant = null;   // (Bloco 2) slug do TENANT (resolvido pelo entregadorAuth) — antes era hardcoded 'joey'
 let _lojaGeo = { cidade: '', estado: '' };   // cidade/estado do tenant (config/loja) p/ compor o destino da rota
 const $ = (id) => document.getElementById(id);
@@ -313,6 +323,7 @@ function _gpsQuenteFresco() {
 }
 
 function render(lista) {
+  _ultimaLista = lista;
   if (!lista.length) {
     $('conteudo').innerHTML = `<div class="estado"><div class="big">🎉</div><div>Nenhuma entrega no momento.</div><div style="font-size:13px;color:var(--text3);margin-top:8px">Os pedidos atribuídos a você aparecem aqui na hora.</div></div>`;
     return;
@@ -325,13 +336,17 @@ function render(lista) {
     const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
     const pix = p.pagamento === 'pix';
     const trocoTxt = (p.pagamento === 'dinheiro' && p.troco) ? ` · troco p/ R$ ${Number(p.troco).toFixed(2).replace('.', ',')}` : '';
-    const pagHtml = pix
+    const cartao = p.pagamento === 'cartao' || p.pagamento === 'credito' || p.pagamento === 'debito';
+    const pagHtml = p.pagamento === 'ifood'                     // pago online no app do iFood: nada a receber
+      ? `<span class="pago">📱 Pago no iFood</span>`
+      : pix
       ? `<span class="pago">📱 Pix · pago</span>`
-      : `<span class="receber">${p.pagamento === 'cartao' ? '💳 Cartão na entrega' : '💵 Dinheiro' + trocoTxt} · receber</span>`;
+      : `<span class="receber">${cartao ? '💳 Cartão na entrega' : '💵 Dinheiro' + trocoTxt} · receber</span>`;
     const tel = (c.tel || '').replace(/\D/g, '');
     const _dr = destinoRota(p);        // coord (se o Google achou a casa) ou texto do endereço
     return `<div class="card">
       <div class="card-top"><span class="num">#${esc(p.id)}</span>${pill}</div>
+      ${p.origem === 'ifood' ? `<div class="ifood-tag">iFood${p.ifoodDisplayId ? ' #' + esc(p.ifoodDisplayId) : ''}</div>` : ''}
       <div class="cli">${esc(c.nome || '—')}</div>
       ${tel ? `<a class="tel" href="tel:${tel}">📞 ${esc(c.tel)}</a>` : ''}
       <div class="end">📍 ${esc(enderecoTxt(c)) || '—'}${c.ref ? `<br><span class="ref">Ref: ${esc(c.ref)}</span>` : ''}${c.complemento ? `<br>${esc(c.complemento)}` : ''}</div>
@@ -340,10 +355,71 @@ function render(lista) {
       <div class="pag">${pagHtml}<span class="total">${total}</span></div>
       <div class="btns">
         <button class="btn btn-rota" onclick="abrirRotaMenu('${encodeURIComponent(_dr.txt)}', ${_dr.coord})">🗺️ Abrir rota</button>
-        <button class="btn btn-ok" onclick="entreguei('${esc(p.id)}', this)">✅ Entreguei</button>
+        ${pedeCodigo(p) ? '' : `<button class="btn btn-ok" onclick="entreguei('${esc(p.id)}', this)">✅ Entreguei</button>`}
       </div>
+      ${pedeCodigo(p) ? codigoHtml(p) : ''}
     </div>`;
   }).join('');
+  refocarCodigo();
+}
+
+// ── Código de entrega do iFood ─────────────────────────────────────────────────────────────────
+// Pedido do iFood com entrega PRÓPRIA não tem "Entreguei": o motoboy pede o código ao cliente (ele vê
+// no app do iFood) e o iFood valida. Só com o iFood aceitando o pedido conclui — quem grava
+// finalizado é o serviço; o card some pelo onSnapshot. Erro fica escrito no card (sem alert).
+// O que foi digitado sobrevive ao re-render do onSnapshot.
+const _cod = { valor: {}, erro: {}, ocupado: new Set(), foco: null };
+let _ultimaLista = [];
+function pedeCodigo(p) {
+  return p.origem === 'ifood' && !!p.ifoodOrderId && p.ifoodTipo === 'DELIVERY' && p.ifoodEntregaPor === 'MERCHANT';
+}
+function codigoHtml(p) {
+  const id = esc(p.id);
+  const ocupado = _cod.ocupado.has(p.id);
+  const erro = _cod.erro[p.id];
+  return `<div class="cod">
+    <input id="cod_${id}" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código de entrega"
+      value="${esc(_cod.valor[p.id] || '')}" ${ocupado ? 'disabled' : ''}
+      oninput="_cod.valor['${id}']=this.value" onfocus="_cod.foco='${id}'" onblur="if(this.isConnected&&_cod.foco==='${id}')_cod.foco=null"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();validarCodigo('${id}')}">
+    <button class="btn btn-ifood" ${ocupado ? 'disabled' : ''} onclick="validarCodigo('${id}')">${ocupado ? '⏳ Validando no iFood…' : '✅ Validar e entregar'}</button>
+    ${erro ? `<div class="erro">⚠️ ${esc(erro)}</div>` : `<div class="dica">Peça ao cliente o código de entrega que aparece no app do iFood.</div>`}
+  </div>`;
+}
+function refocarCodigo() {
+  const el = _cod.foco && document.getElementById('cod_' + _cod.foco);
+  if (el && document.activeElement !== el && !el.disabled) { el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (_) {} }
+}
+async function validarCodigo(id) {
+  if (_cod.ocupado.has(id)) return;
+  const codigo = String(_cod.valor[id] || '').replace(/\D/g, '');
+  if (codigo.length < 4) { _cod.erro[id] = 'Digite o código que o cliente vê no app do iFood.'; render(_ultimaLista); return; }
+  _cod.erro[id] = null;
+  _cod.foco = null;
+  _cod.ocupado.add(id);
+  render(_ultimaLista);
+  try {
+    const u = auth.currentUser;
+    if (!u) throw new Error('Sessão expirada. Abra o link de novo.');
+    let resp;
+    try {
+      resp = await fetch(`${IFOOD_API}/pedidos/${encodeURIComponent(tenant)}/${encodeURIComponent(id)}/codigo-entrega`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + await u.getIdToken(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo }),
+      });
+    } catch (_) { throw new Error('Sem conexão com o iFood agora. Confira a internet e tente de novo.'); }
+    let j = {};
+    try { j = await resp.json(); } catch (_) {}
+    if (!resp.ok || !j.ok) throw new Error(j.erro || ('Erro ' + resp.status + ' ao validar no iFood.'));
+    delete _cod.valor[id];
+    // sucesso: o serviço marcou o pedido como entregue → o onSnapshot tira o card
+  } catch (e) {
+    _cod.erro[id] = e.message;
+  } finally {
+    _cod.ocupado.delete(id);
+    render(_ultimaLista);
+  }
 }
 
 async function entreguei(id, btn) {

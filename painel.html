@@ -3592,6 +3592,7 @@ function renderKanban() {
   }).join('');
   startPixTimers();
   startEntregaTimers();
+  _ifoodCodigoRefocar();
 }
 
 // Mesmo número gravado de jeitos diferentes: "5521999884477", "21999884477",
@@ -3917,12 +3918,14 @@ function orderCardHtml(p) {
       botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
         ${_atrib || ''}
         <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;width:100%;white-space:nowrap" onclick="avancarStatus('${p.id}')">🛵 Enviar para entrega</button>
+        ${_ifoodCodigoHtml(p)}
       </div>`;
     }
   } else if (p.status === 'entregue') {
     const _selAtrib = entregadorSelectHtml(p); // delivery+joey sem entregador → atribuir retroativo
     botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
       ${_selAtrib || ''}
+      ${_ifoodCodigoHtml(p)}
       <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${p.id}')">✓ Finalizar pedido</button>
       <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>
     </div>`;
@@ -4431,6 +4434,61 @@ async function _avancarIfood(p) {
     notify(`❌ iFood não aceitou (pedido ${p.id}): ${e.message}`, 'error');
   } finally {
     _ifoodEmAndamento.delete(p.id);
+    renderKanban();
+  }
+}
+
+// Código de entrega (entrega PRÓPRIA do iFood): a equipe digita o código que o cliente vê no app do
+// iFood e o serviço valida (POST .../codigo-entrega). Só com o iFood aceitando o pedido conclui — quem
+// grava finalizado + entregueEm é o SERVIÇO (o app do motoboy chama a mesma rota); o card só reflete o
+// snapshot. Em "Prontos" o serviço despacha antes. O que foi digitado sobrevive ao re-render do Kanban.
+const _ifoodCod = { valor: {}, erro: {}, foco: null };
+function _ifoodPedeCodigo(p) {
+  return _ehIfood(p) && p.ifoodTipo === 'DELIVERY' && p.ifoodEntregaPor === 'MERCHANT'
+    && (p.status === 'pronto' || p.status === 'entregue');
+}
+function _ifoodCodigoHtml(p) {
+  if (!_ifoodPedeCodigo(p)) return '';
+  const id = _esc(p.id);
+  const ocupado = _ifoodEmAndamento.has(p.id);
+  const erro = _ifoodCod.erro[p.id];
+  return `<div onclick="event.stopPropagation()" style="display:flex;flex-direction:column;gap:6px;width:100%">
+    <div style="display:flex;gap:6px">
+      <input id="ifoodCod_${id}" type="text" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="Código de entrega"
+        value="${_esc(_ifoodCod.valor[p.id] || '')}" ${ocupado ? 'disabled' : ''}
+        oninput="_ifoodCod.valor['${id}']=this.value" onfocus="_ifoodCod.foco='${id}'" onblur="if(this.isConnected&&_ifoodCod.foco==='${id}')_ifoodCod.foco=null"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();validarCodigoIfood('${id}')}"
+        style="flex:1;min-width:0;background:var(--bg3);color:var(--text);border:1px solid rgba(234,29,44,.35);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;letter-spacing:2px">
+      <button class="oc-btn" ${ocupado ? 'disabled' : ''} onclick="validarCodigoIfood('${id}')"
+        style="background:rgba(234,29,44,.12);color:#ea1d2c;border:1px solid rgba(234,29,44,.35);white-space:nowrap">${ocupado ? '⏳' : '🔑 Validar e entregar'}</button>
+    </div>
+    ${erro ? `<div style="font-size:11px;color:#ef4444;line-height:1.35">⚠ ${_esc(erro)}</div>` : ''}
+  </div>`;
+}
+function _ifoodCodigoRefocar() {
+  const id = _ifoodCod.foco;
+  if (!id) return;
+  const el = document.getElementById('ifoodCod_' + id);
+  if (el && document.activeElement !== el && !el.disabled) { el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (_) {} }
+}
+async function validarCodigoIfood(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p || !_ifoodPedeCodigo(p) || _ifoodEmAndamento.has(id)) return;
+  const codigo = String(_ifoodCod.valor[id] || '').replace(/\D/g, '');
+  if (codigo.length < 4) { _ifoodCod.erro[id] = 'Digite o código que o cliente vê no app do iFood.'; renderKanban(); return; }
+  _ifoodCod.erro[id] = null;
+  _ifoodCod.foco = null;
+  _ifoodEmAndamento.add(id);
+  renderKanban();
+  try {
+    await _ifoodChamar(p, 'codigo-entrega', { corpo: { codigo } });
+    delete _ifoodCod.valor[id];
+    notify(`✅ iFood confirmou a entrega do pedido ${id} — concluído`);
+  } catch (e) {
+    _ifoodCod.erro[id] = e.message;
+    notify(`❌ Código de entrega (pedido ${id}): ${e.message}`, 'error');
+  } finally {
+    _ifoodEmAndamento.delete(id);
     renderKanban();
   }
 }
