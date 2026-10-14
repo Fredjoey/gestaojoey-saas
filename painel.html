@@ -1982,6 +1982,17 @@ body.suporte-on #botAlertBanner{top:36px}
   </div>
 </div>
 
+<div class="modal-overlay" id="ifoodNegModal" onclick="if(event.target===this)fecharNegociacaoIfood()">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">⚖️ Negociação no iFood <span id="ifoodNegTitulo" style="color:var(--text2);font-weight:600"></span></div>
+      <button class="modal-close" onclick="fecharNegociacaoIfood()">✕</button>
+    </div>
+    <div id="ifoodNegCorpo"></div>
+    <div id="ifoodNegErro" style="font-size:13px;color:#ef4444;margin-top:10px"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cxHistModal" onclick="if(event.target===this)fecharHistoricoCaixa()">
   <div class="modal-box" style="max-width:640px">
     <div class="modal-header">
@@ -3544,6 +3555,8 @@ function renderKanban() {
     //  - Prontos p/ entrega: ordem do "Marcar pronto" (prontoEm ASC; fallback chegada)
     //  - Entregues hoje: inalterado (ts DESC da lista global)
     if (col.key==='novo' || col.key==='producao') cp.sort((a,b) => (a.ts||0) - (b.ts||0));
+    if (col.key==='novo') cp = _ifoodCanceladosNoQuadro().concat(cp);   // cancelado do iFood: no topo até o "Ciente"
+
     else if (col.key==='pronto')                  cp.sort((a,b) => _prontoTs(a) - _prontoTs(b));
     if (col.key==='entregue') {
       const q = buscaEntregues.toLowerCase().trim();
@@ -3593,6 +3606,7 @@ function renderKanban() {
   startPixTimers();
   startEntregaTimers();
   _ifoodCodigoRefocar();
+  _ifoodNegRender();
 }
 
 // Mesmo número gravado de jeitos diferentes: "5521999884477", "21999884477",
@@ -3929,6 +3943,8 @@ function orderCardHtml(p) {
       <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${p.id}')">✓ Finalizar pedido</button>
       <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>
     </div>`;
+  } else if (p.status === 'cancelado' && _ehIfood(p)) {
+    botoes = `<button class="oc-btn" style="width:100%;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.35)" onclick="event.stopPropagation();ifoodCancelamentoCiente('${p.id}')">✓ Ciente — tirar do quadro</button>`;
   } else if (p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') {
     // Estado 2 (entregue pelo motoboy): "Finalizar pedido" ARQUIVA (sai do Kanban) + mantém NFCe, empilhados.
     botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
@@ -3947,7 +3963,7 @@ function orderCardHtml(p) {
     : '';
 
   return `
-    <div class="order-card${_cardCls}${(p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') ? ' entregue-ok' : ''}" onclick="openOrderModal('${p.id}')">
+    <div class="order-card${_cardCls}${(p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') ? ' entregue-ok' : ''}"${p.status === 'cancelado' ? ' style="border-color:rgba(239,68,68,.6);opacity:.9"' : ''} onclick="openOrderModal('${p.id}')">
       <div class="oc-top"><span style="display:flex;align-items:center;gap:6px"><span class="oc-id">${p.id}</span>${_badgeAuto}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${p.id}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${p.hora}</span></span></div>
       <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
       ${_agendadoBadgeHtml(p)}
@@ -4493,6 +4509,312 @@ async function validarCodigoIfood(id) {
   }
 }
 
+// ── iFood: o que a homologação exige ver no painel e na comanda ─────────────────────────────────
+// Bandeira do cartão, troco, cupom com QUEM PAGA (iFood x loja), observações do pedido e dos itens,
+// código de coleta, CPF/CNPJ da nota, agendamento e motivo de cancelamento. Tudo sai de campos que o
+// joey-ifood grava (src/pedido.js) com o ifoodRaw (detalhe inteiro) de reserva para pedido antigo.
+const _IFOOD_METODO = { CASH: 'Dinheiro', CREDIT: 'Crédito', DEBIT: 'Débito', MEAL_VOUCHER: 'Vale-refeição',
+  FOOD_VOUCHER: 'Vale-alimentação', GIFT_CARD: 'Gift card', DIGITAL_WALLET: 'Carteira digital', PIX: 'Pix', OTHER: 'Outro' };
+const _IFOOD_PAGADOR = { IFOOD: 'iFood', MERCHANT: 'Loja' };
+const _IFOOD_TIPO = { DELIVERY: 'DELIVERY', TAKEOUT: 'PRA RETIRAR', DINE_IN: 'NA MESA' };
+const _IFOOD_ORIGEM_CANCEL = { CUSTOMER: 'cliente', MERCHANT: 'loja', IFOOD: 'iFood', LOGISTIC: 'logística iFood', PLATFORM: 'iFood' };
+const _brlIf = (v) => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
+const _ifoodRaw = (p) => (p && p.ifoodRaw) || {};
+
+// ISO → "HH:MM" (ou "dd/mm HH:MM" se não for hoje), fuso de SP.
+function _ifoodHora(iso) {
+  const t = Date.parse(iso || '');
+  if (!t) return '';
+  const o = { timeZone: 'America/Sao_Paulo' };
+  const d = new Date(t);
+  const h = d.toLocaleTimeString('pt-BR', { ...o, hour: '2-digit', minute: '2-digit' });
+  const dia = d.toLocaleDateString('pt-BR', { ...o, day: '2-digit', month: '2-digit' });
+  const hoje = new Date().toLocaleDateString('pt-BR', { ...o, day: '2-digit', month: '2-digit' });
+  return dia === hoje ? h : `${dia} ${h}`;
+}
+// Janela do agendado ("19:00 – 19:30"), '' se é imediato.
+function _ifoodAgendado(p) {
+  const sc = p.ifoodAgendamento || _ifoodRaw(p).schedule;
+  if (p.ifoodMomento !== 'SCHEDULED' && !sc) return '';
+  if (!sc) return 'agendado';
+  const a = _ifoodHora(sc.deliveryDateTimeStart), b = _ifoodHora(sc.deliveryDateTimeEnd);
+  return a && b ? `${a} – ${b.slice(-5)}` : (a || b);
+}
+function _ifoodPrevisto(p) {
+  const r = _ifoodRaw(p);
+  return p.ifoodPrevistoPara || (r.schedule && r.schedule.deliveryDateTimeStart) || (r.delivery && r.delivery.deliveryDateTime)
+    || (r.takeout && r.takeout.takeoutDateTime) || (r.dineIn && r.dineIn.deliveryDateTime) || '';
+}
+// Cada forma de pagamento: online (já pago no app) ou cobrar na entrega, com bandeira; dinheiro com troco.
+function _ifoodPagamentos(p) {
+  return ((p.ifoodPagamento && p.ifoodPagamento.metodos) || []).map(m => {
+    const metodo = String(m.metodo || '').toUpperCase();
+    const det = [m.bandeira, m.carteira].filter(Boolean).join(' ');
+    const troco = metodo === 'CASH' && m.trocoPara > 0
+      ? { para: m.trocoPara, levar: Math.max(0, Math.round((m.trocoPara - (m.valor || 0)) * 100) / 100) } : null;
+    return {
+      online: String(m.tipo || '').toUpperCase() !== 'OFFLINE',
+      txt: (_IFOOD_METODO[metodo] || m.metodo || '—') + (det ? ' · ' + det : ''),
+      valor: m.valor || 0,
+      troco,
+    };
+  });
+}
+// [{ quem: 'iFood' | 'Loja' | outro patrocinador, valor }]
+function _ifoodCupons(p) {
+  const por = p.ifoodCupomPorPagador || {};
+  return Object.keys(por).map(k => ({ quem: _IFOOD_PAGADOR[k] || k, valor: por[k] }));
+}
+function _ifoodDoc(p) {
+  const d = String(p.cpfCnpj || '').replace(/\D/g, '');
+  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  return p.cpfCnpj ? String(p.cpfCnpj) : '';
+}
+function _ifoodCancelTxt(p) {
+  const c = p.ifoodCancelamento || {};
+  const quem = _IFOOD_ORIGEM_CANCEL[String(c.origem || '').toUpperCase()] || (c.origem ? String(c.origem).toLowerCase() : '');
+  return (p.motivoCancelamento || 'Cancelado no iFood') + (quem ? ` (por ${quem})` : '');
+}
+function _ifoodTelTxt(p) {
+  const t = p.ifoodTelefone || (_ifoodRaw(p).customer || {}).phone || {};
+  const num = t.numero || t.number || '';
+  const loc = t.localizador || t.localizer || '';
+  return num ? num + (loc ? ` · ID ${loc}` : '') : '';
+}
+function _ifoodNegPendente(p) {
+  const n = p && p.ifoodNegociacao;
+  return !!(n && n.status === 'PENDENTE' && (!n.expiraEm || Date.parse(n.expiraEm) > Date.now()));
+}
+
+// Linhas extras do pedido do iFood no MODAL de detalhe.
+function _ifoodModalHtml(p) {
+  const row = (k, v, cor) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val"${cor ? ` style="color:${cor};font-weight:600"` : ''}>${v}</span></div>`;
+  const out = [];
+  out.push(`<div style="margin:12px 0 4px;font-size:10px;font-weight:700;color:#ea1d2c;text-transform:uppercase;letter-spacing:1px">iFood${p.ifoodDisplayId ? ' #' + _esc(p.ifoodDisplayId) : ''}</div>`);
+  if (p.status === 'cancelado') out.push(row('❌ Cancelamento', _esc(_ifoodCancelTxt(p)), '#ef4444'));
+  out.push(row('Tipo', (_IFOOD_TIPO[p.ifoodTipo] || p.ifoodTipo || '—') + (p.ifoodTipo === 'DELIVERY' ? ` · entrega ${p.ifoodEntregaPor === 'IFOOD' ? 'pelo iFood' : 'da loja'}` : '')));
+  const ag = _ifoodAgendado(p);
+  if (ag) out.push(row('📅 Agendado', _esc(ag), '#a78bfa'));
+  else if (_ifoodPrevisto(p)) out.push(row('Previsto', _esc(_ifoodHora(_ifoodPrevisto(p)))));
+  if (_ifoodTelTxt(p)) out.push(row('Telefone (iFood)', _esc(_ifoodTelTxt(p))));
+  if (p.ifoodPedidosNaLoja != null || (_ifoodRaw(p).customer || {}).ordersCountOnMerchant != null) {
+    const n = p.ifoodPedidosNaLoja != null ? p.ifoodPedidosNaLoja : _ifoodRaw(p).customer.ordersCountOnMerchant;
+    out.push(row('Pedidos na loja', n > 0 ? `${n} anterior(es)` : 'primeiro pedido'));
+  }
+  _ifoodPagamentos(p).forEach(m => out.push(row(m.online ? '✅ Pago online' : '💰 Cobrar na entrega',
+    `${_esc(m.txt)} · ${_brlIf(m.valor)}${m.troco ? ` · troco p/ ${_brlIf(m.troco.para)} (levar ${_brlIf(m.troco.levar)})` : ''}`, m.online ? '#34d399' : '#fbbf24')));
+  _ifoodCupons(p).forEach(c => out.push(row('🎟️ Cupom pago por ' + _esc(c.quem), '− ' + _brlIf(c.valor), '#34d399')));
+  if (p.ifoodTaxasAdicionais) out.push(row('Taxa adicional', _brlIf(p.ifoodTaxasAdicionais)));
+  if (_ifoodDoc(p)) out.push(row('🧾 CPF/CNPJ na nota', _esc(_ifoodDoc(p))));
+  if (p.ifoodCodigoColeta) out.push(row('🔐 Código de coleta', _esc(p.ifoodCodigoColeta)));
+  if (p.obs) out.push(row('📝 Observações', _esc(p.obs), 'var(--orange)'));
+  const n = p.ifoodNegociacao;
+  if (n && n.id) out.push(row('⚖️ Negociação', `${_esc(_ifoodNegTitulo(n))} — ${_esc(_ifoodNegStatus(n))}`, _ifoodNegPendente(p) ? '#f59e0b' : undefined));
+  return out.join('');
+}
+
+// ── Comanda do iFood (modelo da doc: developer.ifood.com.br → Detalhes do pedido → Impressão) ───────
+// Vale para os dois cupons (produção e entrega) de pedido do iFood; os outros pedidos não mudam.
+// CPF: "Incluir CPF na nota fiscal" como no modelo — mas NÃO em entrega feita pelo iFood (a doc pede
+// para não imprimir CPF/endereço em documento que vai para parceiro de entrega).
+function gerarHtmlComandaIfood(p) {
+  const W = 28, eq = '='.repeat(W), dash = '- '.repeat(Math.floor(W / 2));
+  const r = _ifoodRaw(p);
+  const parceiro = p.ifoodTipo === 'DELIVERY' && p.ifoodEntregaPor === 'IFOOD';
+  const e = (t) => _esc(t == null ? '' : String(t));
+  const linha = (a, b) => `<div class="row-val"><span>${a}</span><span>${b}</span></div>`;
+  const ag = _ifoodAgendado(p), prev = _ifoodPrevisto(p);
+  const itensHtml = (p.itens || []).map(i => {
+    const unit = precoUnitario(i);
+    const adics = (i.adicionais || []).filter(a => a && a.nome).map(a =>
+      `<div class="adic"><span>${a.qty || 1} UN ${e(a.nome)}</span>${a.preco > 0 ? `<span>${_brlIf(a.preco * (a.qty || 1))}</span>` : ''}</div>`).join('');
+    return `<div class="row-item"><span class="item-desc">${i.qty} UN ${e(i.nome)}</span><span class="item-val">${_brlIf(unit * i.qty)}</span></div>${adics}`
+      + (i.obs ? `<div class="obs">Obs: ${e(i.obs)}</div>` : '');
+  }).join('<div class="line">' + '.'.repeat(W) + '</div>');
+  const pags = _ifoodPagamentos(p);
+  const pagHtml = pags.map(m => m.online
+    ? linha(`Pagamento online (${e(m.txt)})`, _brlIf(m.valor))
+    : `<div class="cli">Cobrar do cliente na entrega</div>${linha('&nbsp;&nbsp;' + e(m.txt), _brlIf(m.valor))}`
+      + (m.troco ? `<div class="cli">TROCO PARA: ${_brlIf(m.troco.para)}</div><div class="centro-bold">LEVAR TROCO: ${_brlIf(m.troco.levar)}</div>` : '')).join('')
+    || `<div class="cli">${e((p.pagamento || '-').toUpperCase())}</div>`;
+  const tudoOnline = pags.length && pags.every(m => m.online);
+  const cupons = _ifoodCupons(p);
+  const c = p.cliente || {};
+  const entregaHtml = p.ifoodTipo === 'DELIVERY' ? `
+<div class="line">${dash}</div>
+<div class="tipo-ent">ENTREGA PEDIDO #${e(p.ifoodDisplayId || p.id)}</div>
+<div class="cli">Entregue por: ${parceiro ? 'PARCEIRO IFOOD' : 'LOJA'}</div>
+${prev ? `<div class="cli">Horário da entrega: ${e(_ifoodHora(prev))}</div>` : ''}
+<div class="cli">Cliente: ${e(c.nome || '-')}</div>
+${parceiro ? '' : [
+    ((c.rua || '') + (c.numero ? ', ' + c.numero : '')) && `Endereço: ${(c.rua || '') + (c.numero ? ', ' + c.numero : '')}`,
+    c.comp && `Comp: ${c.comp}`, c.ref && `Ref: ${c.ref}`, c.bairro && `Bairro: ${c.bairro}`,
+    c.cidade && `Cidade: ${c.cidade}${c.uf ? ' - ' + c.uf : ''}`, c.cep && `CEP: ${c.cep}`,
+  ].filter(Boolean).map(l => `<div class="cli">${e(l)}</div>`).join('')}` : '';
+  const pedidosNaLoja = p.ifoodPedidosNaLoja != null ? p.ifoodPedidosNaLoja : (r.customer || {}).ordersCountOnMerchant;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;color:#000;background:#fff;font-weight:normal}
+@page{margin:0;size:80mm auto}
+@media print{*{color:#000!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45}
+.line{font-size:13px;text-align:center;white-space:pre}
+.tipo-ent{font-size:16px;font-weight:900;text-align:center;margin:3px 0}
+.cancel{font-size:20px;font-weight:900;text-align:center;border:2px solid #000;padding:4px;margin:4px 0}
+.info{font-size:13px;font-weight:700;text-align:center}
+.loja{font-size:15px;font-weight:700;text-align:center;margin-top:2px}
+.ped-num{font-size:26px;font-weight:900;text-align:center;letter-spacing:1px;margin:2px 0}
+.row-item{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin:2px 0}
+.item-desc{flex:1;font-weight:700;margin-right:4px;word-break:break-word}
+.item-val{white-space:nowrap;font-weight:700}
+.adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
+.obs{font-size:13px;font-weight:700;margin:2px 0 2px 4px}
+.cli{font-size:13px;font-weight:700;margin:1px 0;word-break:break-word}
+.row-val{display:flex;justify-content:space-between;gap:6px;font-size:13px;font-weight:700;margin:1px 0}
+.row-total{display:flex;justify-content:space-between;font-size:17px;font-weight:900;margin-top:4px}
+.sec{font-size:13px;font-weight:700;text-align:center;margin:2px 0}
+.centro-bold{font-size:14px;font-weight:900;text-align:center;margin-top:2px}
+.rodape{text-align:center;font-size:11px;margin-top:4px}
+</style></head><body>
+${p.status === 'cancelado' ? `<div class="cancel">*** PEDIDO CANCELADO ***</div><div class="cli">Motivo: ${e(_ifoodCancelTxt(p))}</div>` : ''}
+<div class="tipo-ent">**** PEDIDO #${e(p.ifoodDisplayId || p.id)} ****</div>
+<div class="info">${_IFOOD_TIPO[p.ifoodTipo] || 'iFood'}${ag ? ' · AGENDADO' : ''}</div>
+<div class="loja">${e((config.nome || 'JOEY').toUpperCase())}</div>
+<div class="ped-num">Nº ${e(p.id)}</div>
+<div class="cli">Data do pedido: ${e(p.data || '')} ${e(p.hora || '')}</div>
+${ag ? `<div class="centro-bold">AGENDADO: ${e(ag)}</div>` : (prev ? `<div class="cli">Data de entrega: ${e(_ifoodHora(prev))}</div>` : '')}
+<div class="cli">Cliente: ${e(c.nome || '-')}</div>
+${_ifoodTelTxt(p) ? `<div class="cli">Telefone: ${e(_ifoodTelTxt(p))}</div>` : ''}
+${pedidosNaLoja != null ? `<div class="cli">${pedidosNaLoja > 0 ? pedidosNaLoja + ' pedido(s) na sua loja' : 'Primeiro pedido na sua loja'}</div>` : ''}
+<div class="line">${dash}</div>
+<div class="sec">ITENS DO PEDIDO</div>
+${itensHtml}
+<div class="line">${dash}</div>
+<div class="sec">TOTAL</div>
+${linha('Valor total dos itens', _brlIf(p.subtotal))}
+${p.taxaEntrega > 0 ? linha('Taxa de entrega', _brlIf(p.taxaEntrega)) : ''}
+${p.ifoodTaxasAdicionais ? linha('Taxa adicional', _brlIf(p.ifoodTaxasAdicionais)) : ''}
+${cupons.map(x => linha(`Desconto (${e(x.quem.toUpperCase())})`, '- ' + _brlIf(x.valor))).join('')}
+<div class="row-total"><span>VALOR TOTAL</span><span>${_brlIf(p.total)}</span></div>
+<div class="line">${dash}</div>
+<div class="sec">FORMAS DE PAGAMENTO</div>
+${pagHtml}
+${tudoOnline ? '<div class="centro-bold">* Pago no app — não cobrar *</div>' : ''}
+${(p.obs || p.ifoodCodigoColeta || (_ifoodDoc(p) && !parceiro)) ? `<div class="line">${dash}</div><div class="sec">INFORMAÇÕES ADICIONAIS</div>` : ''}
+${p.obs ? `<div class="obs">${e(p.obs)}</div>` : ''}
+${p.ifoodCodigoColeta ? `<div class="cli">Código de coleta: ${e(p.ifoodCodigoColeta)}</div>` : ''}
+${_ifoodDoc(p) && !parceiro ? `<div class="cli">Incluir CPF/CNPJ na nota fiscal:</div><div class="cli">${e(_ifoodDoc(p))}</div>` : ''}
+${entregaHtml}
+<div class="line">${dash}</div>
+<div class="rodape">Impresso por: Gestão Joey</div>
+</body></html>`;
+}
+
+// ── Plataforma de Negociação (HSD) — o cliente pediu algo; a equipe responde antes do prazo ─────────
+const _IFOOD_NEG_ACAO = { CANCELLATION: 'cancelar o pedido', PARTIAL_CANCELLATION: 'cancelar parte do pedido',
+  PROPOSED_AMOUNT_REFUND: 'reembolso', PROPOSED_ADDITIONAL_TIME: 'mais tempo' };
+const _IFOOD_NEG_TIPO = { PREPARATION_TIME: 'durante o preparo', DELAY: 'por atraso', AFTER_DELIVERY: 'depois da entrega',
+  AFTER_DELIVERY_PARTIALLY: 'depois da entrega (parcial)' };
+const _IFOOD_NEG_TIMEOUT = { ACCEPT_CANCELLATION: 'o iFood CANCELA o pedido', REJECT_CANCELLATION: 'o iFood recusa o pedido do cliente', VOID: 'nada acontece' };
+const _IFOOD_NEG_MOTIVO = {
+  HIGH_STORE_DEMAND: 'Loja com alta demanda', UNKNOWN_ISSUE: 'Outro problema', CUSTOMER_SATISFACTION: 'Satisfação do cliente',
+  INVENTORY_CHECK: 'Verificação de estoque', SYSTEM_ISSUE: 'Problema no sistema', WRONG_ORDER: 'Pedido incorreto',
+  PRODUCT_QUALITY: 'Qualidade do produto', LATE_DELIVERY: 'Entrega atrasada', CUSTOMER_REQUEST: 'Pedido do cliente',
+  PREPARATION_IN_PROGRESS: 'Pedido já em preparo', STORE_SYSTEM_ISSUES: 'Problema no sistema da loja',
+  STORE_INTERNAL_DIFFICULTIES: 'Dificuldades internas da loja', LACK_OF_DRIVERS: 'Falta de entregadores', OTHER_REASONS: 'Outros motivos',
+};
+const _IFOOD_NEG_RECUSA = ['PREPARATION_IN_PROGRESS', 'INVENTORY_CHECK', 'PRODUCT_QUALITY', 'WRONG_ORDER', 'LATE_DELIVERY',
+  'HIGH_STORE_DEMAND', 'SYSTEM_ISSUE', 'CUSTOMER_REQUEST', 'CUSTOMER_SATISFACTION', 'UNKNOWN_ISSUE'];
+const _ifoodNegTitulo = (n) => `Cliente pediu ${_IFOOD_NEG_ACAO[n.acao] || n.acao || '?'} ${_IFOOD_NEG_TIPO[n.tipo] || ''}`.trim();
+function _ifoodNegStatus(n) {
+  const st = { PENDENTE: 'aguardando sua resposta', RESPONDIDA_ACEITE: 'você aceitou', RESPONDIDA_RECUSA: 'você recusou',
+    ACCEPTED: 'aceita', REJECTED: 'recusada', EXPIRED: 'prazo vencido', ALTERNATIVE_REPLIED: 'contraproposta respondida' };
+  return st[n.status] || n.status || '';
+}
+let _ifoodNegAberta = null;   // id do pedido no modal
+
+// Faixa no topo do Kanban: negociação pendente de QUALQUER pedido carregado (inclusive finalizado/arquivado —
+// "depois da entrega" chega com o card já fora do quadro).
+function _ifoodNegRender() {
+  const board = document.getElementById('kanbanBoard');
+  if (!board) return;
+  let el = document.getElementById('ifoodNegFaixa');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ifoodNegFaixa';
+    board.parentNode.insertBefore(el, board);
+  }
+  const lista = (pedidos || []).filter(_ifoodNegPendente);
+  el.innerHTML = lista.map(p => {
+    const n = p.ifoodNegociacao;
+    return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.5);border-radius:10px;padding:10px 14px;margin:0 0 10px">
+      <span style="font-size:13px;color:#f59e0b;font-weight:700">⚖️ iFood · Pedido ${_esc(p.id)}${p.ifoodDisplayId ? ' (#' + _esc(p.ifoodDisplayId) + ')' : ''}: ${_esc(_ifoodNegTitulo(n))}</span>
+      ${n.mensagem ? `<span style="font-size:12px;color:var(--text2)">“${_esc(n.mensagem)}”</span>` : ''}
+      <span style="font-size:12px;color:var(--text2)">responda até <b style="color:var(--text)">${_esc(_ifoodHora(n.expiraEm))}</b> · se não responder, ${_esc(_IFOOD_NEG_TIMEOUT[n.seNaoResponder] || n.seNaoResponder || '—')}</span>
+      <button onclick="abrirNegociacaoIfood('${_esc(p.id)}')" style="margin-left:auto;background:#f59e0b;color:#1a1a1a;border:none;border-radius:8px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer">Responder</button>
+    </div>`;
+  }).join('');
+}
+
+function abrirNegociacaoIfood(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p || !p.ifoodNegociacao) return;
+  const n = p.ifoodNegociacao;
+  _ifoodNegAberta = id;
+  const opt = (c) => `<option value="${_esc(c)}">${_esc(_IFOOD_NEG_MOTIVO[c] || c)}</option>`;
+  const aceites = n.motivosAceite || [];
+  document.getElementById('ifoodNegTitulo').textContent = `Pedido ${p.id}${p.ifoodDisplayId ? ' · iFood #' + p.ifoodDisplayId : ''}`;
+  document.getElementById('ifoodNegCorpo').innerHTML = `
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">${_esc(_ifoodNegTitulo(n))}</div>
+    ${n.mensagem ? `<div style="font-size:13px;color:var(--text2);margin-bottom:6px">Cliente: “${_esc(n.mensagem)}”</div>` : ''}
+    ${(n.itens || []).length ? `<div style="font-size:12px;color:var(--text2);margin-bottom:6px">Itens: ${n.itens.map(i => `${_esc(i.qtd)}× ${i.valor != null ? _brlIf(i.valor) : ''} ${_esc(i.motivo || '')}`).join(' · ')}</div>` : ''}
+    ${(n.alternativas || []).length ? `<div style="font-size:12px;color:var(--text2);margin-bottom:6px">O iFood também aceita contraproposta (${n.alternativas.map(a => _esc(a.tipo === 'REFUND' && a.valorMax != null ? 'reembolso até ' + _brlIf(a.valorMax) : a.tipo)).join(', ')}) — responda pelo Portal do Parceiro se quiser propor.</div>` : ''}
+    ${n.evidencias ? `<div style="font-size:12px;color:var(--text2);margin-bottom:6px">📷 ${n.evidencias} foto(s) do cliente no Portal do Parceiro.</div>` : ''}
+    <div style="font-size:12px;color:#f59e0b;margin-bottom:12px">Prazo: ${_esc(_ifoodHora(n.expiraEm))} · se não responder, ${_esc(_IFOOD_NEG_TIMEOUT[n.seNaoResponder] || n.seNaoResponder || '—')}.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${aceites.length ? `<select id="ifoodNegMotivoAceite" class="fi" style="padding:7px">${aceites.map(opt).join('')}</select>` : '<div style="font-size:11px;color:var(--text3)">Sem motivo exigido.</div>'}
+        <button onclick="responderNegociacaoIfood('aceitar')" style="padding:9px;border-radius:8px;border:none;background:#e74c3c;color:#fff;font-weight:700;cursor:pointer">Aceitar o pedido do cliente</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <select id="ifoodNegMotivoRecusa" class="fi" style="padding:7px">${_IFOOD_NEG_RECUSA.map(opt).join('')}</select>
+        <button onclick="responderNegociacaoIfood('recusar')" style="padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-weight:700;cursor:pointer">Recusar</button>
+      </div>
+    </div>`;
+  document.getElementById('ifoodNegErro').textContent = '';
+  document.getElementById('ifoodNegModal').classList.add('show');
+}
+function fecharNegociacaoIfood() { document.getElementById('ifoodNegModal').classList.remove('show'); _ifoodNegAberta = null; }
+async function responderNegociacaoIfood(decisao) {
+  const p = pedidos.find(x => x.id === _ifoodNegAberta);
+  if (!p) return;
+  const sel = document.getElementById(decisao === 'aceitar' ? 'ifoodNegMotivoAceite' : 'ifoodNegMotivoRecusa');
+  const motivo = sel ? sel.value : null;
+  const err = document.getElementById('ifoodNegErro');
+  err.textContent = 'Enviando ao iFood…';
+  try {
+    await _ifoodChamar(p, decisao === 'aceitar' ? 'negociacao-aceitar' : 'negociacao-recusar', { corpo: { motivo } });
+    notify(`✅ Resposta enviada ao iFood (pedido ${p.id}: ${decisao === 'aceitar' ? 'aceitou' : 'recusou'})`);
+    fecharNegociacaoIfood();
+  } catch (e) {
+    err.textContent = '❌ ' + e.message;
+  }
+}
+
+// Pedido do iFood CANCELADO fica no quadro (em "Em análise", com o motivo) até a equipe dar ciência —
+// cancelamento do cliente/iFood não pode sumir em silêncio de quem está preparando.
+function _ifoodCanceladosNoQuadro() {
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  return (pedidos || []).filter(p => _ehIfood(p) && p.status === 'cancelado' && p.data === hoje && !p.ifoodCancelamentoVisto && _passaFiltroAtivo(p));
+}
+async function ifoodCancelamentoCiente(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (p) { p.ifoodCancelamentoVisto = true; renderKanban(); }
+  try { await db.collection(`clientes/${slug}/pedidos`).doc(id).update({ ifoodCancelamentoVisto: true }); }
+  catch (e) { notify('Não consegui salvar: ' + e.message, 'error'); }
+}
+
 // Selos do card de pedido do iFood (texto vindo do iFood passa por _esc).
 function _ifoodBadgesHtml(p) {
   if (!_ehIfood(p)) return '';
@@ -4502,6 +4824,20 @@ function _ifoodBadgesHtml(p) {
   if (p.status !== 'cancelado' && p.ifoodCancelamentoSolicitado) linhas.push(aviso('#f59e0b', '⏳ Cancelamento pedido ao iFood — aguardando resposta'));
   if (p.status !== 'cancelado' && p.ifoodCancelamentoFalhou) linhas.push(aviso('#ef4444', '⚠ iFood recusou o cancelamento: ' + _esc(p.ifoodCancelamentoFalhou.motivo || '')));
   if (p.status === 'novo' && p.ifoodAutoAceiteFalhou) linhas.push(aviso('#ef4444', '⚠ Auto-aceite no iFood falhou — confirme na mão: ' + _esc(p.ifoodAutoAceiteFalhou.mensagem || '')));
+  if (p.status === 'cancelado') linhas.push(aviso('#ef4444', '❌ <b>CANCELADO</b> — ' + _esc(_ifoodCancelTxt(p))));
+  if (_ifoodNegPendente(p)) linhas.push(`<div onclick="event.stopPropagation();abrirNegociacaoIfood('${_esc(p.id)}')" style="cursor:pointer;font-size:11px;color:#f59e0b;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:5px 7px;margin:0 0 6px;line-height:1.35">⚖️ ${_esc(_ifoodNegTitulo(p.ifoodNegociacao))} — responder até ${_esc(_ifoodHora(p.ifoodNegociacao.expiraEm))} ›</div>`);
+  const ag = _ifoodAgendado(p);
+  if (ag) linhas.push(aviso('#a78bfa', '📅 <b>Agendado</b>: ' + _esc(ag)));
+  else if (p.ifoodTipo === 'TAKEOUT' && _ifoodPrevisto(p)) linhas.push(aviso('var(--text2)', '🏃 Retirada às ' + _esc(_ifoodHora(_ifoodPrevisto(p)))));
+  _ifoodPagamentos(p).forEach(m => linhas.push(aviso(m.online ? '#34d399' : '#fbbf24', m.online
+    ? `✅ Pago online · ${_esc(m.txt)}`
+    : `💰 Cobrar ${_brlIf(m.valor)} · ${_esc(m.txt)}${m.troco ? ` · troco p/ ${_brlIf(m.troco.para)} (levar ${_brlIf(m.troco.levar)})` : ''}`)));
+  const cup = _ifoodCupons(p);
+  if (cup.length) linhas.push(aviso('#34d399', '🎟️ Cupom: ' + cup.map(c => `${_esc(c.quem)} ${_brlIf(c.valor)}`).join(' · ')));
+  if (_ifoodDoc(p)) linhas.push(aviso('var(--text2)', '🧾 CPF/CNPJ na nota: ' + _esc(_ifoodDoc(p))));
+  if (p.ifoodCodigoColeta) linhas.push(aviso('var(--text2)', '🔐 Código de coleta: <b>' + _esc(p.ifoodCodigoColeta) + '</b>'));
+  if (p.obs) linhas.push(aviso('var(--orange)', '📝 ' + _esc(p.obs)));
+  if ((p.itens || []).some(i => i.obs)) linhas.push(aviso('var(--orange)', '📝 Itens: ' + p.itens.filter(i => i.obs).map(i => `${_esc(i.nome)}: ${_esc(i.obs)}`).join(' · ')));
   return linhas.join('');
 }
 
@@ -4546,6 +4882,7 @@ function _horaPrevista(p) {
 }
 
 function gerarHtmlComanda(p) {
+  if (_ehIfood(p)) return gerarHtmlComandaIfood(p);
   const now  = new Date();
   const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
@@ -4870,6 +5207,7 @@ function imprimirComandaMesa(comanda, mesaNome) {
 
 // Template: comanda de produção do kanban (delivery/retirada/local)
 function gerarHtmlPedidoProducao(p) {
+  if (_ehIfood(p)) return gerarHtmlComandaIfood(p);
   const now  = new Date();
   const data = p.data || now.toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' });
   const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
@@ -5450,7 +5788,7 @@ function openOrderModal(id) {
     <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val"><span class="chip ${st.cls}">${st.label}</span></span></div>
     <div class="detail-row"><span class="detail-key">Data / Hora</span><span class="detail-val">${p.data} às ${p.hora}</span></div>
     <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${p.cliente?.nome||'—'}</span></div>
-    <div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${p.cliente?.tel||'—'}</span></div>
+    ${_ehIfood(p) ? '' : `<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${p.cliente?.tel||'—'}</span></div>`}
     <div class="detail-row"><span class="detail-key">Entrega</span><span class="detail-val">${endHtml}</span></div>
     ${p.cliente?.ref?`<div class="detail-row"><span class="detail-key">📍 Referência</span><span class="detail-val" style="color:var(--orange);font-weight:600">${p.cliente.ref}</span></div>`:''}
     <div style="margin:12px 0 4px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Itens do pedido</div>
@@ -5460,15 +5798,16 @@ function openOrderModal(id) {
     ${p.desconto && p.desconto.valorAplicado > 0 ? `<div class="detail-row"><span class="detail-key">Desconto</span><span class="detail-val" style="color:#34d399">− R$ ${p.desconto.valorAplicado.toFixed(2).replace('.',',')}${p.desconto.tipo==='percent'?' ('+p.desconto.valor+'%)':''}</span></div>` : ''}
     <div class="detail-row" style="font-size:15px"><span class="detail-key" style="color:var(--text);font-weight:700">Total</span><span class="detail-val" style="color:var(--orange);font-size:16px">R$ ${(p.total||0).toFixed(2).replace('.',',')}</span></div>
     <div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">${p.pagamento?.toUpperCase()||'—'}${(p.pagamento==='pix'&&p.pagamentoManual)?' (na entrega)':''}${p.troco>0?` · troco p/ R$ ${p.troco.toFixed(2).replace('.',',')}`:''}${p.formaPagamentoAnterior?` <span style="color:var(--text3);font-size:11px">(era ${p.formaPagamentoAnterior.toUpperCase()})</span>`:''}</span></div>
+    ${_ehIfood(p) ? _ifoodModalHtml(p) : ''}
     <div style="display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap">
       ${p.status==='novo'
         ? (_pixLockState(p).locked
             ? `<button class="btn" style="flex:1;background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;border:1px solid rgba(100,100,100,.2)" disabled>🔒 ${_pixLockState(p).badge}</button>`
             : `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Confirmar → Produção</button>`)
-          + `<button class="btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma de pagamento</button>`
+          + (_ehIfood(p) ? '' : `<button class="btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma de pagamento</button>`)
         : p.status==='producao'
         ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">🚀 Marcar pronto</button>
-           <button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${p.id}')">✏️ Editar pedido</button>`
+           ${_ehIfood(p) ? '' : `<button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${p.id}')">✏️ Editar pedido</button>`}`
         : p.status==='pronto'
         ? ((p.tipo==='mesa'||p.origem==='salao')
             ? `<button class="btn btn-primary" style="flex:1;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3)" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Entregue na mesa</button>`
@@ -5476,7 +5815,8 @@ function openOrderModal(id) {
         : ''}
       ${!['entregue','cancelado'].includes(p.status)?`<button class="btn btn-danger" onclick="cancelarPedido('${p.id}');closeOrderModal()">Cancelar</button>`:''}
       ${_podeRegerarPix(p)?`<button class="btn" style="flex:1 1 100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();regerarPix('${p.id}')">🔄 Gerar novo PIX</button>`:''}
-      ${['entregue','cancelado','finalizado'].includes(p.status)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${p.id}')">🔁 Pedir novamente</button>`:''}
+      ${['entregue','cancelado','finalizado'].includes(p.status) && !_ehIfood(p)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${p.id}')">🔁 Pedir novamente</button>`:''}
+      ${_ifoodNegPendente(p)?`<button class="btn" style="flex:1 1 100%;background:#f59e0b;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();abrirNegociacaoIfood('${p.id}')">⚖️ Responder negociação do iFood</button>`:''}
     </div>`;
   document.getElementById('orderModal').classList.add('show');
 }
@@ -9314,6 +9654,28 @@ function iniciarListenersFirestore() {
         try { imprimirPedidoProducao(ped); } catch (e) { console.warn('[ifood auto print]', e); }
         notify(`🤖 Pedido iFood ${d.id} auto-aceito → Produção`);
         if (_somAtivo) tocarSomPedido();
+      });
+      // iFood: cancelamento (do cliente/iFood ou confirmado após pedido da loja) e negociação nova.
+      snap.docs.forEach(d => {
+        const ped = d.data();
+        if (ped.origem !== 'ifood') return;
+        const ant = _pedidosAnt.find(x => x.id === d.id);
+        if (!ant) return;
+        if (ped.status === 'cancelado' && ant.status !== 'cancelado') {
+          notify(`❌ iFood cancelou o pedido ${d.id}${ped.ifoodDisplayId ? ' (#' + ped.ifoodDisplayId + ')' : ''}: ${_ifoodCancelTxt(ped)}`, 'error');
+          if (_somAtivo) tocarSomPedido();
+          mostrarNotificacaoPush('❌ Pedido iFood cancelado', `Pedido ${d.id}: ${_ifoodCancelTxt(ped)}`);
+          // A cozinha já tinha a comanda (confirmado) e o cancelamento não partiu daqui: sai o cupom de cancelado.
+          if (ant.status !== 'novo' && !ant.ifoodCancelamentoSolicitado) {
+            try { _dispararHtml(gerarHtmlComandaIfood({ ...ped, id: d.id })); } catch (e) { console.warn('[ifood cancel print]', e); }
+          }
+        }
+        const n = ped.ifoodNegociacao, na = ant.ifoodNegociacao;
+        if (n && n.status === 'PENDENTE' && (!na || na.id !== n.id)) {
+          notify(`⚖️ iFood: ${_ifoodNegTitulo(n)} — pedido ${d.id}, responda até ${_ifoodHora(n.expiraEm)}`, 'warning');
+          if (_somAtivo) tocarSomPedido();
+          mostrarNotificacaoPush('⚖️ Negociação no iFood', `Pedido ${d.id}: ${_ifoodNegTitulo(n)}`);
+        }
       });
       const chegaram = snap.docs.filter(d => !_knownPedidoIds.has(d.id) && d.data().status === 'novo');
       if (chegaram.length > 0) {
