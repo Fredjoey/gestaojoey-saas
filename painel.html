@@ -4517,7 +4517,7 @@ const _IFOOD_METODO = { CASH: 'Dinheiro', CREDIT: 'Crédito', DEBIT: 'Débito', 
   FOOD_VOUCHER: 'Vale-alimentação', GIFT_CARD: 'Gift card', DIGITAL_WALLET: 'Carteira digital', PIX: 'Pix', OTHER: 'Outro' };
 const _IFOOD_PAGADOR = { IFOOD: 'iFood', MERCHANT: 'Loja' };
 const _IFOOD_TIPO = { DELIVERY: 'DELIVERY', TAKEOUT: 'PRA RETIRAR', DINE_IN: 'NA MESA' };
-const _IFOOD_ORIGEM_CANCEL = { CUSTOMER: 'cliente', MERCHANT: 'loja', IFOOD: 'iFood', LOGISTIC: 'logística iFood', PLATFORM: 'iFood' };
+const _IFOOD_ORIGEM_CANCEL = { CUSTOMER: 'cliente', MERCHANT: 'loja', RESTAURANT: 'loja', IFOOD: 'iFood', LOGISTIC: 'logística iFood', PLATFORM: 'iFood', DRIVER: 'entregador' };
 const _brlIf = (v) => 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
 const _ifoodRaw = (p) => (p && p.ifoodRaw) || {};
 
@@ -4565,11 +4565,17 @@ function _ifoodCupons(p) {
   const por = p.ifoodCupomPorPagador || {};
   return Object.keys(por).map(k => ({ quem: _IFOOD_PAGADOR[k] || k, valor: por[k] }));
 }
+// CPF/CNPJ que vai na nota ('' se não há, ou se o documento não é CPF/CNPJ).
 function _ifoodDoc(p) {
   const d = String(p.cpfCnpj || '').replace(/\D/g, '');
   if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-  return p.cpfCnpj ? String(p.cpfCnpj) : '';
+  return '';
+}
+// Outro documento do cliente (ex.: ID estrangeiro do cliente de teste) — informativo, não vai na nota.
+function _ifoodDocOutro(p) {
+  const o = p.ifoodDocumento || (!_ifoodDoc(p) && p.cpfCnpj ? { numero: p.cpfCnpj, tipo: p.cpfCnpjTipo } : null);
+  return o && o.numero ? `${o.numero}${o.tipo ? ' (' + o.tipo + ')' : ''}` : '';
 }
 function _ifoodCancelTxt(p) {
   const c = p.ifoodCancelamento || {};
@@ -4607,6 +4613,7 @@ function _ifoodModalHtml(p) {
   _ifoodCupons(p).forEach(c => out.push(row('🎟️ Cupom pago por ' + _esc(c.quem), '− ' + _brlIf(c.valor), '#34d399')));
   if (p.ifoodTaxasAdicionais) out.push(row('Taxa adicional', _brlIf(p.ifoodTaxasAdicionais)));
   if (_ifoodDoc(p)) out.push(row('🧾 CPF/CNPJ na nota', _esc(_ifoodDoc(p))));
+  else if (_ifoodDocOutro(p)) out.push(row('Documento do cliente', _esc(_ifoodDocOutro(p)) + ' — não é CPF/CNPJ, não vai na nota'));
   if (p.ifoodCodigoColeta) out.push(row('🔐 Código de coleta', _esc(p.ifoodCodigoColeta)));
   if (p.obs) out.push(row('📝 Observações', _esc(p.obs), 'var(--orange)'));
   const n = p.ifoodNegociacao;
@@ -7973,7 +7980,7 @@ function openNfceModal(pedidoId) {
     </div>
     ${!jaEmitida ? `<div style="margin-bottom:16px">
       <label class="fl" style="margin-bottom:6px;display:block">CPF / CNPJ do cliente <span style="color:var(--text3)">(opcional)</span></label>
-      <input class="fi" id="nfceCpf" placeholder="000.000.000-00" style="width:100%" value="${notaExist?.cpfCnpj||''}">
+      <input class="fi" id="nfceCpf" placeholder="000.000.000-00" style="width:100%" value="${notaExist?.cpfCnpj||(_ehIfood(p)?_ifoodDoc(p):'')||''}">
     </div>` : ''}
     <div id="nfceFooter" style="display:flex;gap:8px;margin-top:4px;align-items:center">
       ${footerHtml}
