@@ -91,6 +91,23 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
     contam como cartão.
   - Quem grava `finalizado` + `entregueEm` é o **serviço** (só se o iFood aceitar) — painel e app só refletem o
     snapshot. O CON chega depois e não muda nada. O "Finalizar pedido" segue só arquivando.
+- **Homologação (em produção desde 14/10/2026 ~12:40, commits `6482ad3`…`99be6fa`)** — só pedido iFood:
+  - **Comanda do iFood** (`gerarHtmlComandaIfood`, no modelo da doc "Detalhes do pedido → Impressão"): os DOIS cupons
+    (`gerarHtmlComanda` e `gerarHtmlPedidoProducao`) desviam para ela. Nº iFood, tipo/AGENDADO, 0800 + ID
+    (localizador), pedidos na loja, itens com complementos e obs, "Desconto (IFOOD/LOJA)", formas de pagamento
+    (online × cobrar na entrega, bandeira, TROCO PARA / LEVAR TROCO), obs do pedido, código de coleta, "Incluir
+    CPF/CNPJ na nota fiscal", bloco ENTREGA. Entrega **pelo iFood**: sem endereço e sem CPF (doc: não imprimir
+    para parceiro de entrega). Cancelado sai com "PEDIDO CANCELADO · Motivo".
+  - **Card e modal** (`_ifoodBadgesHtml`, `_ifoodModalHtml`): agendado, "Pago online · bandeira" / "Cobrar … troco
+    p/ … (levar …)", cupom por pagador, CPF/CNPJ (só se for CPF/CNPJ — documento estrangeiro aparece à parte, fora
+    da nota), código de coleta, obs do pedido e dos itens, motivo de cancelamento com quem cancelou. Modal sem
+    "Trocar forma", "Editar" e "Pedir novamente". NFC-e já abre com o CPF/CNPJ do pedido iFood.
+  - **Cancelado pelo iFood não some**: fica no topo de "Em análise" com o motivo até "✓ Ciente"
+    (`ifoodCancelamentoVisto`). Na transição para cancelado: toast + som + push; se já estava em preparo e não foi a
+    loja que pediu, sai o cupom de cancelado.
+  - **Plataforma de Negociação** (HSD): faixa no topo do Kanban (`#ifoodNegFaixa`, vale p/ pedido já finalizado) +
+    modal `#ifoodNegModal` para aceitar (motivos que o iFood mandou) ou recusar (lista da doc). Rotas
+    `negociacao-aceitar`/`negociacao-recusar` do joey-ifood. Contraproposta: só pelo Portal do Parceiro.
 - Domínio novo servindo o painel → entra também no CORS do joey-ifood (`src/cors.js`), além da chave do Maps.
 
 ## Extrato bancário (⑧ da aba Financeiro do gestao-joey.html) — **só o tenant joey**
