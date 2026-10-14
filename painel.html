@@ -3970,7 +3970,7 @@ function orderCardHtml(p) {
       ${_ifoodBadgesHtml(p)}
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
-      ${_timerPillHtml(p)}
+      ${p.status === 'cancelado' ? '' : _timerPillHtml(p)}
       ${p.entrega==='delivery'&&p.cliente?`<div style="font-size:11px;color:var(--text2);margin:-2px 0 8px;line-height:1.35">📍 ${((p.cliente.rua||'')+(p.cliente.numero?', '+p.cliente.numero:''))||'—'}${p.cliente.bairro?' · '+p.cliente.bairro:''}${p.cliente.ref?`<br><span style="color:var(--orange)">Ref: ${p.cliente.ref}</span>`:''}</div>`:''}
       ${p.mesa ? `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--orange);color:#fff;border-radius:6px;padding:4px 10px;margin-bottom:8px;font-size:12px;font-weight:700;letter-spacing:.2px">🍽️ ${p.mesaNome || ('Mesa ' + p.mesa)}</div>` : ''}
       ${pixTarjaHtml(p)}
