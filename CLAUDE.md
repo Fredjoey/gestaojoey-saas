@@ -57,6 +57,26 @@ Uma ressalva enquanto durar: **as outras 7 functions ainda rodam a revisão de j
 embutida naquele bundle. Cada uma passa a usar ADC no primeiro redeploy — é aí que o
 `storage.objectAdmin` entra em jogo, na `nfceXml`/`nfceXmlZip`, que gravam e leem os XMLs.
 
+## Pedidos do iFood: o painel RESPONDE ao iFood (desde a branch `ifood-fase2`, 14/10/2026)
+
+Pedido com `origem:'ifood'` + `ifoodOrderId` é gravado pelo serviço **joey-ifood** (repo `Fredjoey/joey-ifood`,
+Railway, `IFOOD_API` = `https://joey-ifood-production.up.railway.app`). O desenho completo do serviço está no
+CLAUDE.md de lá. No painel (`_ehIfood(p)`):
+
+- **Confirmar → Produção / Marcar pronto / Enviar para entrega** (`avancarStatus` → `_avancarIfood`): chama o
+  serviço (`/confirmar`, `/pronto`, `/despachar`) com o ID token do login. **Só com o iFood aceitando** o card
+  anda (`_aplicarAvanco`, o avanço de sempre); recusa → toast com o erro do iFood e o card FICA. Trava de duplo
+  clique em `_ifoodEmAndamento` (selo "⏳ Enviando ao iFood…"). Entrega do iFood / retirada: o serviço não chama
+  `dispatch` (a doc proíbe) e devolve `semChamada` — o card anda igual.
+- **Cancelar** (`cancelarPedido` → `cancelarIfoodAbrir`): modal próprio `#cancelIfoodModal` com os motivos que o
+  iFood devolve (nunca lista fixa). É assíncrono: o card **não** vira cancelado no clique — ganha o selo
+  "⏳ Cancelamento pedido ao iFood" e muda quando o CAN chega; CARF → selo vermelho com o motivo.
+- **Sem WhatsApp ao cliente** em pedido do iFood (`cliente.tel` é `''`; o telefone do iFood é 0800).
+- **Auto-aceitar**: o do painel PULA pedido do iFood — quem auto-aceita é o serviço (confirma no iFood e põe em
+  produção com `autoAceito`); o painel só imprime a comanda uma vez ao ver o card chegar assim.
+- **Sem eco**: os eventos do iFood mudam o status direto no Firestore; nada disparado por snapshot chama o iFood.
+- Domínio novo servindo o painel → entra também no CORS do joey-ifood (`src/cors.js`), além da chave do Maps.
+
 ## Extrato bancário (⑧ da aba Financeiro do gestao-joey.html) — **só o tenant joey**
 
 Feature **em construção**, travada no slug `joey`: outro tenant não vê a seção, nem o upload, nem a conciliação. **Não altera o cálculo do lucro** — é conferência entre extrato e compras lançadas.

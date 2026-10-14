@@ -1965,6 +1965,23 @@ body.suporte-on #botAlertBanner{top:36px}
   </div>
 </div>
 
+<div class="modal-overlay" id="cancelIfoodModal" onclick="if(event.target===this)cancelarIfoodVoltar()">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">❌ Cancelar no iFood <span id="cancelIfoodPedidoId" style="color:var(--text2);font-weight:600"></span></div>
+      <button class="modal-close" onclick="cancelarIfoodVoltar()">✕</button>
+    </div>
+    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;">Motivo (lista do iFood) *</label>
+    <div id="cancelIfoodMotivos" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto"></div>
+    <div style="font-size:12px;color:var(--text2);margin-top:12px;line-height:1.4">O iFood avisa o cliente. O card só muda para cancelado quando o iFood confirmar.</div>
+    <div id="cancelIfoodErro" style="font-size:13px;color:#ef4444;margin-top:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;">
+      <button onclick="cancelarIfoodVoltar()" style="padding:9px 16px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">Voltar</button>
+      <button id="cancelIfoodBtn" onclick="cancelarIfoodConfirmar()" disabled style="padding:9px 16px;border-radius:8px;border:none;background:#e74c3c;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Pedir cancelamento ao iFood</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cxHistModal" onclick="if(event.target===this)fecharHistoricoCaixa()">
   <div class="modal-box" style="max-width:640px">
     <div class="modal-header">
@@ -3931,6 +3948,7 @@ function orderCardHtml(p) {
       <div class="oc-top"><span style="display:flex;align-items:center;gap:6px"><span class="oc-id">${p.id}</span>${_badgeAuto}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${p.id}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${p.hora}</span></span></div>
       <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
       ${_agendadoBadgeHtml(p)}
+      ${_ifoodBadgesHtml(p)}
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
       ${_timerPillHtml(p)}
@@ -4341,6 +4359,15 @@ function avancarStatus(id) {
   if (!p || !STATUS_NEXT[p.status]) return;
   // Trava de segurança: pedido PIX em "novo" só avança depois do pagamento confirmado (webhook).
   if (_pixLockState(p).locked) { notify('⏳ Pedido aguardando pagamento Pix — só avança após a confirmação.', 'error'); return; }
+  // iFood: primeiro o iFood aceita, DEPOIS o card anda (ver _avancarIfood).
+  if (_ehIfood(p)) { _avancarIfood(p); return; }
+  _aplicarAvanco(p);
+}
+
+// O avanço local de sempre (Firestore + impressão + avisos). Pedido do iFood só chega aqui depois
+// que o iFood aceitou; o WhatsApp ao cliente fica de fora (o telefone do iFood é 0800, não do cliente).
+function _aplicarAvanco(p) {
+  const id = p.id;
   const statusAnterior = p.status;
   const novoStatus = STATUS_NEXT[p.status].next;
   p.status = novoStatus;
@@ -4350,10 +4377,74 @@ function avancarStatus(id) {
   atualizarStatusFb(id, novoStatus);
   notify(`Pedido ${id} → ${STATUS_LABELS[novoStatus].label}`);
   const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
-  if (statusAnterior === 'novo') { imprimirPedidoProducao(p); if (!isMesa) enviarWppConfirmado(p); }
-  if (statusAnterior === 'producao' && novoStatus === 'pronto' && !isMesa && p.entrega === 'retirada') enviarWppProntoRetirada(p);
-  if (statusAnterior === 'pronto' && novoStatus === 'entregue' && !isMesa) enviarWppEntregue(p);
+  const semWpp = isMesa || _ehIfood(p);
+  if (statusAnterior === 'novo') { imprimirPedidoProducao(p); if (!semWpp) enviarWppConfirmado(p); }
+  if (statusAnterior === 'producao' && novoStatus === 'pronto' && !semWpp && p.entrega === 'retirada') enviarWppProntoRetirada(p);
+  if (statusAnterior === 'pronto' && novoStatus === 'entregue' && !semWpp) enviarWppEntregue(p);
   if (novoStatus === 'entregue') salvarNotaFiscalPedido(p);
+}
+
+// ── iFood: o painel RESPONDE ao iFood pelo serviço joey-ifood ────────────────────────────────
+// Confirmar/pronto/despachar/cancelar de pedido origem:'ifood' passam pelo serviço, que chama o
+// iFood com a credencial do app. Só com o iFood aceitando o card anda; recusa → mostra o erro e o
+// card FICA. Os eventos do iFood mudam o status direto no Firestore (o snapshot só reflete) — nada
+// aqui é disparado por snapshot, então não há eco de volta para o iFood.
+const IFOOD_API = 'https://joey-ifood-production.up.railway.app';
+const IFOOD_ACAO_POR_STATUS = { novo: 'confirmar', producao: 'pronto', pronto: 'despachar' };
+const _ifoodEmAndamento = new Set();   // pedido com chamada ao iFood em voo (trava duplo clique)
+function _ehIfood(p) { return !!(p && p.origem === 'ifood' && p.ifoodOrderId); }
+
+async function _ifoodChamar(p, acao, { metodo = 'POST', corpo } = {}) {
+  const u = firebase.auth().currentUser;
+  if (!u) throw new Error('Sessão expirada. Recarregue o painel.');
+  const idToken = await u.getIdToken();
+  let resp;
+  try {
+    resp = await fetch(`${IFOOD_API}/pedidos/${slug}/${encodeURIComponent(p.id)}/${acao}`, {
+      method: metodo,
+      headers: { 'Authorization': 'Bearer ' + idToken, ...(corpo ? { 'Content-Type': 'application/json' } : {}) },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+  } catch (e) {
+    throw new Error('sem conexão com o serviço do iFood — tente de novo');
+  }
+  let j = {};
+  try { j = await resp.json(); } catch (_) {}
+  if (!resp.ok || !j.ok) throw new Error(j.erro || ('erro ' + resp.status + ' no serviço do iFood'));
+  return j;
+}
+
+async function _avancarIfood(p) {
+  if (_ifoodEmAndamento.has(p.id)) return;
+  const acao = IFOOD_ACAO_POR_STATUS[p.status];
+  if (!acao) return;
+  const de = p.status;
+  _ifoodEmAndamento.add(p.id);
+  renderKanban();
+  try {
+    const r = await _ifoodChamar(p, acao);
+    const atual = pedidos.find(x => x.id === p.id) || p;
+    if (atual.status === de) _aplicarAvanco(atual);
+    else if (de === 'novo') imprimirPedidoProducao(atual);   // o evento do iFood chegou antes: imprime igual
+    if (r.semChamada && r.motivo) notify('ℹ️ iFood: ' + r.motivo);
+  } catch (e) {
+    notify(`❌ iFood não aceitou (pedido ${p.id}): ${e.message}`, 'error');
+  } finally {
+    _ifoodEmAndamento.delete(p.id);
+    renderKanban();
+  }
+}
+
+// Selos do card de pedido do iFood (texto vindo do iFood passa por _esc).
+function _ifoodBadgesHtml(p) {
+  if (!_ehIfood(p)) return '';
+  const linhas = [`<div style="font-size:11px;color:#ea1d2c;font-weight:700;margin:2px 0 4px">iFood${p.ifoodDisplayId ? ' #' + _esc(p.ifoodDisplayId) : ''}${p.ifoodEntregaPor === 'IFOOD' ? ' · entrega iFood' : ''}</div>`];
+  const aviso = (cor, txt) => `<div style="font-size:11px;color:${cor};margin:0 0 6px;line-height:1.35">${txt}</div>`;
+  if (_ifoodEmAndamento.has(p.id)) linhas.push(aviso('var(--text2)', '⏳ Enviando ao iFood…'));
+  if (p.status !== 'cancelado' && p.ifoodCancelamentoSolicitado) linhas.push(aviso('#f59e0b', '⏳ Cancelamento pedido ao iFood — aguardando resposta'));
+  if (p.status !== 'cancelado' && p.ifoodCancelamentoFalhou) linhas.push(aviso('#ef4444', '⚠ iFood recusou o cancelamento: ' + _esc(p.ifoodCancelamentoFalhou.motivo || '')));
+  if (p.status === 'novo' && p.ifoodAutoAceiteFalhou) linhas.push(aviso('#ef4444', '⚠ Auto-aceite no iFood falhou — confirme na mão: ' + _esc(p.ifoodAutoAceiteFalhou.mensagem || '')));
+  return linhas.join('');
 }
 
 async function salvarNotaFiscalPedido(p) {
@@ -5080,7 +5171,10 @@ function enviarWppProntoRetirada(p) {
 let _cancelPedidoId = null;
 
 // Abre o modal de cancelamento (em vez de cancelar direto). A lógica real fica em cancelarConfirmar().
+// Pedido do iFood abre o modal próprio, com os motivos do iFood (cancelarIfoodAbrir).
 function cancelarPedido(id) {
+  const _p = pedidos.find(x => x.id === id);
+  if (_ehIfood(_p)) { cancelarIfoodAbrir(_p); return; }
   _cancelPedidoId = id;
   const motivoEl = document.getElementById('cancelMotivo');
   if (motivoEl) motivoEl.value = '';
@@ -5160,6 +5254,65 @@ async function cancelarConfirmar() {
   notify('Pedido cancelado.', 'warning');
   const relPanel = document.getElementById('panel-relatorios');
   if (relPanel && relPanel.style.display !== 'none') renderRelatorioDia();
+}
+
+// ── Cancelar pedido do iFood: motivos vêm do iFood (GET /motivos-cancelamento), nunca lista fixa.
+// O pedido é ASSÍNCRONO: o iFood aceita o pedido de cancelamento e responde depois (CAN = cancelado,
+// CARF = recusou). O card só vira "cancelado" quando o CAN chega — aqui só fica o selo de aguardando.
+let _cancelIfoodId = null;
+let _cancelIfoodEnviando = false;
+async function cancelarIfoodAbrir(p) {
+  _cancelIfoodId = p.id;
+  const lista = document.getElementById('cancelIfoodMotivos');
+  const erro = document.getElementById('cancelIfoodErro');
+  const btn = document.getElementById('cancelIfoodBtn');
+  document.getElementById('cancelIfoodPedidoId').textContent = '#' + p.id + (p.ifoodDisplayId ? ' (iFood #' + p.ifoodDisplayId + ')' : '');
+  erro.textContent = '';
+  btn.disabled = true;
+  lista.innerHTML = '<div style="font-size:13px;color:var(--text2)">⏳ Buscando os motivos no iFood…</div>';
+  document.getElementById('cancelIfoodModal').classList.add('show');
+  try {
+    const r = await _ifoodChamar(p, 'motivos-cancelamento', { metodo: 'GET' });
+    if (_cancelIfoodId !== p.id) return;   // fechou/trocou de pedido enquanto buscava
+    if (!r.podeCancelar) {
+      lista.innerHTML = '<div style="font-size:13px;color:#ef4444">O iFood não permite cancelar este pedido agora.</div>';
+      return;
+    }
+    lista.innerHTML = r.motivos.map(m =>
+      `<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px">
+        <input type="radio" name="cancelIfoodMotivo" value="${_esc(m.codigo)}" style="width:auto;margin-top:2px;accent-color:#ea1d2c" onchange="document.getElementById('cancelIfoodBtn').disabled=false">
+        <span>${_esc(m.descricao || m.codigo)}</span></label>`).join('');
+  } catch (e) {
+    if (_cancelIfoodId === p.id) lista.innerHTML = `<div style="font-size:13px;color:#ef4444">Não consegui buscar os motivos: ${_esc(e.message)}</div>`;
+  }
+}
+
+function cancelarIfoodVoltar() {
+  _cancelIfoodId = null;
+  document.getElementById('cancelIfoodModal').classList.remove('show');
+}
+
+async function cancelarIfoodConfirmar() {
+  const p = pedidos.find(x => x.id === _cancelIfoodId);
+  const sel = document.querySelector('input[name="cancelIfoodMotivo"]:checked');
+  if (!p || !sel || _cancelIfoodEnviando) return;
+  const btn = document.getElementById('cancelIfoodBtn');
+  const erro = document.getElementById('cancelIfoodErro');
+  _cancelIfoodEnviando = true;
+  btn.disabled = true;
+  btn.textContent = 'Enviando ao iFood…';
+  erro.textContent = '';
+  try {
+    await _ifoodChamar(p, 'cancelar', { corpo: { codigoMotivo: sel.value } });
+    cancelarIfoodVoltar();
+    notify(`⏳ Cancelamento do pedido ${p.id} pedido ao iFood — o card muda quando o iFood confirmar.`, 'warning');
+  } catch (e) {
+    erro.textContent = 'iFood não aceitou: ' + e.message;   // o modal fica aberto e o card não muda
+    btn.disabled = false;
+  } finally {
+    _cancelIfoodEnviando = false;
+    btn.textContent = 'Pedir cancelamento ao iFood';
+  }
 }
 
 function finalizarPedido(id) {
@@ -9092,6 +9245,18 @@ function iniciarListenersFirestore() {
           if (_somAtivo) tocarSomPedido();
         }
       });
+      // iFood auto-aceito pelo serviço (confirmou no iFood e pôs em produção): imprime a comanda uma vez,
+      // como o auto-aceite daqui faz — seja o card visto antes em "novo", seja já chegando em produção.
+      snap.docs.forEach(d => {
+        const ped = d.data();
+        if (ped.origem !== 'ifood' || !ped.autoAceito || ped.status !== 'producao' || _autoProcessados.has(d.id)) return;
+        const ant = _pedidosAnt.find(x => x.id === d.id);
+        if (_knownPedidoIds.has(d.id) && !(ant && ant.status === 'novo')) return;   // já estava em produção antes
+        _autoProcessados.add(d.id);
+        try { imprimirPedidoProducao(ped); } catch (e) { console.warn('[ifood auto print]', e); }
+        notify(`🤖 Pedido iFood ${d.id} auto-aceito → Produção`);
+        if (_somAtivo) tocarSomPedido();
+      });
       const chegaram = snap.docs.filter(d => !_knownPedidoIds.has(d.id) && d.data().status === 'novo');
       if (chegaram.length > 0) {
         const qtd = chegaram.length;
@@ -9104,6 +9269,7 @@ function iniciarListenersFirestore() {
           chegaram.forEach(d => {
             const ped = d.data();
             if (ped.agendado) return;   // pedido AGENDADO não é auto-aceito (é p/ depois) — staff confirma na hora
+            if (ped.origem === 'ifood') return;   // iFood: quem auto-aceita é o serviço joey-ifood (confirma no iFood)
             if (ped.pagamento === 'pix') _autoMarcarAguardandoPix(ped);
             else                        _autoAceitarDinheiro(ped);
           });
