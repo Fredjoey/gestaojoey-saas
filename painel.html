@@ -299,6 +299,16 @@ textarea.fi{resize:vertical;min-height:60px}
 .ifl-tab{width:100%;border-collapse:collapse;font-size:12px}
 .ifl-tab td,.ifl-tab th{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left}
 .ifl-dif{color:#f59e0b;font-weight:700}
+/* iFood: cardápio (módulo Catalog) — só aparece com cardápio iFood ligado (config/ifoodCatalogo.ligado) */
+.ifc-acao{font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap}
+.ifc-criar{background:rgba(52,211,153,.15);color:#34d399}
+.ifc-ligar{background:rgba(59,130,246,.15);color:#60a5fa}
+.ifc-atualizar{background:rgba(245,158,11,.15);color:#f59e0b}
+.ifc-igual{background:var(--bg4);color:var(--text3)}
+.ifc-recriar{background:rgba(168,85,247,.15);color:#c084fc}
+.ifc-erro{background:rgba(239,68,68,.15);color:#ef4444}
+.ifc-n{white-space:nowrap}
+.ifc-preco-if{font-size:10.5px;color:#ea1d2c;font-weight:700;margin-top:2px;white-space:nowrap}
 .bot-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
 .bot-toggle{padding:5px 14px;border-radius:999px;border:1px solid;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .2s;}
 .auto-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
@@ -771,6 +781,9 @@ body.suporte-on #botAlertBanner{top:36px}
     <div class="bot-item" id="ifoodLojaItem" style="display:none;cursor:pointer" onclick="abrirIfoodLoja()" title="Loja no iFood: status, pausa e horários">
       <div><div class="tempo-label">Loja no iFood</div><div id="ifoodLojaLabel" class="ifl-sel">—</div></div>
       <button class="ifl-btn" id="ifoodLojaBtn" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();ifoodLojaBotaoTopo()">⏸ Pausar</button>
+    </div>
+    <div class="bot-item" id="ifoodCardItem" style="display:none;cursor:pointer" onclick="abrirIfoodCardapio()" title="Cardápio no iFood: regra de preço, envio e sincronização">
+      <div><div class="tempo-label">Cardápio no iFood</div><div id="ifoodCardLabel" class="ifl-sel">—</div></div>
     </div>
     <div class="bot-item">
       <div><div id="autoAceitarLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🤖 Auto-aceitar: OFF</div></div>
@@ -1292,6 +1305,27 @@ body.suporte-on #botAlertBanner{top:36px}
             <button class="btn btn-primary" onclick="adicionarMotoboy()">+ Adicionar</button>
           </div>
           <div id="motoboysList"></div>
+        </div>
+
+        <div class="card-box" id="secaoIfoodCardapio" style="display:none">
+          <div class="section-lbl" style="margin-top:0">🛵 iFood — cardápio</div>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:10px">O cardápio do Gestão Joey vai para o iFood com o acréscimo abaixo, em itens <b>e</b> adicionais. Depois do primeiro envio, mudar preço, item, adicional ou esgotado aqui (ou no Sistema Joey) atualiza o iFood sozinho.</p>
+          <div style="display:grid;grid-template-columns:130px minmax(0,220px);gap:8px;align-items:center">
+            <label for="ifcPct" style="font-size:12px;color:var(--text2)">Acréscimo (%)</label>
+            <input class="fi" id="ifcPct" type="number" min="0" max="200" step="0.5" inputmode="decimal" oninput="_ifcRegraSujo=true;_ifcRegraExemplo()">
+            <label for="ifcArr" style="font-size:12px;color:var(--text2)">Arredondar</label>
+            <select class="fi" id="ifcArr" onchange="_ifcRegraSujo=true;_ifcRegraExemplo()">
+              <option value="90">para cima no ,90</option>
+              <option value="99">para cima no ,99</option>
+              <option value="nenhum">sem arredondar</option>
+            </select>
+          </div>
+          <div id="ifcExemplo" style="font-size:12px;color:var(--text2);margin:8px 0"></div>
+          <div id="ifcRegraConfirma"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            <button class="btn btn-primary" onclick="salvarRegraIfood()">Salvar regra</button>
+            <button class="ifl-btn" onclick="abrirIfoodCardapio()">🛵 Cardápio no iFood (envio, prévia, log)…</button>
+          </div>
         </div>
 
         <div class="card-box">
@@ -2005,6 +2039,17 @@ body.suporte-on #botAlertBanner{top:36px}
     </div>
     <div id="ifoodLojaCorpo"></div>
     <div id="ifoodLojaMsg" style="font-size:13px;margin-top:10px;min-height:18px"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ifoodCardModal" onclick="if(event.target===this)fecharIfoodCardapio()">
+  <div class="modal-box" style="max-width:760px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <div class="modal-title">🛵 Cardápio no iFood</div>
+      <button class="modal-close" onclick="fecharIfoodCardapio()">✕</button>
+    </div>
+    <div id="ifoodCardMsg" style="font-size:13px;margin-bottom:10px;min-height:18px"></div>
+    <div id="ifoodCardCorpo"></div>
   </div>
 </div>
 
@@ -6060,10 +6105,7 @@ function renderCardapioEditor() {
             <span class="prod-cat-tag" style="margin-top:4px">${r.categoria||'—'}</span>
             ${fotoUrl ? `<br><span onclick="event.stopPropagation();_removerFotoProduto('${r.id}')" style="font-size:10px;color:#ff6b6b;cursor:pointer;margin-top:2px;display:inline-block">✕ remover foto</span>` : ''}
           </div>
-          <div style="text-align:right">
-            <div style="font-size:9px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">Preço</div>
-            <div style="font-weight:700;color:var(--orange)">R$ ${(r.price||0).toFixed(2).replace('.',',')}</div>
-          </div>
+          ${_ifcCelulaPreco(r)}
           <div style="text-align:right">
             <div style="font-size:9px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">Margem</div>
             <div style="color:${corMarg};font-weight:600">R$ ${margem.toFixed(2).replace('.',',')}</div>
@@ -6164,7 +6206,7 @@ function renderAdicionaisEditor() {
           <div style="font-size:13.5px;font-weight:600;${disponivel ? '' : 'color:var(--text2);text-decoration:line-through;text-decoration-color:#e74c3c;'}">${_esc(a.nome || '(sem nome)')}${tag}</div>
           <div style="font-size:11.5px;color:var(--text3);margin-top:2px">máx ${Number(a.qtdMax) || 1} por pedido</div>
         </div>
-        <div style="font-size:13px;text-align:right;white-space:nowrap">${preco}</div>
+        ${_ifcCelulaPrecoAdic(a, preco)}
         <div style="font-size:12.5px;text-align:right;white-space:nowrap;min-width:86px">${usosTxt}</div>
         <label class="toggle-switch" title="${disponivel ? 'Tirar do cardápio (esgotado)' : 'Voltar ao cardápio'} em ${usos} lanche(s)">
           <input type="checkbox" ${disponivel ? 'checked' : ''} onchange="toggleAdicionalAtivo('${idEsc}', this.checked)">
@@ -6662,6 +6704,7 @@ function carregarConfig() {
   renderHorariosDias();
   renderBairros();
   if (slug === 'joey') { const secMb = document.getElementById('secaoMotoboys'); if (secMb) secMb.style.display = ''; carregarMotoboys(); } // Motoboys: só joey (Fase 1 entrega)
+  _ifcPreencherRegra();   // Configurações → iFood (regra de preço do cardápio no iFood)
   carregarHistoricoBackup();
   // Posição do estabelecimento (Gestão de Entrega): pré-preenche o endereço + inicia o mapa Leaflet.
   { const _ee = document.getElementById('cfgEstabEnd'); if (_ee && !_ee.value) _ee.value = config.estabelecimentoEndereco || config.end || ''; }
@@ -9836,11 +9879,446 @@ function ifoodLojaEnviarHorarios() {
   _iflComando({ acao: 'horarios', turnos: p.turnos });
 }
 
+// =================== iFood: CARDÁPIO (módulo Catalog) ===================
+// O serviço joey-ifood replica o cardápio do Gestão no iFood com a regra de preço do tenant (config/ifoodPreco:
+// { percentual, arredondamento } — padrão +20%, para cima no ,90, em itens E adicionais) e grava o estado em
+// config/ifoodCatalogo (vinculado, log, erro, prévia, envio, trava). O painel só PEDE, por config/ifoodCatalogoComando
+// ({ id, acao: previa|enviar|apagar|aplicarMassa|sincronizar }). Depois do 1º envio é automático: mudar preço, item,
+// adicional ou esgotado no Gestão (aqui ou no Sistema Joey) vai ao iFood sozinho. Sem cardápio iFood ligado no
+// serviço (doc ausente ou ligado:false) nada disto aparece.
+const _IFC_ACAO = {
+  criar: ['ifc-criar', 'Criar'], ligar: ['ifc-ligar', 'Ligar ao existente'], atualizar: ['ifc-atualizar', 'Atualizar'],
+  igual: ['ifc-igual', 'Igual'], recriar: ['ifc-recriar', 'Criar de novo'], conflito: ['ifc-erro', 'Conflito — não vai'],
+  erro: ['ifc-erro', 'Erro — não vai'],
+};
+const _IFC_ORIGEM = { auto: 'automático', envio: 'envio', painel: 'pelo painel' };
+let _ifoodCard = null, _ifcUnsub = null, _ifcRegraDoc = null, _ifcCmd = null, _ifcConfirmar = null, _ifcErroVisto,
+  _ifcPreviaId = null, _ifcPrecoEdit = null, _ifcPrecoVal = '', _ifcRegraSujo = false, _ifcChaveCardapio = '';
+
+const _ifcBRL = (v) => v == null ? '—' : 'R$ ' + Number(v).toFixed(2).replace('.', ',');
+const _ifcHora = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+function _ifcLigado() { return !!(_ifoodCard && _ifoodCard.ligado === true); }
+function _ifcVinculado() { return _ifcLigado() && _ifoodCard.vinculado === true; }
+function _ifcRegraValida(r) {
+  const pct = Number(r && r.percentual);
+  const arr = r && r.arredondamento != null ? String(r.arredondamento) : '90';
+  if (!isFinite(pct) || pct < 0 || pct > 200 || !['90', '99', 'nenhum'].includes(arr)) return { percentual: 20, arredondamento: '90' };
+  return { percentual: Math.round(pct * 100) / 100, arredondamento: arr };
+}
+function _ifcRegra() { return _ifcRegraValida(_ifcRegraDoc || (_ifoodCard && _ifoodCard.regra)); }
+// A MESMA conta do serviço (joey-ifood/src/catalogoRegras.js precoIfood): centavos inteiros; para cima no ,90/,99.
+function _ifcPreco(preco, regra) {
+  const c = Math.round(Number(preco) * 100);
+  if (!(c > 0)) return 0;
+  const r = _ifcRegraValida(regra);
+  const base = Math.round(c * (100 + r.percentual) / 100);
+  if (r.arredondamento === 'nenhum') return base / 100;
+  const alvo = r.arredondamento === '99' ? 99 : 90;
+  let n = Math.floor(base / 100) * 100 + alvo;
+  if (n < base) n += 100;
+  return n / 100;
+}
+function _ifcTextoRegra(r) {
+  const x = _ifcRegraValida(r);
+  return '+' + String(x.percentual).replace('.', ',') + '% · ' + (x.arredondamento === 'nenhum' ? 'sem arredondar' : 'arredondado para cima no ,' + x.arredondamento);
+}
+// Vai para o iFood? (a régua do serviço: está no cardápio do delivery = ativo e não "só no QR da mesa", e o dado é
+// aceito pelo iFood — nome até 100 caracteres e preço > 0; o que não passa aparece em "Não enviados" no modal)
+function _ifcVaiProIfood(id) {
+  const st = catalogoStatusMap[id];
+  if (!(st && st.ativo === true && st.soMesa !== true)) return false;
+  const r = recipes.find(x => String(x.id) === String(id));
+  const nome = String((r && (r.name || r.nome)) || '').trim();
+  return !!nome && nome.length <= 100 && Number(r.price) > 0;
+}
+
+function _ifoodCardOuvir() {
+  if (_ifcUnsub || !slug) return;
+  _ifcUnsub = db.doc(`clientes/${slug}/config/ifoodCatalogo`).onSnapshot(snap => {
+    _ifoodCard = snap.exists ? snap.data() : null;
+    _ifcResultados();
+    _ifoodCardRender();
+  }, e => console.warn('[iFood cardápio] listener:', e.message));
+  db.doc(`clientes/${slug}/config/ifoodPreco`).onSnapshot(snap => {
+    _ifcRegraDoc = snap.exists ? snap.data() : null;
+    _ifcPreencherRegra();
+    _ifcRedesenharCardapio(true);
+  }, e => console.warn('[iFood cardápio] regra:', e.message));
+}
+
+// Resposta do serviço ao NOSSO comando (mesmo id) e aviso de falha nova de sincronização (toast).
+function _ifcResultados() {
+  const C = _ifoodCard || {};
+  const c = C.comando;
+  if (c && _ifcCmd && c.id === _ifcCmd.id) {
+    const acao = _ifcCmd.acao;
+    _ifcCmd = null;
+    if (acao === 'enviar' && c.ok) _ifcPreviaId = null;
+    if (acao !== 'previa' || !c.ok) notify('iFood (cardápio): ' + c.mensagem, c.ok ? 'success' : 'error');
+    _ifcMsg(c.mensagem, !!c.ok);
+  }
+  const e = C.erro;
+  const eMs = e && e.em ? Date.parse(e.em) : 0;
+  if (_ifcErroVisto === undefined) { _ifcErroVisto = eMs; return; } // 1ª leitura: só marca
+  if (eMs && eMs > _ifcErroVisto) { _ifcErroVisto = eMs; notify('⚠️ iFood (cardápio): ' + e.mensagem, 'error'); }
+}
+function _ifcMsg(txt, ok) {
+  const el = document.getElementById('ifoodCardMsg');
+  if (!el) return;
+  el.textContent = txt || '';
+  el.style.color = ok === false ? '#ef4444' : (ok ? '#34d399' : 'var(--text2)');
+}
+const _ifcModalAberto = () => document.getElementById('ifoodCardModal').style.display === 'flex';
+
+// O preço do iFood aparece embaixo do preço no Gestor de cardápio: redesenha só quando vínculo/regra mudam.
+function _ifcRedesenharCardapio(forcar) {
+  const chave = JSON.stringify([_ifcVinculado(), _ifcRegra(), (_ifoodCard && _ifoodCard.noIfood && _ifoodCard.noIfood.em) || '']);
+  if (!forcar && chave === _ifcChaveCardapio) return;
+  _ifcChaveCardapio = chave;
+  if (document.getElementById('panel-cardapio').style.display !== 'none') renderCardapioPainel();
+}
+
+function _ifoodCardRender() {
+  const lig = _ifcLigado();
+  const item = document.getElementById('ifoodCardItem');
+  const sec = document.getElementById('secaoIfoodCardapio');
+  if (item) item.style.display = lig ? '' : 'none';
+  if (sec) sec.style.display = lig ? '' : 'none';
+  _ifcRedesenharCardapio(false);
+  if (!lig) { if (_ifcModalAberto()) fecharIfoodCardapio(); return; }
+  const C = _ifoodCard;
+  let label;
+  if (!C.vinculado) label = '⏳ ainda não enviado';
+  else if (C.massa) label = '🔒 confirme a mudança';
+  else if (C.erro) label = C.erro.tipo === 'diferente' ? '⚠️ diferente no iFood' : C.erro.tipo === 'sumiu' ? '⚠️ item sumiu do iFood' : '⚠️ falha ao sincronizar';
+  else {
+    const u = (C.log || [])[0];
+    label = '✅ sincronizado' + (u ? ' ' + new Date(u.em).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '');
+  }
+  const lbl = document.getElementById('ifoodCardLabel');
+  if (lbl) {
+    lbl.textContent = label;
+    lbl.style.color = C.vinculado && (C.erro || C.massa) ? '#ef4444' : '';
+    lbl.title = C.erro ? C.erro.mensagem : (C.textoRegra || '');
+  }
+  if (_ifcModalAberto()) _ifoodCardModalRender();
+}
+
+function abrirIfoodCardapio() {
+  if (!_ifcLigado()) return;
+  _ifcConfirmar = null;
+  _ifcMsg('');
+  document.getElementById('ifoodCardModal').style.display = 'flex';
+  _ifoodCardModalRender();
+}
+function fecharIfoodCardapio() { document.getElementById('ifoodCardModal').style.display = 'none'; _ifcConfirmar = null; }
+
+function _ifoodCardModalRender() {
+  const C = _ifoodCard || {};
+  const pend = !!_ifcCmd;
+  const dis = pend ? 'disabled' : '';
+  let h = '<div class="ifl-box">';
+  h += '<div style="font-size:16px;font-weight:800">' + (C.vinculado ? '✅ Cardápio ligado ao iFood' : '⏳ Cardápio ainda não enviado ao iFood') + '</div>';
+  h += '<div style="font-size:12px;color:var(--text2);margin-top:4px">Regra de preço: <b>' + _esc(_ifcTextoRegra(_ifcRegra())) + '</b> (itens e adicionais) — muda em Configurações → iFood</div>';
+  if (C.vinculado) {
+    const k = C.contagem || {};
+    h += '<div style="font-size:12px;color:var(--text2);margin-top:4px">Enviado em ' + _esc(_ifcHora(C.vinculadoEm)) + ' · ' + (k.noIfood || 0) + ' itens no iFood (' + (k.disponiveis || 0) + ' disponíveis, ' + (k.indisponiveis || 0) + ' indisponíveis)</div>';
+    h += '<div style="font-size:12px;color:var(--text3);margin-top:4px">Automático: salvar preço, item, adicional ou esgotado no Gestão atualiza o iFood em segundos.</div>';
+  } else {
+    h += '<div style="font-size:12px;color:var(--text3);margin-top:4px">Primeiro envio: veja a prévia (o que será criado e o que já existe no iFood e só será ligado) e confirme. Depois disso a sincronização é automática.</div>';
+  }
+  if (C.erro) h += '<div style="font-size:12px;color:#ef4444;margin-top:8px">⚠️ ' + (C.erro.tipo === 'sumiu' || C.erro.tipo === 'diferente' ? 'Atenção' : 'Última falha') + ' (' + _esc(_ifcHora(C.erro.em)) + '): ' + _esc(C.erro.mensagem || '') + '</div>';
+  h += '</div>';
+
+  if (C.massa) {
+    h += '<div class="ifl-box" style="border-color:#ef4444"><div style="font-size:13px;color:#ef4444;font-weight:700">🔒 ' + _esc(C.massa.mensagem || '') + '</div>';
+    if (_ifcConfirmar === 'massa') {
+      h += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="ifl-btn" onclick="_ifcConfirmar=null;_ifoodCardModalRender()">Cancelar</button>' +
+        '<button class="ifl-btn ifl-btn-pri" ' + dis + ' onclick="_ifcComando({acao:\'aplicarMassa\'})">Confirmar: deixar esses itens indisponíveis no iFood</button></div>';
+    } else {
+      h += '<button class="ifl-btn" style="margin-top:8px" ' + dis + ' onclick="_ifcConfirmar=\'massa\';_ifoodCardModalRender()">Aplicar mesmo assim…</button>';
+    }
+    h += '</div>';
+  }
+  if ((C.invalidos || []).length) {
+    h += '<div class="ifl-h">Não enviados — corrija no Gestão</div>';
+    C.invalidos.forEach(x => { h += '<div style="font-size:12px;margin-bottom:3px">⚠️ <b>' + _esc(x.nome || '') + '</b> — ' + _esc((x.erros || []).join('; ')) + '</div>'; });
+  }
+  if ((C.apagadosNoGestao || []).length) {
+    h += '<div class="ifl-h">Apagados no Gestão (ficaram indisponíveis no iFood)</div>';
+    C.apagadosNoGestao.forEach(x => {
+      const rid = _esc(String(x.rid));
+      const conf = _ifcConfirmar === 'apagar:' + x.rid;
+      h += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;flex-wrap:wrap"><span style="flex:1">🗑️ ' + _esc(x.nome || '') + '</span>' + (conf
+        ? '<button class="ifl-btn" onclick="_ifcConfirmar=null;_ifoodCardModalRender()">Cancelar</button><button class="ifl-btn ifl-btn-pri" ' + dis + ' onclick="_ifcComando({acao:\'apagar\',rids:[\'' + rid + '\']})">Confirmar: apagar do iFood</button>'
+        : '<button class="ifl-btn" ' + dis + ' onclick="_ifcConfirmar=\'apagar:' + rid + '\';_ifoodCardModalRender()">Apagar do iFood…</button>') + '</div>';
+    });
+  }
+  if ((C.sumiramNoIfood || []).length) {
+    h += '<div class="ifl-h">Apagados direto no iFood</div><div style="font-size:12px;color:var(--text2)">' + C.sumiramNoIfood.map(x => _esc(x.nome || '')).join(', ') + ' — gere a prévia para criar de novo.</div>';
+  }
+
+  h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">';
+  h += '<button class="ifl-btn' + (C.vinculado ? '' : ' ifl-btn-pri') + '" ' + dis + ' onclick="ifoodCardPrevia()">' + (C.vinculado ? '📋 Conferir com o iFood (prévia)' : '📋 Enviar cardápio ao iFood… (ver prévia)') + '</button>';
+  if (C.vinculado) h += '<button class="ifl-btn" ' + dis + ' onclick="_ifcComando({acao:\'sincronizar\'})">🔄 Sincronizar agora</button>';
+  h += '</div>';
+
+  const E = C.envio;
+  if (E && E.fase === 'enviando') {
+    const pct = E.total ? Math.round(100 * E.feitos / E.total) : 5;
+    h += '<div class="ifl-box" style="margin-top:10px"><b>Enviando ao iFood…</b> ' + (E.total ? E.feitos + '/' + E.total : '') +
+      '<div style="height:6px;background:var(--bg3);border-radius:4px;margin-top:6px"><div style="height:6px;width:' + pct + '%;background:#e74c3c;border-radius:4px"></div></div></div>';
+  }
+  const P = C.previa;
+  if (P && P.id && P.id === _ifcPreviaId) h += _ifcPreviaHtml(P, pend);
+
+  const N = C.noIfood;
+  if (C.vinculado && N) {
+    h += '<div class="ifl-h">No iFood agora</div><div style="font-size:11.5px;color:var(--text3);margin-bottom:6px">Lido do iFood às ' + _esc(_ifcHora(N.em)) +
+      (N.ms != null ? ' — ' + (N.ms / 1000).toFixed(1).replace('.', ',') + ' s depois da mudança' : '') +
+      (N.erro ? ' · <span style="color:#ef4444">' + _esc(N.erro) + '</span>' : '') +
+      (() => {
+        const sum = (N.itens || []).filter(x => !x.existe).length, dif = (N.itens || []).filter(x => x.existe && !x.ok).length;
+        return (sum ? ' · <span style="color:#ef4444">' + sum + ' não existe(m) mais no iFood — "Conferir com o iFood (prévia)" cria de novo</span>' : '') +
+          (dif ? ' · <span style="color:#f59e0b">' + dif + ' diferente(s) do que o Gestão mandou — "Sincronizar agora" corrige</span>' : '');
+      })() + '</div>';
+    h += '<table class="ifl-tab"><tr><th>Item no iFood</th><th>Preço</th><th>Situação</th></tr>';
+    (N.itens || []).forEach(x => {
+      const sit = !x.existe ? '<span style="color:#ef4444">não existe no iFood</span>'
+        : (x.disponivel ? 'disponível' : '<span style="color:#f59e0b">indisponível</span>') + (x.ok ? ' ✓'
+          : ' <span style="color:#f59e0b">⚠️ o Gestão mandou ' + _ifcBRL(x.esperado && x.esperado.preco) + (x.esperado && x.esperado.disponivel === false ? ', indisponível' : '') + '</span>');
+      h += '<tr><td>' + _esc(x.nome || '') + '<div style="font-size:10.5px;color:var(--text3)">' + _esc(x.categoria || '') + (x.complementos ? ' · ' + _esc(x.complementos) : '') + '</div></td><td class="ifc-n"><b>' + _ifcBRL(x.preco) + '</b></td><td>' + sit + '</td></tr>';
+    });
+    h += '</table>';
+  }
+
+  h += '<div class="ifl-h">Últimas sincronizações</div>';
+  const log = (C.log || []).slice(0, 12);
+  if (!log.length) h += '<div style="font-size:12px;color:var(--text3)">Nada ainda.</div>';
+  log.forEach(l => {
+    h += '<div style="font-size:12px;margin-bottom:5px">' + (!l.ok ? '❌' : /⚠️/.test(l.mensagem || '') ? '⚠️' : '✅') + ' <span style="color:var(--text3)">' + _esc(_ifcHora(l.em)) + ' · ' + _esc(_IFC_ORIGEM[l.origem] || l.origem || '') +
+      (l.ms != null ? ' · ' + (l.ms / 1000).toFixed(1).replace('.', ',') + ' s' : '') + '</span><br>' + _esc(l.mensagem || '') +
+      ((l.falhas || []).length ? '<br><span style="color:#ef4444">' + l.falhas.map(f => _esc((f.nome || '') + ': ' + (f.mensagem || ''))).join('<br>') + '</span>' : '') +
+      ((l.avisos || []).length ? '<br><span style="color:#f59e0b">' + l.avisos.map(f => _esc((f.nome || '') + ': ' + (f.mensagem || ''))).join('<br>') + '</span>' : '') + '</div>';
+  });
+  document.getElementById('ifoodCardCorpo').innerHTML = h;
+}
+
+function _ifcPreviaHtml(P, pend) {
+  const k = P.contagem || {};
+  let h = '<div class="ifl-h">Prévia do envio — ' + _esc(P.textoRegra || '') + '</div>';
+  h += '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">' + [
+    k.criar && k.criar + ' para criar', k.ligar && k.ligar + ' já existem no iFood (serão ligados, não recriados)',
+    k.atualizar && k.atualizar + ' para atualizar', k.igual && k.igual + ' iguais', k.recriar && k.recriar + ' para criar de novo',
+    k.conflito && k.conflito + ' em conflito', k.erro && k.erro + ' com erro',
+  ].filter(Boolean).join(' · ') + '</div>';
+  if ((P.categoriasNovas || []).length) h += '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">Categorias novas no iFood: <b>' + P.categoriasNovas.map(c => _esc(c)).join(', ') + '</b></div>';
+  h += '<table class="ifl-tab"><tr><th>Item</th><th>Preço Gestão</th><th>Preço iFood</th><th>Ação</th></tr>';
+  (P.linhas || []).forEach(l => {
+    const [cls, txt] = _IFC_ACAO[l.acao] || ['ifc-igual', l.acao];
+    h += '<tr><td><b>' + _esc(l.nome || '') + '</b><div style="font-size:10.5px;color:var(--text3)">' + _esc(l.categoria || '') +
+      (l.disponivel === false && l.motivo ? ' · indisponível (' + _esc(l.motivo) + ')' : '') + '</div>' +
+      (l.nota ? '<div style="font-size:10.5px;color:var(--text2)">' + _esc(l.nota) + '</div>' : '') + '</td>' +
+      '<td class="ifc-n">' + _ifcBRL(l.precoGestao) + '</td><td class="ifc-n"><b>' + _ifcBRL(l.preco) + '</b></td><td><span class="ifc-acao ' + cls + '">' + txt + '</span></td></tr>';
+  });
+  h += '</table>';
+  if ((P.adicionais || []).length) {
+    h += '<div class="ifl-h">Adicionais (' + P.adicionais.length + ')</div><table class="ifl-tab"><tr><th>Adicional</th><th>Preço Gestão</th><th>Preço iFood</th><th>Lanches</th></tr>';
+    P.adicionais.forEach(a => {
+      h += '<tr><td>' + _esc(a.nome || '') + (a.disponivel ? '' : ' <span style="color:#ef4444;font-size:10.5px">esgotado</span>') + '</td><td class="ifc-n">' +
+        (a.precoGestao > 0 ? _ifcBRL(a.precoGestao) : 'incluso') + '</td><td class="ifc-n"><b>' + (a.preco > 0 ? _ifcBRL(a.preco) : 'incluso') + '</b></td><td>' + (a.lanches || 0) + '</td></tr>';
+    });
+    h += '</table>';
+  }
+  if ((P.soNoIfood || []).length) {
+    h += '<div class="ifl-h">Só no iFood — não mexemos (' + P.soNoIfood.length + ')</div><div style="font-size:12px;color:var(--text2)">' +
+      P.soNoIfood.map(x => _esc(x.nome || '') + ' <span style="color:var(--text3)">(' + _esc(x.categoria || '') + ', ' + _ifcBRL(x.preco) + ')</span>').join(' · ') + '</div>';
+  }
+  if ((P.foraDoCardapio || []).length) {
+    h += '<details style="margin-top:8px"><summary style="font-size:12px;color:var(--text2);cursor:pointer">Fora do cardápio do delivery — não vão (' + P.foraDoCardapio.length + ')</summary>' +
+      '<div style="font-size:12px;color:var(--text3);margin-top:4px">' + P.foraDoCardapio.map(x => _esc(x.nome || '') + ' (' + _esc(x.motivo || '') + ')').join(' · ') + '</div></details>';
+  }
+  const vai = (k.criar || 0) + (k.ligar || 0) + (k.atualizar || 0) + (k.recriar || 0);
+  h += '<div style="font-size:12px;color:#f59e0b;margin-top:10px">' + (vai
+    ? 'Nada é apagado no iFood.' + (k.ligar ? ' Os itens "Ligar ao existente" continuam sendo o mesmo item do iFood e passam a seguir o Gestão (preço, nome, descrição e complementos).' : '')
+    : 'Nada a enviar: o iFood já está igual ao Gestão.') + '</div>';
+  h += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="ifl-btn" onclick="_ifcPreviaId=null;_ifoodCardModalRender()">Fechar prévia</button>' +
+    (vai ? '<button class="ifl-btn ifl-btn-pri" ' + (pend ? 'disabled' : '') + ' onclick="ifoodCardEnviar(\'' + _esc(P.id) + '\')">Confirmar e enviar ao iFood</button>' : '') + '</div>';
+  return h;
+}
+
+function _ifcComando(cmd) {
+  if (!_ifcLigado() || !slug || _ifcCmd) return null;
+  const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const u = firebase.auth().currentUser;
+  _ifcCmd = { id, acao: cmd.acao };
+  _ifcConfirmar = null;
+  _ifcMsg(cmd.acao === 'previa' ? 'Lendo o cardápio do iFood e montando a prévia…' : 'Enviando ao iFood…');
+  if (_ifcModalAberto()) _ifoodCardModalRender();
+  db.doc(`clientes/${slug}/config/ifoodCatalogoComando`).set({ id, ...cmd, por: (u && u.email) || null, em: firebase.firestore.FieldValue.serverTimestamp() })
+    .catch(e => {
+      if (_ifcCmd && _ifcCmd.id === id) _ifcCmd = null;
+      _ifcMsg('Não consegui enviar: ' + e.message, false);
+      notify('iFood: não consegui enviar — ' + e.message, 'error');
+      if (_ifcModalAberto()) _ifoodCardModalRender();
+    });
+  setTimeout(() => {
+    if (!_ifcCmd || _ifcCmd.id !== id) return;
+    _ifcCmd = null;
+    _ifcMsg('Sem resposta do serviço do iFood — confira o log antes de tentar de novo.', false);
+    if (_ifcModalAberto()) _ifoodCardModalRender();
+  }, cmd.acao === 'enviar' ? 300000 : 90000);
+  return id;
+}
+function ifoodCardPrevia() { const id = _ifcComando({ acao: 'previa' }); if (id) _ifcPreviaId = id; }
+function ifoodCardEnviar(previaId) { _ifcComando({ acao: 'enviar', previaId }); }
+
+// ── Configurações → iFood: regra de preço ──
+function _ifcPreencherRegra() {
+  const p = document.getElementById('ifcPct'), a = document.getElementById('ifcArr');
+  if (!p || !a || _ifcRegraSujo || document.activeElement === p || document.activeElement === a) return;
+  const r = _ifcRegra();
+  p.value = r.percentual;
+  a.value = r.arredondamento;
+  _ifcRegraExemplo();
+}
+function _ifcRegraDoForm() {
+  return { percentual: Number(String(document.getElementById('ifcPct').value).replace(',', '.')), arredondamento: document.getElementById('ifcArr').value };
+}
+function _ifcRegraExemplo() {
+  const el = document.getElementById('ifcExemplo');
+  if (!el) return;
+  const f = _ifcRegraDoForm();
+  if (!(f.percentual >= 0 && f.percentual <= 200)) { el.innerHTML = '<span style="color:#ef4444">Percentual de 0 a 200.</span>'; return; }
+  el.innerHTML = 'Exemplo: ' + [20, 25, 6, 4.5].map(v => _ifcBRL(v) + ' → <b>' + _ifcBRL(_ifcPreco(v, f)) + '</b>').join(' · ') + ' · adicional incluso (R$ 0) continua incluso';
+}
+function _ifcQuantosMudam(a, b) {
+  let itens = 0, adicionais = 0, exemplo = '';
+  const usados = new Set();
+  recipes.forEach(r => {
+    if (!_ifcVaiProIfood(r.id)) return;
+    (Array.isArray(r.adicionais) ? r.adicionais : []).forEach(x => usados.add(String(x)));
+    (Array.isArray(r.adicionaisGrupos) ? r.adicionaisGrupos : []).forEach(g => ((g && g.itens) || []).forEach(x => usados.add(String(x))));
+    const p1 = _ifcPreco(r.price, a), p2 = _ifcPreco(r.price, b);
+    if (p1 !== p2) { itens++; if (!exemplo) exemplo = (r.name || '') + ' ' + _ifcBRL(p1) + ' → ' + _ifcBRL(p2); }
+  });
+  adicionaisBiblioteca.forEach(x => { if (usados.has(String(x.id)) && _ifcPreco(x.preco, a) !== _ifcPreco(x.preco, b)) adicionais++; });
+  return { itens, adicionais, exemplo };
+}
+function salvarRegraIfood(confirmado) {
+  const f = _ifcRegraDoForm();
+  if (!(f.percentual >= 0 && f.percentual <= 200)) return notify('Percentual inválido (de 0 a 200)', 'error');
+  const nova = _ifcRegraValida(f), atual = _ifcRegra();
+  const box = document.getElementById('ifcRegraConfirma');
+  if (_ifcRegraDoc && nova.percentual === atual.percentual && nova.arredondamento === atual.arredondamento) {
+    _ifcRegraSujo = false; if (box) box.innerHTML = '';
+    return notify('A regra já é essa.');
+  }
+  if (_ifcVinculado() && !confirmado) {
+    const m = _ifcQuantosMudam(atual, nova);
+    box.innerHTML = '<div class="ifl-box" style="margin-top:8px"><div style="font-size:12px;color:#f59e0b">Isso muda agora, no iFood, o preço de <b>' + m.itens + ' item(ns)</b> e <b>' + m.adicionais + ' adicional(is)</b>' +
+      (m.exemplo ? ' (ex.: ' + _esc(m.exemplo) + ')' : '') + '.</div><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button class="ifl-btn" onclick="document.getElementById(\'ifcRegraConfirma\').innerHTML=\'\'">Cancelar</button>' +
+      '<button class="ifl-btn ifl-btn-pri" onclick="salvarRegraIfood(true)">Confirmar e atualizar o iFood</button></div></div>';
+    return;
+  }
+  if (box) box.innerHTML = '';
+  const u = firebase.auth().currentUser;
+  db.doc(`clientes/${slug}/config/ifoodPreco`).set({ ...nova, por: (u && u.email) || null, em: firebase.firestore.FieldValue.serverTimestamp() })
+    .then(() => { _ifcRegraSujo = false; notify('✓ Regra do iFood salva: ' + _ifcTextoRegra(nova) + (_ifcVinculado() ? ' — atualizando os preços no iFood…' : '')); })
+    .catch(e => notify('Erro ao salvar a regra: ' + e.message, 'error'));
+}
+
+// ── Gestor de cardápio: preço editável (grava no MESMO campo que o Sistema Joey: recipes.price / adicionais.preco)
+// + o preço que vai para o iFood embaixo (quando o cardápio está ligado ao iFood).
+const _IFC_LBL_PRECO = '<div style="font-size:9px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">Preço</div>';
+function _ifcInputPreco(onSalvar) {
+  return '<div style="display:flex;gap:4px;justify-content:flex-end"><input id="ifcPrecoInp" type="number" step="0.01" min="0" inputmode="decimal" value="' + _esc(_ifcPrecoVal) + '"' +
+    ' oninput="_ifcPrecoVal=this.value" onkeydown="if(event.key===\'Enter\'){' + onSalvar + '}if(event.key===\'Escape\')cancelarPrecoEdit()"' +
+    ' style="width:70px;padding:4px 6px;background:var(--bg4);border:1px solid var(--orange);border-radius:6px;color:var(--text);font-size:12px;font-family:inherit">' +
+    '<button onclick="' + onSalvar + '" title="Salvar preço" style="background:#34d399;border:none;border-radius:6px;color:#000;font-weight:800;cursor:pointer;padding:0 7px">✓</button></div>';
+}
+function _ifcFocarPreco() { setTimeout(() => { const i = document.getElementById('ifcPrecoInp'); if (i) { i.focus(); i.select(); } }, 0); }
+function cancelarPrecoEdit() { _ifcPrecoEdit = null; renderCardapioPainel(); }
+// ✓ quando a última leitura do iFood (conferência do serviço) mostra exatamente este preço.
+function _ifcConferido(rid, preco) {
+  const N = _ifoodCard && _ifoodCard.noIfood;
+  const x = N && (N.itens || []).find(i => String(i.rid) === String(rid));
+  return x && x.existe && x.preco === preco ? ' ✓' : '';
+}
+function _ifcCelulaPreco(r) {
+  const id = String(r.id);
+  if (_ifcPrecoEdit === 'r:' + id) return '<div style="text-align:right">' + _IFC_LBL_PRECO + _ifcInputPreco("salvarPrecoItem('" + _esc(id) + "')") + '</div>';
+  const ifood = _ifcVinculado() && _ifcVaiProIfood(id)
+    ? '<div class="ifc-preco-if" title="Preço no iFood (' + _esc(_ifcTextoRegra(_ifcRegra())) + ')">iFood ' + _ifcBRL(_ifcPreco(r.price, _ifcRegra())) + _ifcConferido(id, _ifcPreco(r.price, _ifcRegra())) + '</div>' : '';
+  return '<div style="text-align:right">' + _IFC_LBL_PRECO + '<div style="font-weight:700;color:var(--orange);cursor:pointer;white-space:nowrap" onclick="editarPrecoItem(\'' + _esc(id) + '\')" title="Editar preço">' +
+    _ifcBRL(r.price || 0) + ' <span style="font-size:10px;opacity:.6">✏️</span></div>' + ifood + '</div>';
+}
+function editarPrecoItem(id) {
+  const r = recipes.find(x => String(x.id) === String(id));
+  _ifcPrecoEdit = 'r:' + id;
+  _ifcPrecoVal = r ? Number(r.price || 0).toFixed(2) : '';
+  renderCardapioEditor();
+  _ifcFocarPreco();
+}
+function salvarPrecoItem(id) {
+  const v = Math.round(parseFloat(String(_ifcPrecoVal).replace(',', '.')) * 100) / 100;
+  if (!(v > 0)) return notify('Preço inválido', 'error');
+  const r = recipes.find(x => String(x.id) === String(id));
+  _ifcPrecoEdit = null;
+  renderCardapioEditor();
+  if (r && Number(r.price) === v) return;
+  db.collection(`clientes/${slug}/recipes`).doc(String(id)).set({ price: v }, { merge: true })
+    .then(() => {
+      notify('✓ Preço salvo: ' + _ifcBRL(v) + (_ifcVinculado() && _ifcVaiProIfood(id) ? ' · no iFood ' + _ifcBRL(_ifcPreco(v, _ifcRegra())) : ''));
+      // A mesma trilha do Sistema Joey (fbLog → auditLog), para saber de onde veio a mudança.
+      const ent = { id: Date.now(), timestamp: new Date().toISOString(), acao: 'editou', categoria: 'Receita', item: (r && r.name) || String(id), detalhe: 'Preço: ' + _ifcBRL(v) + ' (pelo painel)' };
+      db.collection(`clientes/${slug}/auditLog`).doc(String(ent.id)).set(ent).catch(() => {});
+    })
+    .catch(e => notify('Erro ao salvar preço: ' + e.message, 'error'));
+}
+function _ifcCelulaPrecoAdic(a, precoHtml) {
+  const id = String(a.id);
+  if (_ifcPrecoEdit === 'a:' + id) return '<div style="text-align:right">' + _ifcInputPreco("salvarPrecoAdicional('" + _esc(id) + "')") + '</div>';
+  const ifood = _ifcVinculado() && _ifcAdicionalNoIfood(id)
+    ? '<div class="ifc-preco-if">iFood ' + (Number(a.preco || 0) > 0 ? _ifcBRL(_ifcPreco(a.preco, _ifcRegra())) : 'incluso') + '</div>' : '';
+  return '<div style="font-size:13px;text-align:right;white-space:nowrap;cursor:pointer" onclick="editarPrecoAdicional(\'' + _esc(id) + '\')" title="Editar preço">' + precoHtml + ' <span style="font-size:10px;opacity:.6">✏️</span>' + ifood + '</div>';
+}
+// Adicional que vai para o iFood: está (avulso ou em grupo) em algum lanche que vai para o iFood.
+function _ifcAdicionalNoIfood(aid) {
+  const alvo = String(aid);
+  return recipes.some(r => _ifcVaiProIfood(r.id) && (
+    (Array.isArray(r.adicionais) ? r.adicionais : []).some(x => String(x) === alvo) ||
+    (Array.isArray(r.adicionaisGrupos) ? r.adicionaisGrupos : []).some(g => ((g && g.itens) || []).some(x => String(x) === alvo))));
+}
+function editarPrecoAdicional(id) {
+  const a = adicionaisBiblioteca.find(x => String(x.id) === String(id));
+  _ifcPrecoEdit = 'a:' + id;
+  _ifcPrecoVal = a ? Number(a.preco || 0).toFixed(2) : '';
+  renderAdicionaisEditor();
+  _ifcFocarPreco();
+}
+function salvarPrecoAdicional(id) {
+  const v = Math.round(parseFloat(String(_ifcPrecoVal).replace(',', '.')) * 100) / 100;
+  if (!(v >= 0)) return notify('Preço inválido (0 = incluso)', 'error');
+  const a = adicionaisBiblioteca.find(x => String(x.id) === String(id));
+  _ifcPrecoEdit = null;
+  renderAdicionaisEditor();
+  if (a && Number(a.preco || 0) === v) return;
+  db.collection(`clientes/${slug}/adicionais`).doc(String(id)).set({ preco: v }, { merge: true })
+    .then(() => {
+      notify('✓ Preço do adicional salvo: ' + (v > 0 ? _ifcBRL(v) : 'incluso') + (_ifcVinculado() && v > 0 ? ' · no iFood ' + _ifcBRL(_ifcPreco(v, _ifcRegra())) : ''));
+      const ent = { id: Date.now(), timestamp: new Date().toISOString(), acao: 'editou', categoria: 'Adicional', item: (a && a.nome) || String(id), detalhe: 'Preço: ' + _ifcBRL(v) + ' (pelo painel)' };
+      db.collection(`clientes/${slug}/auditLog`).doc(String(ent.id)).set(ent).catch(() => {});
+    })
+    .catch(e => notify('Erro ao salvar preço: ' + e.message, 'error'));
+}
+
 // =================== LISTENERS FIREBASE (TEMPO REAL) ===================
 let _listenersIniciados = false;
 function iniciarListenersFirestore() {
   carregarAutoAceitar();
   _ifoodLojaOuvir();     // loja no iFood (status/pausa/horários) — só aparece com loja iFood ligada
+  _ifoodCardOuvir();     // cardápio no iFood (regra de preço, envio, sincronização) — só com cardápio iFood ligado
   iniciarIaListeners();
   _wacListenerConfig();   // estado conectado do WhatsApp Cloud API (config/whatsappCloud)
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
