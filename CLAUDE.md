@@ -112,7 +112,7 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
     `negociacao-aceitar`/`negociacao-recusar` do joey-ifood. Contraproposta: só pelo Portal do Parceiro.
 - Domínio novo servindo o painel → entra também no CORS do joey-ifood (`src/cors.js`), além da chave do Maps.
 
-### "Conectar meu iFood" + motoboy para todos — branch `ifood-saas`, SÓ NA PRÉVIA em 15/10/2026, NÃO publicado
+### "Conectar meu iFood" + motoboy para todos — 🟢 PUBLICADO em 15/10/2026 09:26 (`7f42d4f`, 3 sites)
 
 - **Configurações → "iFood — conectar minha loja"** (`#secaoIfoodConexao`, todos os tenants): o restaurante informa o ID
   da loja no iFood (ou o CNPJ) → o painel grava `config/ifoodConexaoPedido` `{ id, acao: conectar|desconectar|cancelar,
@@ -126,11 +126,20 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
   "trocar", aviso ao motoboy. O aviso usa o template `joey_entrega_motoboy` SÓ na Joey (o template é da conta de WhatsApp
   dela); nos outros vai o texto pelo bot do próprio restaurante. `entregador.html`: fora da Joey o cabeçalho leva o nome
   da loja (`config/loja.nome`) em vez de "Joey Entregas". A rota `/entregador/**` já existia em todos os domínios.
+  ⚠️ Abrir o link do motoboy no MESMO domínio (e navegador) em que o painel está logado troca a sessão (o app do motoboy
+  faz `signInWithCustomToken`; a sessão do Firebase é por domínio) → o painel desse domínio mostra "Não encontramos um
+  restaurante vinculado a esta conta" até entrar de novo. Comportamento antigo (já era assim na Joey).
 - Testado em 15/10/2026 na prévia `ifood-fase2` com o `clienteteste` (motoboy cadastrado → atribuído → app do motoboy →
   "Entreguei"; conexão da loja de teste com o joey-ifood LOCAL) — dados de teste apagados. Prints em
   `Desktop/_resumos-claude/2026-10-15_*_ifood-saas*`.
+- **Publicado em 15/10/2026 09:26** (merge `ifood-saas` → `master`, fast-forward; `pedidos-joey-painel` + `pedidos-joey`
+  no projeto pedidos-joey e `gestaojoey-painel` no gestaojoey), conferido nos 7 domínios (mesmo `painel.html`/`entregador.html`)
+  e em produção: Joey com "🟢 Conectado ao iFood … Conexão gerenciada pelo suporte" (sem Desconectar); card no `clienteteste`;
+  motoboy no `clienteteste` (atribuir no card em "Prontos" → app "clienteteste · Entregas" → "Entreguei"); pedido manual
+  sem chamar o iFood. Antes estava no ar o `1c5e19c` (painel) / `68224a4` (motoboy) — **rollback**: worktree em `1c5e19c` +
+  os mesmos `firebase deploy --only hosting:…`, ou Console → Hosting → histórico de versões → Reverter (em cada um dos 3 sites).
 
-### Loja no iFood (módulo Merchant) — SÓ NA PRÉVIA em 14/10/2026, NÃO publicado
+### Loja no iFood (módulo Merchant) — código PUBLICADO em 15/10/2026 junto com o pacote SaaS, mas INVISÍVEL (o serviço está com `IFOOD_MERCHANT` desligado)
 
 Status da loja no iFood + pausa + horários, para ter um lugar só (detalhes do serviço: CLAUDE.md do joey-ifood,
 "Módulo Merchant"). **Não usa HTTP**: o painel lê `clientes/{slug}/config/ifoodLoja` (o serviço grava) e grava o
@@ -152,7 +161,7 @@ comando em `config/ifoodComando` (`_iflComando`); o serviço executa e devolve o
 - **Publicar** só depois de o módulo Merchant estar homologado e ligado no joey-ifood; antes disso publicar não
   quebra nada (sem `ifoodLoja` o painel não mostra), mas não há o que mostrar.
 
-### Cardápio no iFood (módulo Catalog) — SÓ NA PRÉVIA em 14/10/2026, NÃO publicado
+### Cardápio no iFood (módulo Catalog) — código PUBLICADO em 15/10/2026 junto com o pacote SaaS, mas INVISÍVEL (o serviço está com `IFOOD_CATALOGO` desligado); o preço editável do Gestor de cardápio JÁ VALE para todos
 
 O cardápio do Gestão replicado no iFood com **+20%, para cima no ,90** (configurável), sincronizado sozinho depois do 1º
 envio (detalhes do serviço: CLAUDE.md do joey-ifood, "Módulo Catalog"). Mesmo modelo do Merchant: o painel lê
@@ -237,7 +246,7 @@ abre a rota por link do Google Maps/Waze, sem custo de API).
 (`_inicioDiaTrabalho`). Ninguém zera nada: a marcação de ontem fica antes das 05:00 de hoje e deixa de contar.
 Corte às 05:00 para uma entrega depois da meia-noite não tirar o motoboy do plantão no meio do turno.
 
-- Faixa `#plantaoBar` no topo do kanban (todos os tenants desde 15/10/2026 — branch `ifood-saas`; antes só joey): um chip por motoboy ativo, toque liga/desliga
+- Faixa `#plantaoBar` no topo do kanban (todos os tenants desde 15/10/2026 — publicado; antes só joey): um chip por motoboy ativo, toque liga/desliga
   (`togglePlantao`). Sem ninguém marcado, ela fica laranja e pergunta "Quem está de plantão hoje?".
 - "Atribuir entregador" e "trocar" (`_mbOpts`) mostram **só quem está de plantão**. Ninguém marcado →
   mostram todos os ativos com o aviso "escolher já marca", e `atribuirMotoboy` grava o `plantaoEm` de quem
