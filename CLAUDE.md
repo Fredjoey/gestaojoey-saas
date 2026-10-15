@@ -134,6 +134,30 @@ comando em `config/ifoodComando` (`_iflComando`); o serviço executa e devolve o
 - **Publicar** só depois de o módulo Merchant estar homologado e ligado no joey-ifood; antes disso publicar não
   quebra nada (sem `ifoodLoja` o painel não mostra), mas não há o que mostrar.
 
+### Cardápio no iFood (módulo Catalog) — SÓ NA PRÉVIA em 14/10/2026, NÃO publicado
+
+O cardápio do Gestão replicado no iFood com **+20%, para cima no ,90** (configurável), sincronizado sozinho depois do 1º
+envio (detalhes do serviço: CLAUDE.md do joey-ifood, "Módulo Catalog"). Mesmo modelo do Merchant: o painel lê
+`config/ifoodCatalogo` (o serviço grava) e pede por `config/ifoodCatalogoComando` (`_ifcComando`). Regra em
+`config/ifoodPreco` `{ percentual, arredondamento: '90'|'99'|'nenhum' }` — o painel grava direto.
+- **Só aparece com `config/ifoodCatalogo.ligado === true`**: item "Cardápio no iFood" na faixa do topo (`#ifoodCardItem`:
+  ⏳ ainda não enviado / ✅ sincronizado HH:MM / ⚠️ falha ao sincronizar / ⚠️ item sumiu do iFood / ⚠️ diferente no iFood /
+  🔒 confirme a mudança), seção **Configurações → iFood — cardápio** (`#secaoIfoodCardapio`: acréscimo %, arredondamento,
+  exemplo ao vivo; com o cardápio já ligado, salvar pede confirmação "muda o preço de N itens e M adicionais no iFood") e
+  modal `#ifoodCardModal`: status, **prévia** (tabela item × preço Gestão × preço iFood × ação Criar / Ligar ao existente /
+  Atualizar / Igual / Criar de novo / Conflito / Erro; adicionais; "Só no iFood — não mexemos"; "Fora do cardápio") →
+  "Confirmar e enviar ao iFood" com progresso; **"No iFood agora"** (releitura do iFood com ✓/⚠️ e a hora); "Não enviados";
+  "Apagados no Gestão" com "Apagar do iFood…" (confirmação dentro do modal); trava "Aplicar mesmo assim…"; log.
+- `_ifcPreco` = a MESMA conta do serviço (`catalogoRegras.precoIfood`); `_ifcVaiProIfood` = a mesma régua (ativo, não
+  só-mesa, nome ≤ 100, preço > 0).
+- ⚠️ **Gestor de cardápio: preço EDITÁVEL** (clique no preço → campo → Enter/✓) para item (`recipes/{id}.price`) e
+  adicional (`adicionais/{id}.preco`), com a linha no `auditLog` igual à do Sistema Joey (detalhe "… (pelo painel)").
+  **Vale para todos os tenants** quando publicar (não depende do iFood). Com o cardápio ligado ao iFood aparece embaixo
+  "iFood R$ X" (✓ quando a última releitura do iFood mostra exatamente esse preço).
+- Testado na prévia `ifood-fase2` com o joey-ifood LOCAL (loja de teste, `clienteteste`) em 14/10/2026; prints e logs em
+  `Desktop/_resumos-claude/2026-10-14_ifood-catalogo-homologacao/`. Publicar só depois de o Catalog estar homologado e
+  ligado no joey-ifood (sem `ifoodCatalogo` nada aparece, exceto a edição de preço).
+
 ## Extrato bancário (⑧ da aba Financeiro do gestao-joey.html) — **só o tenant joey**
 
 Feature **em construção**, travada no slug `joey`: outro tenant não vê a seção, nem o upload, nem a conciliação. **Não altera o cálculo do lucro** — é conferência entre extrato e compras lançadas.
