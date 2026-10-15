@@ -132,7 +132,16 @@ async function init() {
     entregadorId = d.entregadorId;
     tenant = d.tenant || 'joey';   // (Bloco 2) tenant resolvido pelo entregadorAuth (fallback joey p/ compat)
     // cidade/estado do tenant p/ compor o destino da rota (config/loja tem leitura pública)
-    try { const lj = (await db.doc('clientes/' + tenant + '/config/loja').get()).data() || {}; _lojaGeo = { cidade: lj.cidade || '', estado: lj.estado || '' }; } catch (_) {}
+    try {
+      const lj = (await db.doc('clientes/' + tenant + '/config/loja').get()).data() || {};
+      _lojaGeo = { cidade: lj.cidade || '', estado: lj.estado || '' };
+      // Motoboy de qualquer restaurante (desde 15/10/2026): o cabeçalho leva o nome da loja; o Joey continua "Joey Entregas".
+      if (tenant !== 'joey' && lj.nome) {
+        const logo = document.querySelector('.logo');
+        if (logo) logo.textContent = '🛵 ' + lj.nome + ' · Entregas';
+        document.title = 'Entregas · ' + lj.nome;
+      }
+    } catch (_) {}
     $('who').innerHTML = `<b>${esc(d.nome || 'Entregador')}</b>suas entregas`;
     escutarPedidos();
   } catch (e) {

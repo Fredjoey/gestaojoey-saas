@@ -1298,13 +1298,18 @@ body.suporte-on #botAlertBanner{top:36px}
 
         <div class="card-box" id="secaoMotoboys" style="display:none">
           <div class="section-lbl" style="margin-top:0">🛵 Motoboys / Entregadores</div>
-          <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Cadastre seus entregadores. Cada um ganha um <strong>link pessoal</strong> (em breve será a página onde ele recebe os pedidos atribuídos).</p>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:1rem">Cadastre seus entregadores. Cada um ganha um <strong>link pessoal</strong>: a página onde ele vê as entregas atribuídas a ele, abre a rota e marca "Entreguei". Mande o link para o celular dele.</p>
           <div style="display:grid;grid-template-columns:1fr 150px auto;gap:8px;margin-bottom:12px">
             <input class="fi" id="newMotoboyNome" placeholder="Nome do entregador">
             <input class="fi" id="newMotoboyTel" type="tel" placeholder="Telefone (WhatsApp)">
             <button class="btn btn-primary" onclick="adicionarMotoboy()">+ Adicionar</button>
           </div>
           <div id="motoboysList"></div>
+        </div>
+
+        <div class="card-box" id="secaoIfoodConexao">
+          <div class="section-lbl" style="margin-top:0">🛵 iFood — conectar minha loja</div>
+          <div id="ifxCorpo"><div style="font-size:12px;color:var(--text3)">Carregando…</div></div>
         </div>
 
         <div class="card-box" id="secaoIfoodCardapio" style="display:none">
@@ -2573,11 +2578,12 @@ function atualizarStatusFb(id, status) {
   return prom;
 }
 
-// Avisa o motoboy atribuído no WhatsApp que o pedido saiu p/ entrega (Gestão de Entrega — só joey, delivery).
+// Avisa o motoboy atribuído no WhatsApp que o pedido saiu p/ entrega (Gestão de Entrega — delivery, todos os tenants
+// desde 15/10/2026; antes só joey).
 // Reusa enviarWhatsAppBot (joeyapi /send) — NÃO cria caminho novo. Sem telefone → pula. Falha só loga.
 async function notificarMotoboyEntrega(p) {
   try {
-    if (slug !== 'joey' || !p || p.entrega !== 'delivery' || !p.entregadorId) return; // sem motoboy/não-delivery → pula
+    if (!p || p.entrega !== 'delivery' || !p.entregadorId) return; // sem motoboy/não-delivery → pula
     const snap = await db.collection(`clientes/${slug}/motoboys`).doc(p.entregadorId).get();
     if (!snap.exists) return;
     const m = snap.data() || {};
@@ -2602,11 +2608,13 @@ async function notificarMotoboyEntrega(p) {
     const pagTpl = p.pagamento === 'pix' ? 'Pix (já pago)'
       : p.pagamento === 'cartao' ? `Cartão na entrega, receber ${Number(p.total || 0).toFixed(2).replace('.', ',')}`
       : `Dinheiro, receber ${Number(p.total || 0).toFixed(2).replace('.', ',')}`;
-    enviarWhatsAppBot(tel, msg, {
+    // O template joey_entrega_motoboy só existe na conta do WhatsApp do Joey: nos outros tenants vai o texto, pelo
+    // bot do próprio restaurante (joeyapi-{slug}).
+    enviarWhatsAppBot(tel, msg, slug === 'joey' ? {
       name: 'joey_entrega_motoboy',
       params: [primeiro, p.id, c.nome || 'cliente', end || 'endereço não informado', pagTpl].map(_tplParam),
       urlParam: m.slug,
-    }, { tipo: 'motoboy', pedidoId: p.id, nome: m.nome || '' });  // helper já é failure-safe (try/catch interno; não lança)
+    } : null, { tipo: 'motoboy', pedidoId: p.id, nome: m.nome || '' });  // helper já é failure-safe (try/catch interno; não lança)
   } catch (e) {
     console.error('[entrega] aviso ao motoboy falhou (pedido avança normalmente):', e && e.message ? e.message : e);
   }
@@ -3868,7 +3876,7 @@ function _motoboysParaAtribuir() {
 function _renderPlantaoBar() {
   const el = document.getElementById('plantaoBar');
   if (!el) return;
-  if (slug !== 'joey' || !_motoboysAtivos.length) { el.innerHTML = ''; return; }
+  if (!_motoboysAtivos.length) { el.innerHTML = ''; return; }
   const ninguem = !_motoboysAtivos.some(m => _emPlantao(m));
   const chip = m => {
     const on = _emPlantao(m);
@@ -3923,14 +3931,14 @@ function entregadorLinhaHtml(p) {
   const selSt = 'background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:10px;padding:1px 4px;font-family:inherit;cursor:pointer';
   return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#a78bfa;margin:2px 0 8px;font-weight:600" onclick="event.stopPropagation()">
     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🛵 ${_escMb(p.entregadorNome || '?')} · ${quando}</span>
-    ${slug === 'joey' && _motoboysAtivos.length ? `<select title="Trocar entregador" style="${selSt}" onchange="atribuirMotoboy('${p.id}', this.value); this.selectedIndex=0"><option value="">trocar…</option>${_mbOpts()}</select>` : ''}
+    ${_motoboysAtivos.length ? `<select title="Trocar entregador" style="${selSt}" onchange="atribuirMotoboy('${p.id}', this.value); this.selectedIndex=0"><option value="">trocar…</option>${_mbOpts()}</select>` : ''}
     <button title="Remover entregador" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px" onclick="desatribuirMotoboy('${p.id}')">✕</button>
   </div>`;
 }
 // Dropdown de atribuição (só quando NÃO há entregador). comEnvio=true (card 'pronto') envia p/ entrega.
 // Dropdown que SÓ atribui (não move de coluna). Aparece só quando ainda não há entregador.
 function entregadorSelectHtml(p) {
-  if (p.entrega !== 'delivery' || slug !== 'joey' || !_motoboysAtivos.length || p.entregadorId) return '';
+  if (p.entrega !== 'delivery' || !_motoboysAtivos.length || p.entregadorId) return '';
   const st = 'width:100%;background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.3);border-radius:8px;font-size:12px;font-weight:600;padding:8px 10px;font-family:inherit;cursor:pointer';
   return `<select style="${st}" onclick="event.stopPropagation()" onchange="atribuirMotoboy('${p.id}', this.value)"><option value="">🛵 Atribuir entregador…</option>${_mbOpts()}</select>`;
 }
@@ -6703,7 +6711,7 @@ function carregarConfig() {
   renderDestaqueOpts();
   renderHorariosDias();
   renderBairros();
-  if (slug === 'joey') { const secMb = document.getElementById('secaoMotoboys'); if (secMb) secMb.style.display = ''; carregarMotoboys(); } // Motoboys: só joey (Fase 1 entrega)
+  { const secMb = document.getElementById('secaoMotoboys'); if (secMb) secMb.style.display = ''; carregarMotoboys(); } // Motoboys: todos os tenants (desde 15/10/2026)
   _ifcPreencherRegra();   // Configurações → iFood (regra de preço do cardápio no iFood)
   carregarHistoricoBackup();
   // Posição do estabelecimento (Gestão de Entrega): pré-preenche o endereço + inicia o mapa Leaflet.
@@ -6883,7 +6891,7 @@ function _slugMotoboy(nome) {
   let suf = ''; for (let i = 0; i < bytes.length; i++) suf += cs[bytes[i] % cs.length];
   return `${base}-${suf}`;
 }
-function _linkEntregador(s) { return `${CARDAPIO_URL || ''}/entregador/${s}`; }  // página é da Fase 3 (ainda não existe)
+function _linkEntregador(s) { return `${CARDAPIO_URL || ''}/entregador/${s}`; }  // entregador.html (rota /entregador/** em todos os domínios do painel)
 
 async function carregarMotoboys() {
   const el = document.getElementById('motoboysList');
@@ -9932,6 +9940,155 @@ function _ifcVaiProIfood(id) {
   return !!nome && nome.length <= 100 && Number(r.price) > 0;
 }
 
+// ── "Conectar meu iFood" (Configurações → iFood) ──
+// O painel grava o PEDIDO em config/ifoodConexaoPedido; o serviço joey-ifood (módulo conexao.js) executa e devolve o
+// estado em config/ifoodConexao. O iFood não tem API para pedir acesso: a equipe pede no Portal do Desenvolvedor, o
+// dono aprova no Portal do Parceiro e o serviço liga a loja sozinho (confere a cada 15 min). Ver CLAUDE.md do joey-ifood.
+const IFX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let _ifx = null, _ifxPed = null, _ifxUnsub = null, _ifxConfirmaDesc = false, _ifxEnviando = false;
+
+function _ifoodConexaoOuvir() {
+  if (_ifxUnsub || !slug) return;
+  _ifxUnsub = db.doc(`clientes/${slug}/config/ifoodConexao`).onSnapshot(s => {
+    const antes = _ifx && _ifx.status;
+    _ifx = s.exists ? s.data() : null;
+    if (antes && _ifx && antes !== _ifx.status) {
+      if (_ifx.status === 'conectado') notify('🟢 iFood conectado — os pedidos do iFood entram no quadro.', 'success');
+      else if (_ifx.status === 'erro' && _ifx.erro) notify('⚠️ iFood: ' + _ifx.erro.mensagem, 'error');
+    }
+    _ifxRender();
+  }, e => console.warn('[iFood conexão] listener:', e.message));
+  db.doc(`clientes/${slug}/config/ifoodConexaoPedido`).onSnapshot(s => {
+    _ifxPed = s.exists ? s.data() : null;
+    _ifxRender();
+  }, e => console.warn('[iFood conexão] pedido:', e.message));
+}
+
+function _ifxData(ts) {
+  const d = ts && ts.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+  if (!d || isNaN(d)) return '';
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace(',', ' às');
+}
+
+function _ifxCaixa(cor, titulo, corpo) {
+  const cores = { verde: ['rgba(52,211,153,.10)', 'rgba(52,211,153,.4)', '#34d399'], amarelo: ['rgba(245,158,11,.10)', 'rgba(245,158,11,.4)', '#f59e0b'],
+    vermelho: ['rgba(239,68,68,.10)', 'rgba(239,68,68,.4)', '#f87171'], cinza: ['var(--bg3)', 'var(--border2)', 'var(--text)'] }[cor];
+  return `<div style="background:${cores[0]};border:1px solid ${cores[1]};border-radius:10px;padding:12px 14px;margin-bottom:10px">
+    <div style="font-weight:800;color:${cores[2]};margin-bottom:6px">${titulo}</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${corpo}</div></div>`;
+}
+
+const _IFX_APROVAR = `<ol style="margin:6px 0 0 18px;padding:0">
+  <li>Entre no <b>Portal do Parceiro</b> do iFood (<a href="https://portal.ifood.com.br" target="_blank" rel="noopener" style="color:#60a5fa">portal.ifood.com.br</a>) com a conta da loja.</li>
+  <li>Abra <b>Serviços e soluções → Integrações</b>.</li>
+  <li>Aprove o aplicativo <b>Gestão Joey</b> (desenvolvedor JOEY EMPREENDIMENTOS GASTRONOMICOS LTDA).</li>
+  <li>Pronto: em até 15 minutos esta tela mostra <b>Conectado</b> e os pedidos do iFood começam a entrar no quadro.</li></ol>`;
+
+function _ifxForm(titulo) {
+  return (titulo || '') + `<p style="font-size:12px;color:var(--text2);margin:0 0 10px">Receba os pedidos do iFood direto no quadro do Gestão Joey — com impressão da comanda, motoboy e fechamento de caixa. Sem digitar nada duas vezes.</p>
+    <div style="display:grid;grid-template-columns:150px minmax(0,340px);gap:8px;align-items:center">
+      <label for="ifxMerchant" style="font-size:12px;color:var(--text2)">ID da loja no iFood</label>
+      <input class="fi" id="ifxMerchant" placeholder="ex.: 815d095a-66dc-4975-8910-a30e94fae5ab" autocomplete="off" spellcheck="false">
+      <label for="ifxCnpj" style="font-size:12px;color:var(--text2)">ou CNPJ da loja</label>
+      <input class="fi" id="ifxCnpj" placeholder="só se não achar o ID" inputmode="numeric" autocomplete="off">
+    </div>
+    <details style="font-size:12px;color:var(--text2);margin:8px 0">
+      <summary style="cursor:pointer;color:#60a5fa">Onde acho o ID da loja?</summary>
+      <div style="margin-top:6px;line-height:1.6">No <b>Portal do Parceiro</b> do iFood (portal.ifood.com.br), entre com a conta da loja: o ID da loja aparece nos dados/perfil da loja — é um código de letras e números separados por hífens (36 caracteres). <b>Não achou?</b> Deixe o ID em branco e informe só o <b>CNPJ</b>: a nossa equipe localiza a sua loja no iFood.</div>
+    </details>
+    <div style="font-size:12px;color:var(--text2);margin:6px 0 10px;line-height:1.6"><b>Como funciona:</b> 1) a equipe Gestão Joey solicita o acesso à sua loja no iFood; 2) você aprova no Portal do Parceiro; 3) os pedidos entram sozinhos no quadro.</div>
+    <button class="btn btn-primary" onclick="ifoodConectar()" ${_ifxEnviando ? 'disabled' : ''}>🛵 Conectar meu iFood</button>`;
+}
+
+function _ifxRender() {
+  const el = document.getElementById('ifxCorpo');
+  if (!el) return;
+  const C = _ifx || {};
+  const P = _ifxPed || {};
+  const st = C.status || 'nenhum';
+  const loja = C.merchantId ? `<code style="font-size:11px">${_esc(C.merchantId)}</code>` : (C.cnpj ? 'CNPJ ' + _esc(C.cnpj) : '');
+  const semResposta = P.id && C.pedidoId !== P.id;  // pedido gravado, o serviço ainda não respondeu
+  const cancelar = '<button class="ifl-btn" onclick="ifoodCancelarConexao()">Cancelar pedido</button>';
+  let h = '';
+  if (semResposta && P.acao !== 'cancelar') {
+    h = _ifxCaixa('amarelo', '⏳ Pedido registrado', 'Aguardando o serviço do iFood do Gestão Joey confirmar o recebimento…') + (P.acao === 'conectar' ? cancelar : '');
+  } else if (st === 'conectado') {
+    h = _ifxCaixa('verde', '🟢 Conectado ao iFood',
+      `Loja ${loja}${C.conectadoEm ? ' · desde ' + _ifxData(C.conectadoEm) : ''}.<br>Os pedidos do iFood entram sozinhos no quadro (em <b>Em análise</b>). Pedido não confirmado em 8 minutos é cancelado pelo iFood — para confirmar sozinho, ligue <b>Auto-aceitar</b> no topo.`);
+    if (C.protegido) {
+      h += `<div style="font-size:12px;color:var(--text3)">Conexão gerenciada pelo suporte Gestão Joey.${C.erro && C.erro.codigo === 'protegido' ? ' ' + _esc(C.erro.mensagem) : ''}</div>`;
+    } else if (_ifxConfirmaDesc) {
+      h += `<div style="font-size:12px;color:#f87171;margin-bottom:8px">Desconectar faz os pedidos do iFood pararem de entrar no Gestão Joey (a loja continua aberta no iFood — use o Gestor de Pedidos do iFood). Confirma?</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ifl-btn" onclick="_ifxConfirmaDesc=false;_ifxRender()">Cancelar</button>
+        <button class="ifl-btn ifl-btn-pri" onclick="ifoodDesconectar()" ${_ifxEnviando ? 'disabled' : ''}>Confirmar: desconectar iFood</button></div>`;
+    } else {
+      h += '<button class="ifl-btn" onclick="_ifxConfirmaDesc=true;_ifxRender()">Desconectar iFood</button>';
+    }
+  } else if (st === 'aguardando_equipe') {
+    h = _ifxCaixa('amarelo', '⏳ Pedido recebido — a equipe vai solicitar o acesso',
+      `Loja ${loja || '(a equipe localiza pelo CNPJ)'}${C.aguardandoEquipeDesde ? ' · pedido em ' + _ifxData(C.aguardandoEquipeDesde) : ''}.<br>A equipe Gestão Joey solicita o acesso à sua loja no iFood (normalmente no mesmo dia útil). Você não precisa fazer nada agora: quando a solicitação chegar, esta tela mostra como aprovar no Portal do Parceiro.`) + cancelar;
+  } else if (st === 'aguardando_loja') {
+    h = _ifxCaixa('amarelo', '⏳ Falta você aprovar no iFood',
+      `Já solicitamos o acesso à loja ${loja}. Agora é com você:${_IFX_APROVAR}<div style="margin-top:6px;color:var(--text3)">Conferimos no iFood a cada 15 minutos${C.ultimaConferenciaEm ? ' (última conferência ' + _ifxData(C.ultimaConferenciaEm) + ')' : ''}.</div>`) + cancelar;
+  } else if (st === 'erro' && C.erro && C.erro.codigo === 'revogada') {
+    h = _ifxCaixa('vermelho', '⚠️ O iFood recusou o acesso à sua loja', _esc(C.erro.mensagem) + _IFX_APROVAR) +
+      '<button class="ifl-btn ifl-btn-pri" onclick="ifoodConectarDeNovo()">Já aprovei — conferir de novo</button>';
+  } else if (st === 'erro') {
+    h = _ifxForm(_ifxCaixa('vermelho', '⚠️ Não deu para conectar', _esc((C.erro && C.erro.mensagem) || 'Erro na conexão com o iFood.')));
+  } else {
+    h = _ifxForm(st === 'desconectado' ? _ifxCaixa('cinza', 'iFood desconectado', `Loja ${loja}${C.desconectadoEm ? ' · desde ' + _ifxData(C.desconectadoEm) : ''}. Os pedidos do iFood não entram mais no Gestão Joey. Para voltar, conecte de novo abaixo.`) : '');
+  }
+  el.innerHTML = h;
+  // Reabre o formulário com o que já foi digitado (o render não apaga o campo)
+  if (_ifxRascunho && document.getElementById('ifxMerchant')) {
+    document.getElementById('ifxMerchant').value = _ifxRascunho.merchantId || '';
+    document.getElementById('ifxCnpj').value = _ifxRascunho.cnpj || '';
+  }
+}
+let _ifxRascunho = null;
+
+async function _ifxPedido(acao, dados) {
+  if (!slug || _ifxEnviando) return false;
+  _ifxEnviando = true;
+  const u = firebase.auth().currentUser;
+  const id = 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  try {
+    await db.doc(`clientes/${slug}/config/ifoodConexaoPedido`).set({
+      id, acao, merchantId: (dados && dados.merchantId) || null, cnpj: (dados && dados.cnpj) || null,
+      por: (u && u.email) || null, em: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (e) {
+    notify('iFood: não consegui registrar o pedido — ' + e.message, 'error');
+    return false;
+  } finally {
+    _ifxEnviando = false;
+    _ifxRender();
+  }
+}
+
+async function ifoodConectar() {
+  const m = String((document.getElementById('ifxMerchant') || {}).value || '').trim().toLowerCase();
+  const cnpj = String((document.getElementById('ifxCnpj') || {}).value || '').replace(/\D/g, '');
+  _ifxRascunho = { merchantId: m, cnpj };
+  if (m && !IFX_UUID.test(m)) { notify('O ID da loja tem 36 caracteres, no formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.', 'warning'); return; }
+  if (!m && cnpj.length !== 14) { notify('Informe o ID da loja no iFood ou o CNPJ (14 números).', 'warning'); return; }
+  if (await _ifxPedido('conectar', { merchantId: m || null, cnpj: cnpj.length === 14 ? cnpj : null })) {
+    _ifxRascunho = null;
+    notify('🛵 Pedido de conexão com o iFood registrado.', 'success');
+  }
+}
+function ifoodConectarDeNovo() {
+  const C = _ifx || {};
+  return _ifxPedido('conectar', { merchantId: C.merchantId || null, cnpj: C.cnpj || null });
+}
+async function ifoodDesconectar() {
+  if (await _ifxPedido('desconectar', { merchantId: (_ifx && _ifx.merchantId) || null })) {
+    _ifxConfirmaDesc = false;
+    notify('iFood: pedido de desconexão registrado.', 'warning');
+  }
+}
+function ifoodCancelarConexao() { return _ifxPedido('cancelar', {}); }
+
 function _ifoodCardOuvir() {
   if (_ifcUnsub || !slug) return;
   _ifcUnsub = db.doc(`clientes/${slug}/config/ifoodCatalogo`).onSnapshot(snap => {
@@ -10319,6 +10476,7 @@ function iniciarListenersFirestore() {
   carregarAutoAceitar();
   _ifoodLojaOuvir();     // loja no iFood (status/pausa/horários) — só aparece com loja iFood ligada
   _ifoodCardOuvir();     // cardápio no iFood (regra de preço, envio, sincronização) — só com cardápio iFood ligado
+  _ifoodConexaoOuvir();  // "Conectar meu iFood" (Configurações → iFood) — todos os tenants
   iniciarIaListeners();
   _wacListenerConfig();   // estado conectado do WhatsApp Cloud API (config/whatsappCloud)
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
@@ -10497,8 +10655,8 @@ function iniciarListenersFirestore() {
     if (_mesaModalId && document.getElementById('orderModal') && document.getElementById('orderModal').classList.contains('show')) refreshVerMesaModal();
   });
 
-  // Motoboys ATIVOS p/ o seletor de entregador no card (Fase 2 entrega — SÓ joey).
-  if (slug === 'joey') {
+  // Motoboys ATIVOS p/ o seletor de entregador no card (todos os tenants desde 15/10/2026; antes só joey).
+  {
     db.collection(`clientes/${slug}/motoboys`).where('ativo', '==', true).onSnapshot(snap => {
       _motoboysAtivos = snap.docs.map(d => ({ id: d.id, nome: (d.data().nome || '').trim(), plantaoEm: Number(d.data().plantaoEm) || null }))
         .sort((a, b) => a.nome.localeCompare(b.nome));
