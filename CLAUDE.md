@@ -185,6 +185,37 @@ envio (detalhes do serviço: CLAUDE.md do joey-ifood, "Módulo Catalog"). Mesmo 
   `Desktop/_resumos-claude/2026-10-14_ifood-catalogo-homologacao/`. Publicar só depois de o Catalog estar homologado e
   ligado no joey-ifood (sem `ifoodCatalogo` nada aparece, exceto a edição de preço).
 
+## Bairro liga/desliga (desde 15/10/2026)
+
+Configurações > Bairros ganhou um toggle por bairro. Pausar tira o bairro do cardápio e do
+robô **sem apagar a taxa** — não precisa recadastrar quando voltar a entregar lá.
+
+- `painel.html` → `toggleBairroAtivo(i)` grava `bairros[i].ativo` e salva na hora.
+- **Convenção: `ativo !== false` = entregando.** Bairro antigo não tem o campo e continua
+  valendo — não existe migração.
+- `cardapio.html` → `_bairroOn()`; o `<option>` do bairro pausado vira "sem entrega no
+  momento" e fica `disabled`. Quem já tinha endereço salvo naquele bairro vê um aviso
+  (`_bairroSalvoPausado`) em vez de descobrir só no fim.
+- ⚠️ **Trava no envio**: mesmo que o `<option>` seja burlado, o pedido não passa. O `<select>`
+  é editável pelo DevTools — não tire essa checagem achando que o `disabled` basta.
+- Lado do bot: `joeyapi/src/claudeIA.js` (ver o CLAUDE.md de lá).
+
+## Sugestão da noite (desde 15/10/2026)
+
+Pedido da Isabela: o robô abria toda conversa com "vai de x-salada de novo?" e ficou
+repetitivo. Agora a loja escreve o que quer oferecer naquela noite.
+
+- Campo em **Robô > 🧠 Atendente Inteligente**, logo abaixo de "Aviso do momento".
+- Grava em `clientes/<slug>/config/iaInstrucoes.sugestaoNoite = { texto, data }`.
+- `data` é o DIA em que o texto foi escrito (`_hojeISOSP()`, fuso −3). O bot só usa se for
+  hoje — **é isso que impede a promoção de quinta de continuar sendo oferecida na sexta.**
+- ⚠️ `_sugPayload()` só re-carimba a data **se o TEXTO mudar**. Salvar o atendente por outro
+  motivo (tom de voz, regras) NÃO renova a sugestão. Se mexer aqui, preserve esse detalhe:
+  sem ele, qualquer save vira "sugestão de hoje" e a validade por dia deixa de existir.
+- `_iaSugStatus()` mostra "escrita hoje" / "ainda não salva" / "expirou";
+  `limparSugestaoNoite()` esvazia o campo (ainda precisa salvar).
+- Lado do bot: `joeyapi/src/atendimentoV2.js` (ver o CLAUDE.md de lá).
+
 ## Extrato bancário (⑧ da aba Financeiro do gestao-joey.html) — **só o tenant joey**
 
 Feature **em construção**, travada no slug `joey`: outro tenant não vê a seção, nem o upload, nem a conciliação. **Não altera o cálculo do lucro** — é conferência entre extrato e compras lançadas.

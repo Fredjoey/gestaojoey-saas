@@ -1994,17 +1994,30 @@ function renderStepDados(el) {
   if (_mesaNum && !tipoEntrega) tipoEntrega = 'local';
   const c = clienteData || {};
   const cEnd = _enderecoSalvo() || {};
+  // `ativo !== false` = o restaurante esta entregando la agora. Bairro antigo nao
+  // tem o campo e continua valendo.
+  const _bairroOn = (b) => b && b.ativo !== false;
+  let _bairroSalvoPausado = null;
   if (!bairroSelecionado && cEnd.bairro && CONFIG.bairros) {
     const bMatch = CONFIG.bairros.find(b => b.nome === cEnd.bairro);
-    if (bMatch) bairroSelecionado = { nome: bMatch.nome, taxa: bMatch.taxa };
+    // Cliente que SEMPRE pediu daquele bairro nao pode ter o endereco salvo
+    // re-selecionado em silencio quando a loja pausou a entrega la.
+    if (bMatch && _bairroOn(bMatch)) bairroSelecionado = { nome: bMatch.nome, taxa: bMatch.taxa };
+    else if (bMatch) _bairroSalvoPausado = bMatch.nome;
   }
   const temBairros = CONFIG.bairros && CONFIG.bairros.length > 0;
   const _numSalvo = cEnd.numero || c.numero || '';
   const _semNum   = _numSalvo === 'S/N';
+  // Bairro pausado NAO some da lista: aparece desabilitado e dizendo por que.
+  // Sumir faria o cliente procurar o proprio bairro sem entender a ausencia.
   const bairroOpts = temBairros
     ? CONFIG.bairros.map(b =>
-        `<option value="${b.nome}" data-taxa="${b.taxa}" ${bairroSelecionado?.nome===b.nome?'selected':''}>
+        _bairroOn(b)
+          ? `<option value="${b.nome}" data-taxa="${b.taxa}" ${bairroSelecionado?.nome===b.nome?'selected':''}>
           ${b.nome} — R$ ${Number(b.taxa).toFixed(2).replace('.',',')}
+        </option>`
+          : `<option value="${b.nome}" disabled style="color:#999">
+          ${b.nome} — sem entrega no momento
         </option>`
       ).join('')
     : '';
@@ -2017,6 +2030,7 @@ function renderStepDados(el) {
     <div class="sheet-title">Seus Dados 👤</div>
     ${_mesaNum ? `<div class="info-note" style="margin-bottom:4px">🍽️ Você está na <strong>Mesa ${_mesaNum}</strong></div>` : ''}
     ${clienteData ? `<div class="info-note">ℹ️ Encontramos seus dados salvos! Confirme ou edite abaixo.</div>` : ''}
+    ${_bairroSalvoPausado ? `<div class="info-note" style="border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.10)">⚠️ No momento não estamos entregando em <strong>${_bairroSalvoPausado}</strong>. Escolha outro bairro ou peça para retirada.</div>` : ''}
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Nome completo *</label>
@@ -2168,6 +2182,13 @@ function confirmarDados() {
     if (!rua)    { alert('Por favor, preencha a rua.'); return; }
     if (!numero) { alert('Por favor, preencha o número (ou marque "Sem número").'); return; }
     if (!bairro) { alert('Por favor, selecione o bairro.'); return; }
+    // O <option disabled> e so a tela — quem manda o pedido por outro caminho
+    // passaria direto. A taxa do bairro pausado tambem nao vale mais.
+    const _bSel = (CONFIG.bairros || []).find(b => b.nome === bairro);
+    if (_bSel && _bSel.ativo === false) {
+      alert(`No momento não estamos entregando em ${bairro}. Escolha outro bairro ou peça para retirada.`);
+      return;
+    }
     if (!ref)    { alert('Por favor, preencha o ponto de referência (ajuda o entregador a achar).'); return; }
     // Se bairroSelecionado ainda não foi definido (digitação livre sem lista)
     if (!bairroSelecionado && CONFIG.bairros.length === 0) {

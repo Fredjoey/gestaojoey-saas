@@ -1418,6 +1418,16 @@ body.suporte-on #botAlertBanner{top:36px}
             <label class="fl" style="display:block;margin-bottom:4px">Promoção / recado que muda</label>
             <textarea id="ia-aviso" class="fi" rows="5" maxlength="1500" oninput="_iaAutoResize(this)" style="width:100%;min-height:120px;resize:vertical;margin-bottom:16px;font-family:inherit;font-size:12px" placeholder="Ex.: Hoje, na compra de 2 burgers a Coca vem grátis! 🥤"></textarea>
 
+            <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Sugestão da noite</div>
+            <label class="fl" style="display:block;margin-bottom:4px">O que o atendente oferece ao abrir a conversa — vale só HOJE</label>
+            <textarea id="ia-sugestao" class="fi" rows="2" maxlength="200" oninput="_iaAutoResize(this);_iaSugStatus()" style="width:100%;min-height:58px;resize:vertical;margin-bottom:6px;font-family:inherit;font-size:12px" placeholder="Ex.: hoje a pizza de calabresa tá saindo em dobro 🍕"></textarea>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+              <span id="ia-sugestao-st" style="font-size:11px;color:var(--text3)"></span>
+              <button type="button" onclick="limparSugestaoNoite()" style="font-size:11px;padding:3px 10px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer">Limpar</button>
+            </div>
+            <p style="font-size:11px;color:var(--text3);margin-bottom:16px">Com a sugestão preenchida, o atendente abre oferecendo ela em vez de repetir o último pedido do cliente. No dia seguinte ela expira sozinha.</p>
+
+
             <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">O que nunca fazer</div>
             <label class="fl" style="display:block;margin-bottom:4px">Uma regra por linha</label>
             <textarea id="ia-nunca" class="fi" rows="5" maxlength="1500" oninput="_iaAutoResize(this)" style="width:100%;min-height:120px;resize:vertical;margin-bottom:6px;font-family:inherit;font-size:12px" placeholder="Nunca prometa desconto que não esteja no cardápio&#10;Nunca fale mal de concorrentes&#10;Nunca peça número de cartão pelo chat"></textarea>
@@ -7106,6 +7116,19 @@ function adicionarBairro() {
   notify(`Bairro "${nome}" adicionado!`);
 }
 
+// Pausa/retoma a entrega num bairro SEM apagar o cadastro: a taxa e a coordenada
+// do mapa continuam guardadas. Pausado, o bairro aparece no cardapio como
+// indisponivel (nao some) — cliente que mora la entende por que nao da, em vez
+// de procurar o bairro numa lista onde ele nao esta mais.
+function toggleBairroAtivo(i) {
+  const b = config.bairros && config.bairros[i];
+  if (!b) return;
+  b.ativo = !(b.ativo !== false);
+  saveConfig();
+  renderBairros();
+  notify(b.ativo ? `Entregando em "${b.nome}" de novo.` : `"${b.nome}" pausado — o cardápio não aceita mais pedidos para lá.`, b.ativo ? 'success' : 'warning');
+}
+
 function removerBairro(i) {
   const b = config.bairros[i];
   if (!confirm(`Remover bairro "${b.nome}"?`)) return;
@@ -7139,10 +7162,17 @@ function renderBairros() {
     const pinSt = temCoord
       ? 'font-size:15px;color:#34d399;border-color:rgba(52,211,153,.5)'
       : 'font-size:15px;color:var(--text3)';
+    // `ativo !== false` = atende. Bairro antigo nao tem o campo e continua ligado,
+    // entao nao precisa migrar nada. Desligar NAO apaga: a taxa e o pino do mapa
+    // ficam guardados, e religar e um clique.
+    const on = b.ativo !== false;
     return `
-      <div style="display:grid;grid-template-columns:1fr 130px auto auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
-        <span style="font-size:13px;font-weight:500;color:var(--text)">🏘️ ${b.nome}${temCoord ? '<span style="font-size:10px;color:#34d399;margin-left:6px;font-weight:600">📍 no mapa</span>' : ''}</span>
-        <span style="font-size:13px;color:var(--orange);font-weight:600;text-align:right">R$ ${Number(b.taxa).toFixed(2).replace('.',',')}</span>
+      <div style="display:grid;grid-template-columns:auto 1fr 130px auto auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg4);border:1px solid ${on ? 'var(--border)' : 'rgba(251,191,36,.35)'};border-radius:8px;margin-bottom:6px${on ? '' : ';opacity:.6'}">
+        <label class="toggle-switch" title="${on ? 'Parar de entregar neste bairro' : 'Voltar a entregar neste bairro'}">
+          <input type="checkbox" ${on ? 'checked' : ''} onchange="toggleBairroAtivo(${i})"><span class="toggle-slider"></span>
+        </label>
+        <span style="font-size:13px;font-weight:500;color:var(--text)${on ? '' : ';text-decoration:line-through;color:var(--text3)'}">🏘️ ${b.nome}${temCoord ? '<span style="font-size:10px;color:#34d399;margin-left:6px;font-weight:600">📍 no mapa</span>' : ''}${on ? '' : '<span style="font-size:10px;color:#fbbf24;margin-left:6px;font-weight:700;text-decoration:none;display:inline-block">PAUSADO</span>'}</span>
+        <span style="font-size:13px;color:${on ? 'var(--orange)' : 'var(--text3)'};font-weight:600;text-align:right">R$ ${Number(b.taxa).toFixed(2).replace('.',',')}</span>
         <button class="icon-btn" onclick="abrirMapaBairro(${i})" style="${pinSt}" title="${temCoord ? 'Coordenada marcada — clique para ajustar' : 'Marcar no mapa (condomínio que o Google não acha)'}">📍</button>
         <button class="icon-btn" onclick="editarBairro(${i})" title="Editar" style="font-size:15px">✏️</button>
         <button class="icon-btn" onclick="removerBairro(${i})" title="Remover">🗑️</button>
@@ -8929,6 +8959,37 @@ function _iaAutoResize(el) {
   el.style.height = 'auto';
   el.style.height = el.scrollHeight + 'px';
 }
+// ── Sugestão da noite (iaInstrucoes.sugestaoNoite = {texto, data}) ─────────────
+// A data é o dia em que o texto foi ESCRITO. O bot só usa se for a data de hoje — assim
+// uma promoção de quinta não continua sendo oferecida na sexta sem ninguém perceber.
+// Salvar o atendente por outro motivo NÃO re-carimba a data: só mexer no texto faz isso.
+let _sugOrig = {};
+function _sugPayload() {
+  const texto = (document.getElementById('ia-sugestao')?.value || '').trim().slice(0, 200);
+  if (!texto) return { texto: '', data: '' };
+  const igual = texto === String(_sugOrig.texto || '').trim();
+  return { texto, data: (igual && _sugOrig.data) ? _sugOrig.data : _hojeISOSP() };
+}
+function _iaSugStatus() {
+  const el = document.getElementById('ia-sugestao-st'); if (!el) return;
+  const texto = (document.getElementById('ia-sugestao')?.value || '').trim();
+  if (!texto) { el.textContent = 'Sem sugestão — o atendente abre do jeito normal.'; el.style.color = 'var(--text3)'; return; }
+  const p = _sugPayload();
+  if (p.data === _hojeISOSP()) {
+    const nova = p.texto !== String(_sugOrig.texto || '').trim();
+    el.textContent = nova ? '• ainda não salva — clique em "Salvar atendente"' : '✓ escrita hoje — o atendente está usando';
+    el.style.color = nova ? 'var(--orange)' : '#16a34a';
+  } else {
+    const [y, m, dd] = String(p.data).split('-');
+    el.textContent = `⚠ escrita em ${dd}/${m} — expirou. O atendente já voltou ao normal; edite e salve para valer hoje, ou limpe.`;
+    el.style.color = '#f59e0b';
+  }
+}
+function limparSugestaoNoite() {
+  const el = document.getElementById('ia-sugestao'); if (!el) return;
+  el.value = ''; _iaAutoResize(el); _iaSugStatus();
+  notify('Sugestão apagada — salve o atendente para confirmar.', 'warning');
+}
 function carregarAtendenteIA(loja) {
   if (!document.getElementById('secaoAtendenteIA')) return;
   const _tempo = (loja && loja.tempo_delivery) || config.tempo_delivery || '—';
@@ -8944,6 +9005,9 @@ function carregarAtendenteIA(loja) {
     set('ia-status-pedido', d.respostaStatusPedido);
     set('ia-aviso', d.avisoMomento);
     set('ia-nunca', d.nuncaFazer);
+    _sugOrig = d.sugestaoNoite || {};
+    set('ia-sugestao', _sugOrig.texto);
+    _iaSugStatus();
   }).catch(e => console.error('[IA] load instrucoes:', e));
 }
 async function salvarAtendenteIA() {
@@ -8955,10 +9019,13 @@ async function salvarAtendenteIA() {
     respostaStatusPedido: val('ia-status-pedido').slice(0, 500),
     avisoMomento:         val('ia-aviso').slice(0, 1500),
     nuncaFazer:           val('ia-nunca').slice(0, 1500),
+    sugestaoNoite:        _sugPayload(),
     atualizadoEm:         firebase.firestore.FieldValue.serverTimestamp(),
   };
   try {
     await db.doc(`clientes/${slug}/config/iaInstrucoes`).set(payload, { merge: true });
+    _sugOrig = payload.sugestaoNoite;   // o que acabou de salvar vira a referência (não re-carimba data à toa)
+    _iaSugStatus();
     notify('Atendente atualizado — já vale na próxima mensagem do bot! 🤖', 'success');
   } catch (e) { console.error('[IA] save instrucoes:', e); notify('Erro ao salvar: ' + e.message, 'error'); }
 }
