@@ -2590,6 +2590,30 @@ function atualizarStatusFb(id, status) {
   return prom;
 }
 
+// Forma de pagamento no aviso ao motoboy — a MESMA regra do app do motoboy (entregador.html, render): o que ele faz na
+// porta. Pix "pago" = Pix online confirmado pelo webhook (pixStatus 'pago') ou Pix sem nada a cobrar (como no app); Pix
+// trocado na mão / Pix offline do iFood = receber; iFood pago online = não cobrar. `txt` vai no texto; `tpl` no template
+// da Meta (sem # $ %, que o _tplParam tira).
+function _pagamentoMotoboy(p) {
+  const brl = (n) => (Number(n) || 0).toFixed(2).replace('.', ',');
+  const total = brl(p.total);
+  if (p.pagamento === 'ifood') return { txt: '📱 Pago no app · não cobrar', tpl: 'Pago no app, não cobrar' };
+  if (p.pagamento === 'pix') {
+    const receber = p.pixStatus !== 'pago' && (p.pagamentoManual === true || _ehIfood(p));
+    return receber ? { txt: `📱 Pix na entrega · receber R$ ${total}`, tpl: `Pix na entrega, receber ${total}` }
+                   : { txt: '📱 Pix · pago', tpl: 'Pix (já pago)' };
+  }
+  if (['cartao', 'credito', 'debito'].includes(p.pagamento)) {
+    return { txt: `💳 Cartão na entrega · receber R$ ${total} · levar maquininha`, tpl: `Cartão na entrega, receber ${total}, levar maquininha` };
+  }
+  // dinheiro (e qualquer outra forma, como no app): troco = "troco para" do cliente; levar = troco − total (a comanda faz igual)
+  const troco = p.pagamento === 'dinheiro' ? (Number(p.troco) || 0) : 0;
+  const levar = troco - (Number(p.total) || 0);
+  const trocoTxt = troco > 0 ? ` · troco p/ R$ ${brl(troco)}${levar > 0 ? ` (levar R$ ${brl(levar)})` : ''}` : '';
+  const trocoTpl = troco > 0 ? `, troco para ${brl(troco)}${levar > 0 ? ` (levar ${brl(levar)})` : ''}` : '';
+  return { txt: `💵 Dinheiro · receber R$ ${total}${trocoTxt}`, tpl: `Dinheiro, receber ${total}${trocoTpl}` };
+}
+
 // Avisa o motoboy atribuído no WhatsApp que o pedido saiu p/ entrega (Gestão de Entrega — delivery, todos os tenants
 // desde 15/10/2026; antes só joey).
 // Reusa enviarWhatsAppBot (joeyapi /send) — NÃO cria caminho novo. Sem telefone → pula. Falha só loga.
@@ -2603,10 +2627,8 @@ async function notificarMotoboyEntrega(p) {
     if (!tel) return; // motoboy sem telefone cadastrado → pula sem erro
     const c = p.cliente || {};
     const end = [[c.rua, c.numero].filter(Boolean).join(', '), c.bairro].filter(Boolean).join(' · ') + (c.ref ? ` (ref: ${c.ref})` : '');
-    const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
-    const pag = p.pagamento === 'pix' ? '📱 Pix (pago)'
-      : p.pagamento === 'cartao' ? `💳 Cartão na entrega — receber ${total}`
-      : `💵 Dinheiro — receber ${total}`;
+    const pagMb = _pagamentoMotoboy(p);
+    const pag = pagMb.txt;
     const link = `${CARDAPIO_URL || 'https://hamburgueriajoey.com.br'}/entregador/${m.slug}`;
     const primeiro = (m.nome || '').split(' ')[0] || 'entregador';
     const msg = `🛵 Nova entrega, ${primeiro}!\n`
@@ -2617,9 +2639,7 @@ async function notificarMotoboyEntrega(p) {
     // Template p/ fora da janela: o motoboy quase nunca manda mensagem pro bot, então este é
     // o caso que MAIS depende de template. O `R$` sai do parâmetro (a Meta rejeita # $ % em
     // parâmetro) e o link vira botão de URL com o slug do entregador como variável.
-    const pagTpl = p.pagamento === 'pix' ? 'Pix (já pago)'
-      : p.pagamento === 'cartao' ? `Cartão na entrega, receber ${Number(p.total || 0).toFixed(2).replace('.', ',')}`
-      : `Dinheiro, receber ${Number(p.total || 0).toFixed(2).replace('.', ',')}`;
+    const pagTpl = pagMb.tpl;
     // O template joey_entrega_motoboy só existe na conta do WhatsApp do Joey: nos outros tenants vai o texto, pelo
     // bot do próprio restaurante (joeyapi-{slug}).
     enviarWhatsAppBot(tel, msg, slug === 'joey' ? {
@@ -3861,6 +3881,17 @@ async function _aplicarTrocaPagamento(id, nova) {
   // só forma de pagamento — NÃO mexe em total/itens
   const update = { pagamento: nova, pagamentoManual: true, formaPagamentoAnterior: anterior };
   Object.assign(p, update);                                            // feedback imediato (o snapshot reconcilia depois)
+  // Pix online que NÃO foi pago (gerando/pendente/expirado/erro): o estado dele sai junto com a troca — senão o timer do
+  // Pix antigo cancela o pedido quando o QR vence e a tarja/aviso de Pix continuam no card. Pix PAGO fica (o dinheiro
+  // entrou). O pixId também fica: se o cliente ainda pagar o QR antigo, o webhook acha o pedido e marca pago.
+  // Idem o aviso "Agendado não pago — Pix antecipado pendente" (com a forma trocada, a function já dispara o agendado).
+  const FV = firebase.firestore.FieldValue;
+  if (p.pixStatus != null && p.pixStatus !== 'pago') {
+    update.pixStatus = FV.delete(); update.pixExpira = FV.delete();
+    delete p.pixStatus; delete p.pixExpira;
+  }
+  if (p.agendadoNaoPago === true) { update.agendadoNaoPago = FV.delete(); delete p.agendadoNaoPago; }
+  _pararTimerPix(id);
   renderKanban();
   const modal = document.getElementById('orderModal');
   if (modal && modal.classList.contains('show')) openOrderModal(id);   // re-render do modal aberto (destrava o "Confirmar")
@@ -4123,6 +4154,23 @@ function _agendadoBadgeHtml(p) {
   let html = `<div class="oc-agendado">📅 Agendado: ${_esc(p.dataHoraAgendada)}</div>`;
   if (p.agendadoNaoPago === true) html += `<div class="oc-naopago">⚠️ Agendado não pago — Pix antecipado pendente</div>`;
   return html;
+}
+
+// Valor do pedido gravado como TEXTO ("57", "57,50", "R$ 1.234,56" — pedido que não veio do cardápio) derrubava o kanban
+// inteiro no .toFixed (card, modal, comanda, busca). Converte NA LEITURA, só em memória — o documento no Firestore não
+// muda. Número continua igual; texto que não é número vira 0 (o mesmo que o `|| 0` já fazia com valor ausente).
+function _valorLido(v) {
+  if (typeof v !== 'string') return v;
+  let s = v.replace(/[^\d,.\-]/g, '');
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+function _pedidoLido(p) {
+  if (!p) return p;
+  for (const k of ['total', 'subtotal', 'taxaEntrega', 'troco']) if (typeof p[k] === 'string') p[k] = _valorLido(p[k]);
+  if (p.desconto && typeof p.desconto.valorAplicado === 'string') p.desconto = { ...p.desconto, valorAplicado: _valorLido(p.desconto.valorAplicado) };
+  return p;
 }
 
 // Timestamp do Firestore ou ms cru → ms. null quando não dá pra converter.
@@ -4466,14 +4514,15 @@ function renderBusca() {
       const tipo = p.entrega === 'delivery' ? '🛵' : p.entrega === 'local' ? '🍽️' : '🏠';
       const itensStr = (p.itens || []).map(i => `${i.qty}× ${i.nome}`).join(', ') || '—';
       const total = `R$ ${(p.total || 0).toFixed(2).replace('.', ',')}`;
-      return `<div class="sr-item" onclick="openOrderModal('${p.id}')">
-        <div class="sr-id" style="grid-row:1 / span 3">#${p.id}</div>
+      const pid = _wppIdJs(p.id);   // id em onclick: o mesmo filtro do card/inbox
+      return `<div class="sr-item" onclick="openOrderModal('${pid}')">
+        <div class="sr-id" style="grid-row:1 / span 3">#${_esc(p.id)}</div>
         <div class="sr-cliente">${_esc(p.cliente?.nome || '—')} <span style="font-weight:400;color:var(--text2)">${tipo}</span></div>
         <div class="sr-total">${total}</div>
-        <div class="sr-data">${p.data || ''}${p.hora ? ' · ' + p.hora : ''}</div>
-        <div class="sr-badge"><span class="chip ${st.cls}">${st.label}</span></div>
+        <div class="sr-data">${_esc(p.data || '')}${p.hora ? ' · ' + _esc(p.hora) : ''}</div>
+        <div class="sr-badge"><span class="chip ${_esc(st.cls)}">${_esc(st.label)}</span></div>
         <div class="sr-itens">${_esc(itensStr)}</div>
-        <button class="sr-refazer" onclick="event.stopPropagation(); pedirNovamente('${p.id}')" title="Refazer este pedido (abre Novo Pedido pré-preenchido)">🔁 Refazer pedido</button>
+        <button class="sr-refazer" onclick="event.stopPropagation(); pedirNovamente('${pid}')" title="Refazer este pedido (abre Novo Pedido pré-preenchido)">🔁 Refazer pedido</button>
       </div>`;
     }).join('');
 }
@@ -5061,7 +5110,8 @@ function gerarHtmlComanda(p) {
       linhas.push(resto.slice(0, cut).trim());
       resto = resto.slice(cut).trim();
     }
-    const body = linhas.map(l => '+ ' + l.padEnd(inner) + ' +').join('\n');
+    // escape DEPOIS de quebrar e completar a linha: a largura (28) é contada no texto que sai no papel, não no "&amp;"
+    const body = linhas.map(l => '+ ' + _esc(l.padEnd(inner)) + ' +').join('\n');
     return `<pre class="obs-box">${titleBar}\n${body}\n${sepBar}</pre>`;
   }
 
@@ -5069,11 +5119,11 @@ function gerarHtmlComanda(p) {
     const val = 'R$ ' + (i.preco * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais||[]).filter(a => a && a.nome).map(a => {
       const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
-      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${(a.qty||1)}× ${a.nome}`;
+      const rotulo = a.grupo ? `${_esc(a.grupo)}: ${_esc(a.nome)}` : `+ ${_esc(a.qty||1)}× ${_esc(a.nome)}`;
       return `<div class="adic"><span>${rotulo}</span>${aVal}</div>`;
     }).join('');
     const obs = i.obs ? obsBox(i.obs) : '';
-    return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
+    return `<div class="row-item"><span class="item-desc">(${_esc(i.qty)}) ${_esc(i.nome)}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
   }).join('');
 
   // Endereço — só para delivery
@@ -5087,13 +5137,13 @@ function gerarHtmlComanda(p) {
     if (c.bairro) linhas.push('Bairro: ' + c.bairro);
     if (c.cidade) linhas.push('Cidade: ' + c.cidade);
     if (c.cep)    linhas.push('CEP: ' + c.cep);
-    enderecoHtml = linhas.map(l => `<div class="cli">${l}</div>`).join('');
+    enderecoHtml = linhas.map(l => `<div class="cli">${_esc(l)}</div>`).join('');
     // Ponto de referência — linha simples, mesmo formato das demais (End/Comp/Bairro)
-    if (c.ref) enderecoHtml += `<div class="cli">Ref: ${c.ref}</div>`;
+    if (c.ref) enderecoHtml += `<div class="cli">Ref: ${_esc(c.ref)}</div>`;
   }
 
   // Pagamento
-  const formaPag = (p.pagamento || '').toUpperCase() || '-';
+  const formaPag = _esc((p.pagamento || '').toUpperCase() || '-');
   const jaPago   = p.pago === true || p.pixStatus === 'pago' || (p.pagamento === 'pix' && p.pixStatus === 'pago');
   const trocoVal = (p.pagamento === 'dinheiro' && p.troco > 0) ? p.troco : 0;
   const totalNum = p.total || 0;
@@ -5173,21 +5223,21 @@ body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;paddi
 <div class="line">${eq}</div>
 <div class="line">${eq}</div>
 
-<div class="info">${data} ${hora}</div>
+<div class="info">${data} ${_esc(hora)}</div>
 ${previsaoHtml}
 <div class="loja">${(config.nome||'JOEY').toUpperCase()}</div>
 <div class="line">${dash}</div>
 
 <div class="ped-label">Pedido</div>
-<div class="ped-num">${p.id}</div>
+<div class="ped-num">${_esc(p.id)}</div>
 <div class="line">${dash}</div>
 
 <div class="itens-label">Itens</div>
 ${itensHtml}
 <div class="line">${dash}</div>
 
-<div class="cli">Nome: ${p.cliente?.nome || '-'}</div>
-<div class="cli">Tel: ${p.cliente?.tel || '-'}</div>
+<div class="cli">Nome: ${_esc(p.cliente?.nome || '-')}</div>
+<div class="cli">Tel: ${_esc(p.cliente?.tel || '-')}</div>
 ${ordinalCliente ? `<div class="ord-cliente">${ordinalCliente}º pedido</div>` : ''}
 ${enderecoHtml}
 <div class="line">${dash}</div>
@@ -5275,7 +5325,7 @@ function gerarHtmlComandaMesa(p, mesaNome) {
   const data = p.data || now.toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' });
   const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
   const loja = (config.nome || 'JOEY').toUpperCase();
-  const mesa = (mesaNome || p.mesaNome || (p.mesa ? String(p.mesa).replace('mesa-', 'Mesa ') : 'MESA')).toUpperCase();
+  const mesa = _esc((mesaNome || p.mesaNome || (p.mesa ? String(p.mesa).replace('mesa-', 'Mesa ') : 'MESA')).toUpperCase());
 
   const W = 28;
   const eq = '='.repeat(W);
@@ -5286,11 +5336,11 @@ function gerarHtmlComandaMesa(p, mesaNome) {
     const val = 'R$ ' + ((unitPrice || 0) * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
       const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
-      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${(a.qty||1)}× ${a.nome}`;
+      const rotulo = a.grupo ? `${_esc(a.grupo)}: ${_esc(a.nome)}` : `+ ${_esc(a.qty||1)}× ${_esc(a.nome)}`;
       return `<div class="adic"><span>${rotulo}</span>${aVal}</div>`;
     }).join('');
-    const obs = i.obs ? `<div class="adic"><span>Obs: ${i.obs}</span></div>` : '';
-    return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
+    const obs = i.obs ? `<div class="adic"><span>Obs: ${_esc(i.obs)}</span></div>` : '';
+    return `<div class="row-item"><span class="item-desc">(${_esc(i.qty)}) ${_esc(i.nome)}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
   }).join('');
 
   const total = (p.total || p.subtotal || 0).toFixed(2).replace('.', ',');
@@ -5298,7 +5348,7 @@ function gerarHtmlComandaMesa(p, mesaNome) {
   // Conferência da mesa inteira (resumo agregado) usa um rótulo no lugar do nº do pedido.
   const pedidoBlocoHtml = p.id === 'CONFERÊNCIA'
     ? `<div class="ped-num" style="font-size:18px;letter-spacing:1px">CONFERÊNCIA DE MESA</div>`
-    : `<div class="ped-label">Pedido</div>\n<div class="ped-num">${p.id}</div>`;
+    : `<div class="ped-label">Pedido</div>\n<div class="ped-num">${_esc(p.id)}</div>`;
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
@@ -5328,7 +5378,7 @@ body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;paddi
 <div class="line">${eq}</div>
 <div class="line">${eq}</div>
 
-<div class="info">${data} ${hora}</div>
+<div class="info">${_esc(data)} ${_esc(hora)}</div>
 <div class="loja">${loja}</div>
 <div class="line">${dash}</div>
 
@@ -5372,22 +5422,22 @@ function gerarHtmlPedidoProducao(p) {
     const val = 'R$ ' + (unitPrice * i.qty).toFixed(2).replace('.', ',');
     const adics = (i.adicionais || []).filter(a => a && a.nome).map(a => {
       const aVal = a.preco > 0 ? `<span>R$ ${(a.preco * (a.qty||1)).toFixed(2).replace('.', ',')}</span>` : '';
-      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${(a.qty||1)}× ${a.nome}`;
+      const rotulo = a.grupo ? `${_esc(a.grupo)}: ${_esc(a.nome)}` : `+ ${_esc(a.qty||1)}× ${_esc(a.nome)}`;
       return `<div class="adic"><span>${rotulo}</span>${aVal}</div>`;
     }).join('');
-    const obs = i.obs ? `<div class="adic"><span>Obs: ${i.obs}</span></div>` : '';
-    return `<div class="row-item"><span class="item-desc">(${i.qty}) ${i.nome}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
+    const obs = i.obs ? `<div class="adic"><span>Obs: ${_esc(i.obs)}</span></div>` : '';
+    return `<div class="row-item"><span class="item-desc">(${_esc(i.qty)}) ${_esc(i.nome)}</span><span class="item-val">${val}</span></div>${adics}${obs}`;
   }).join('');
 
-  const pagamento   = (p.pagamento || '-').toUpperCase();
+  const pagamento   = _esc((p.pagamento || '-').toUpperCase());
   const subtotal    = (p.subtotal  || p.total || 0).toFixed(2).replace('.', ',');
   const taxaVal     = p.taxaEntrega || 0;
   const total       = (p.total     || 0).toFixed(2).replace('.', ',');
-  const nomeCliente = p.cliente?.nome || '-';
-  const tel         = p.cliente?.tel  || '-';
+  const nomeCliente = _esc(p.cliente?.nome || '-');
+  const tel         = _esc(p.cliente?.tel  || '-');
   const mesaNome    = p.mesaNome || (p.mesa ? p.mesa.replace('mesa-', 'Mesa ') : '');
 
-  const mesaHtml = mesaNome ? `<div class="cli">Mesa: ${mesaNome}</div>` : '';
+  const mesaHtml = mesaNome ? `<div class="cli">Mesa: ${_esc(mesaNome)}</div>` : '';
   // Mesma linha e mesma conta do cupom de entrega (0 = sem telefone: não sai).
   const ordinalCliente = ordinalPedidoDoCliente(p);
 
@@ -5395,13 +5445,13 @@ function gerarHtmlPedidoProducao(p) {
   if (p.entrega === 'delivery') {
     const c      = p.cliente || {};
     const ruaNum = (c.rua || '') + (c.numero ? ', ' + c.numero : ''); // compat: antigo tem rua+nº juntos em c.rua
-    if (ruaNum)   endHtml += `<div class="cli">End: ${ruaNum}</div>`;
-    if (c.comp)   endHtml += `<div class="cli">Comp: ${c.comp}</div>`;
-    if (c.bairro) endHtml += `<div class="cli">Bairro: ${c.bairro}</div>`;
-    if (c.ref)    endHtml += `<div class="cli">Ref: ${c.ref}</div>`;
+    if (ruaNum)   endHtml += `<div class="cli">End: ${_esc(ruaNum)}</div>`;
+    if (c.comp)   endHtml += `<div class="cli">Comp: ${_esc(c.comp)}</div>`;
+    if (c.bairro) endHtml += `<div class="cli">Bairro: ${_esc(c.bairro)}</div>`;
+    if (c.ref)    endHtml += `<div class="cli">Ref: ${_esc(c.ref)}</div>`;
   }
 
-  const obsHtml = p.obs ? `<div class="cli">Obs: ${p.obs}</div>` : '';
+  const obsHtml = p.obs ? `<div class="cli">Obs: ${_esc(p.obs)}</div>` : '';
   const _prev = _horaPrevista(p);
   const previsaoHtml = _prev ? `<div class="info">${_prev}</div>` : '';
 
@@ -5448,13 +5498,13 @@ body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;paddi
 <div class="line">${eq}</div>
 <div class="line">${eq}</div>
 
-<div class="info">${data} ${hora}</div>
+<div class="info">${_esc(data)} ${_esc(hora)}</div>
 ${previsaoHtml}
 <div class="loja">${loja}</div>
 <div class="line">${dash}</div>
 
 <div class="ped-label">Pedido</div>
-<div class="ped-num">${p.id}</div>
+<div class="ped-num">${_esc(p.id)}</div>
 <div class="line">${dash}</div>
 
 <div class="itens-label">Itens</div>
@@ -6369,14 +6419,14 @@ function renderHistorico(){
     <table class="hist-table">
       <thead><tr><th>#</th><th>Data</th><th>Hora</th><th>Cliente</th><th>Entrega</th><th>Itens</th><th>Total</th><th>Status</th></tr></thead>
       <tbody>${todos.map(p=>{const st=STATUS_LABELS[p.status]||{label:p.status,cls:''};return`
-        <tr onclick="openOrderModal('${p.id}')" style="cursor:pointer">
-          <td style="color:var(--orange);font-weight:700">${p.id}</td>
-          <td style="color:var(--text2)">${p.data}</td><td style="color:var(--text2)">${p.hora}</td>
-          <td style="font-weight:600">${p.cliente?.nome||'—'}</td>
+        <tr onclick="openOrderModal('${_wppIdJs(p.id)}')" style="cursor:pointer">
+          <td style="color:var(--orange);font-weight:700">${_esc(p.id)}</td>
+          <td style="color:var(--text2)">${_esc(p.data)}</td><td style="color:var(--text2)">${_esc(p.hora)}</td>
+          <td style="font-weight:600">${_esc(p.cliente?.nome||'—')}</td>
           <td>${p.entrega==='delivery'?'🛵':p.entrega==='local'?'🍽️':'🏠'}</td>
           <td style="color:var(--text2)">${(p.itens||[]).length} item(ns)</td>
           <td style="font-weight:700;color:var(--orange)">R$ ${(p.total||0).toFixed(2).replace('.',',')}</td>
-          <td><span class="chip ${st.cls}">${st.label}</span></td>
+          <td><span class="chip ${_esc(st.cls)}">${_esc(st.label)}</span></td>
         </tr>`;}).join('')}</tbody>
     </table>`;
 }
@@ -7998,27 +8048,29 @@ function renderRelatorioNotas() {
   pageItems.forEach(({p,nota,statusNota}, idx) => {
     const bg = idx%2 ? 'background:rgba(255,255,255,.02)' : '';
     const cell = (c,ex='') => `<div style="padding:9px;font-size:13px;color:var(--text);display:flex;align-items:center;min-width:0;overflow:hidden;${ex}">${c}</div>`;
-    const refEsc = ((nota && (nota.focusRef||nota.ref))||'').toString().replace(/'/g,"\\'");
-    const nfEsc  = ((nota && (nota.numeroNota||nota.nf))||'').toString().replace(/'/g,"\\'");
+    // ref/nº da nota vão como string JS dentro do onclick: \' para o JS e _esc para o atributo
+    const refEsc = _esc(((nota && (nota.focusRef||nota.ref))||'').toString().replace(/'/g,"\\'"));
+    const nfEsc  = _esc(((nota && (nota.numeroNota||nota.nf))||'').toString().replace(/'/g,"\\'"));
+    const pid = _wppIdJs(p.id);   // id em onclick: o mesmo filtro do card/inbox
     let acoes = _nfBadge(statusNota);
-    acoes += ` <button onclick="openOrderModal('${p.id}')" title="Detalhe do pedido" style="margin-left:3px;padding:2px 6px;font-size:11px;background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer">&#x1F441;</button>`;
+    acoes += ` <button onclick="openOrderModal('${pid}')" title="Detalhe do pedido" style="margin-left:3px;padding:2px 6px;font-size:11px;background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer">&#x1F441;</button>`;
     if (statusNota === 'emitida') {
       if (nota && nota.danfeUrl) acoes += ` <a href="${nota.danfeUrl}" target="_blank" rel="noopener" title="DANFE" style="padding:2px 7px;font-size:11px;background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.25);border-radius:5px;text-decoration:none">&#x1F4C4;</a>`;
-      acoes += ` <button onclick="imprimirNfce('${p.id}')" title="Imprimir NFC-e" style="padding:2px 7px;font-size:11px;background:rgba(255,107,53,.1);color:var(--orange);border:1px solid rgba(255,107,53,.25);border-radius:5px;cursor:pointer">&#x1F5A8;</button>`;
-      acoes += ` <button onclick="nfBaixarXml('${p.id}')" title="Baixar XML" style="padding:2px 7px;font-size:11px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:5px;cursor:pointer">XML</button>`;
-      if (refEsc) acoes += ` <button onclick="openCancelNfceModal('${p.id}','${refEsc}','${nfEsc}',${(nota&&nota.total)||p.total||0})" title="Cancelar nota" style="padding:2px 7px;font-size:11px;background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);border-radius:5px;cursor:pointer">&#x1F6AB;</button>`;
+      acoes += ` <button onclick="imprimirNfce('${pid}')" title="Imprimir NFC-e" style="padding:2px 7px;font-size:11px;background:rgba(255,107,53,.1);color:var(--orange);border:1px solid rgba(255,107,53,.25);border-radius:5px;cursor:pointer">&#x1F5A8;</button>`;
+      acoes += ` <button onclick="nfBaixarXml('${pid}')" title="Baixar XML" style="padding:2px 7px;font-size:11px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:5px;cursor:pointer">XML</button>`;
+      if (refEsc) acoes += ` <button onclick="openCancelNfceModal('${pid}','${refEsc}','${nfEsc}',${Number((nota&&nota.total)||p.total)||0})" title="Cancelar nota" style="padding:2px 7px;font-size:11px;background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);border-radius:5px;cursor:pointer">&#x1F6AB;</button>`;
     } else if (statusNota === 'cancelada') {
-      acoes += ` <button onclick="nfBaixarXml('${p.id}')" title="Baixar XML" style="padding:2px 7px;font-size:11px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:5px;cursor:pointer">XML</button>`;
+      acoes += ` <button onclick="nfBaixarXml('${pid}')" title="Baixar XML" style="padding:2px 7px;font-size:11px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.25);border-radius:5px;cursor:pointer">XML</button>`;
     } else if (p.status !== 'cancelado') {
-      acoes += ` <button onclick="openNfceModal('${p.id}')" title="Emitir NFC-e" style="padding:2px 8px;font-size:11px;background:rgba(255,107,53,.12);color:var(--orange);border:1px solid rgba(255,107,53,.3);border-radius:5px;cursor:pointer;white-space:nowrap">Emitir</button>`;
+      acoes += ` <button onclick="openNfceModal('${pid}')" title="Emitir NFC-e" style="padding:2px 8px;font-size:11px;background:rgba(255,107,53,.12);color:var(--orange);border:1px solid rgba(255,107,53,.3);border-radius:5px;cursor:pointer;white-space:nowrap">Emitir</button>`;
     }
     html += `<div style="display:grid;grid-template-columns:${COLS};width:100%;border-bottom:1px solid var(--border);${bg}">
-      ${cell(`<span style="font-weight:600;color:var(--orange)">#${p.id||'&mdash;'}</span>`)}
-      ${cell(`<span style="font-size:11px;color:var(--text2);white-space:nowrap">${STLBL[p.status]||p.status||'&mdash;'}</span>`)}
-      ${cell(`<span style="font-size:12px;color:var(--text2);white-space:nowrap">${p.data||'&mdash;'}</span>`)}
-      ${cell(`<span style="font-size:12px;color:var(--text2);white-space:nowrap">${p.pagamento||'&mdash;'}</span>`)}
+      ${cell(`<span style="font-weight:600;color:var(--orange)">#${p.id ? _esc(p.id) : '&mdash;'}</span>`)}
+      ${cell(`<span style="font-size:11px;color:var(--text2);white-space:nowrap">${STLBL[p.status] || (p.status ? _esc(p.status) : '&mdash;')}</span>`)}
+      ${cell(`<span style="font-size:12px;color:var(--text2);white-space:nowrap">${p.data ? _esc(p.data) : '&mdash;'}</span>`)}
+      ${cell(`<span style="font-size:12px;color:var(--text2);white-space:nowrap">${p.pagamento ? _esc(p.pagamento) : '&mdash;'}</span>`)}
       ${cell(`<span style="white-space:nowrap">R$ ${(Number(p.total)||0).toFixed(2).replace('.',',')}</span>`)}
-      ${cell(`<span style="white-space:nowrap;color:var(--text2)">${nota?(nota.numeroNota||nota.nf||'&mdash;'):'&mdash;'}</span>`)}
+      ${cell(`<span style="white-space:nowrap;color:var(--text2)">${nota && (nota.numeroNota||nota.nf) ? _esc(nota.numeroNota||nota.nf) : '&mdash;'}</span>`)}
       <div style="padding:9px;display:flex;align-items:center;gap:3px;flex-wrap:wrap;min-width:0">${acoes}</div>
     </div>`;
   });
@@ -8112,24 +8164,25 @@ function openNfceModal(pedidoId) {
   const p = pedidos.find(x => x.id === pedidoId); if (!p) return;
   const notaExist = notasFiscais.find(n => n.pedidoId === pedidoId);
 
+  const pid = _wppIdJs(p.id);   // id em onclick: o mesmo filtro do card/inbox
   const itensHtml = (p.itens||[]).map(i => `
     <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0">
-      <span style="color:var(--text2)">${i.qty}× ${i.nome}</span>
+      <span style="color:var(--text2)">${_esc(i.qty)}× ${_esc(i.nome)}</span>
       <span style="color:var(--text)">R$ ${((i.preco||0)*i.qty).toFixed(2).replace('.',',')}</span>
     </div>`).join('');
 
   const jaEmitida = notaExist?.status === 'emitida';
   const footerHtml = jaEmitida
     ? `<span class="nf-emitida" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 12px;border-radius:8px">✅ Emitida${notaExist.nf ? ' — Nº ' + notaExist.nf : ''}</span>
-       <button class="btn" data-print-nfce onclick="imprimirNfce('${p.id}')" style="background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3);white-space:nowrap">🖨️ Imprimir NFC-e</button>
+       <button class="btn" data-print-nfce onclick="imprimirNfce('${pid}')" style="background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3);white-space:nowrap">🖨️ Imprimir NFC-e</button>
        ${notaExist.danfeUrl ? `<a href="${notaExist.danfeUrl}" target="_blank" rel="noopener" class="btn" style="background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);text-decoration:none;white-space:nowrap">📄 Ver DANFE</a>` : ''}
        <button class="btn btn-ghost" onclick="closeNfceModal()">Fechar</button>`
-    : `<button class="btn btn-primary" style="flex:1" onclick="emitirNfce('${p.id}')">🧾 Emitir NFCe</button>
+    : `<button class="btn btn-primary" style="flex:1" onclick="emitirNfce('${pid}')">🧾 Emitir NFCe</button>
        <button class="btn btn-ghost" onclick="closeNfceModal()">Cancelar</button>`;
 
   document.getElementById('nfceModalBody').innerHTML = `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Pedido ${p.id} — ${p.cliente?.nome||'—'}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Pedido ${_esc(p.id)} — ${_esc(p.cliente?.nome||'—')}</div>
       ${itensHtml}
       <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:14px;font-weight:700">
         <span style="color:var(--text)">Total</span>
@@ -8138,7 +8191,7 @@ function openNfceModal(pedidoId) {
     </div>
     ${!jaEmitida ? `<div style="margin-bottom:16px">
       <label class="fl" style="margin-bottom:6px;display:block">CPF / CNPJ do cliente <span style="color:var(--text3)">(opcional)</span></label>
-      <input class="fi" id="nfceCpf" placeholder="000.000.000-00" style="width:100%" value="${notaExist?.cpfCnpj||(_ehIfood(p)?_ifoodDoc(p):'')||''}">
+      <input class="fi" id="nfceCpf" placeholder="000.000.000-00" style="width:100%" value="${_esc(notaExist?.cpfCnpj||(_ehIfood(p)?_ifoodDoc(p):'')||'')}">
     </div>` : ''}
     <div id="nfceFooter" style="display:flex;gap:8px;margin-top:4px;align-items:center">
       ${footerHtml}
@@ -8244,7 +8297,7 @@ async function emitirNfce(pedidoId) {
       if (footer) {
         footer.innerHTML =
           `<span class="nf-emitida" style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px 12px;border-radius:8px">✅ Emitida${data.nf ? ' — Nº ' + data.nf : ''}</span>`
-          + `<button class="btn" data-print-nfce onclick="imprimirNfce('${pedidoId}')" style="background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3);white-space:nowrap">🖨️ Imprimir NFC-e</button>`
+          + `<button class="btn" data-print-nfce onclick="imprimirNfce('${_wppIdJs(pedidoId)}')" style="background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3);white-space:nowrap">🖨️ Imprimir NFC-e</button>`
           + (data.danfe ? `<a href="${data.danfe}" target="_blank" rel="noopener" class="btn" style="background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);text-decoration:none;white-space:nowrap">📄 Ver DANFE</a>` : '')
           + `<button class="btn btn-ghost" onclick="closeNfceModal()">Fechar</button>`;
       } else {
@@ -10628,7 +10681,7 @@ function iniciarListenersFirestore() {
 
   db.collection(`clientes/${slug}/pedidos`).onSnapshot(snap => {
     _pedidosAnt = [...pedidos];
-    pedidos = snap.docs.map(d => d.data({ serverTimestamps: 'estimate' }));
+    pedidos = snap.docs.map(d => _pedidoLido(d.data({ serverTimestamps: 'estimate' })));
     pedidos.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     // Histórico do Anota dos clientes de hoje e de quem está no Kanban ("Nº pedido"
     // das comandas). O cache segura: cada telefone é buscado uma vez por sessão.
@@ -11699,6 +11752,9 @@ let pixTimerInterval = null;
 
 function pixTarjaHtml(p) {
   if (p.pagamento !== 'pix' || _ehIfood(p)) return '';   // iFood: Pix offline, cobrado na entrega — não há Pix a gerar nem a esperar
+  // Pix trocado na mão ("na entrega"): também não há Pix online — nem "Gerando PIX..." (sem pixStatus) nem o cronômetro do
+  // Pix antigo (troca feita antes de 20/10/2026 deixou pixStatus 'pendente' gravado). Pago continua aparecendo como pago.
+  if (_pixNaEntrega(p) && p.pixStatus !== 'pago') return '';
   if (!p.pixStatus || p.pixStatus === 'aguardando_geracao' || p.pixStatus === 'gerando') {
     return '<div class="pix-tarja pix-tarja-gerando">⏳ Gerando PIX...</div>';
   }
@@ -11716,6 +11772,12 @@ function pixTarjaHtml(p) {
     return '<div class="pix-tarja pix-tarja-pago">💚 PIX Confirmado! — Pagamento recebido</div>';
   }
   return '';
+}
+
+// Para o cronômetro de UM pedido (forma de pagamento trocada): o elemento perde o data-pix-expira e o relógio de 1 s não o
+// enxerga mais. O relógio é um só para todos os cards — os outros Pix seguem contando.
+function _pararTimerPix(id) {
+  document.querySelectorAll('[data-pix-expira]').forEach(el => { if (el.dataset.pixPid === String(id)) el.removeAttribute('data-pix-expira'); });
 }
 
 function startPixTimers() {
@@ -11756,6 +11818,9 @@ async function onPixPago(id) {
 async function cancelarPedidoPix(id) {
   const p = pedidos.find(x => x.id === id);
   if (!p || !['pendente','aguardando_geracao','gerando'].includes(p.pixStatus)) return;
+  // Forma trocada na mão (dinheiro, cartão ou Pix na entrega) / Pix do iFood: não há Pix online a vencer — o timer do
+  // Pix antigo nunca cancela esse pedido.
+  if (p.pagamento !== 'pix' || _pixNaEntrega(p)) return;
   await db.collection(`clientes/${slug}/pedidos`).doc(id).update({ status: 'cancelado', pixStatus: 'expirado' });
   notify('Pedido ' + id + ' cancelado — PIX expirou', 'warning');
 }

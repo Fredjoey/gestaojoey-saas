@@ -113,7 +113,9 @@ const IFOOD_API = 'https://joey-ifood-production.up.railway.app';
 let tenant = null;   // (Bloco 2) slug do TENANT (resolvido pelo entregadorAuth) — antes era hardcoded 'joey'
 let _lojaGeo = { cidade: '', estado: '' };   // cidade/estado do tenant (config/loja) p/ compor o destino da rota
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Texto → HTML (conteúdo e atributo). Valor que vai para um onclick NÃO entra como string JS: vai em data-* e o handler
+// lê this.dataset (o navegador desfaz o &#39; ANTES de rodar o JS — escapar não protege string dentro do onclick).
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function telaNeutra() {
   if (_unsub) { _unsub(); _unsub = null; }
@@ -344,8 +346,10 @@ function render(lista) {
     const itens = (p.itens || []).map(i => `${i.qty || i.qtd || 1}× ${esc(i.nome || '')}`).join('<br>');
     const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
     // Pix NA ENTREGA (a receber): a forma trocada no painel (pagamentoManual) ou o Pix OFFLINE do iFood (o joey-ifood só
-    // grava 'pix' quando o iFood manda cobrar na entrega). "Pix · pago" fica para o Pix online do cardápio.
-    const pixReceber = p.pagamento === 'pix' && (p.pagamentoManual === true || (p.origem === 'ifood' && !!p.ifoodOrderId));
+    // grava 'pix' quando o iFood manda cobrar na entrega). "Pix · pago" fica para o Pix online do cardápio — e vale antes de
+    // tudo quando o webhook confirmou (pixStatus 'pago': o cliente pagou o QR mesmo depois da troca). O aviso de WhatsApp do
+    // painel (_pagamentoMotoboy) segue esta mesma regra.
+    const pixReceber = p.pagamento === 'pix' && p.pixStatus !== 'pago' && (p.pagamentoManual === true || (p.origem === 'ifood' && !!p.ifoodOrderId));
     const pix = p.pagamento === 'pix' && !pixReceber;
     const trocoTxt = (p.pagamento === 'dinheiro' && p.troco) ? ` · troco p/ R$ ${Number(p.troco).toFixed(2).replace('.', ',')}` : '';
     const cartao = p.pagamento === 'cartao' || p.pagamento === 'credito' || p.pagamento === 'debito';
@@ -368,8 +372,8 @@ function render(lista) {
       <div class="itens">${itens || '—'}</div>
       <div class="pag">${pagHtml}<span class="total">${total}</span></div>
       <div class="btns">
-        <button class="btn btn-rota" onclick="abrirRotaMenu('${encodeURIComponent(_dr.txt)}', ${_dr.coord})">🗺️ Abrir rota</button>
-        ${pedeCodigo(p) ? '' : `<button class="btn btn-ok" onclick="entreguei('${esc(p.id)}', this)">✅ Entreguei</button>`}
+        <button class="btn btn-rota" data-dest="${esc(encodeURIComponent(_dr.txt))}" data-coord="${_dr.coord ? '1' : ''}" onclick="abrirRotaMenu(this.dataset.dest, !!this.dataset.coord)">🗺️ Abrir rota</button>
+        ${pedeCodigo(p) ? '' : `<button class="btn btn-ok" data-pid="${esc(p.id)}" onclick="entreguei(this.dataset.pid, this)">✅ Entreguei</button>`}
       </div>
       ${pedeCodigo(p) ? codigoHtml(p) : ''}
     </div>`;
@@ -392,11 +396,11 @@ function codigoHtml(p) {
   const ocupado = _cod.ocupado.has(p.id);
   const erro = _cod.erro[p.id];
   return `<div class="cod">
-    <input id="cod_${id}" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código de entrega"
+    <input id="cod_${id}" data-pid="${id}" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código de entrega"
       value="${esc(_cod.valor[p.id] || '')}" ${ocupado ? 'disabled' : ''}
-      oninput="_cod.valor['${id}']=this.value" onfocus="_cod.foco='${id}'" onblur="if(this.isConnected&&_cod.foco==='${id}')_cod.foco=null"
-      onkeydown="if(event.key==='Enter'){event.preventDefault();validarCodigo('${id}')}">
-    <button class="btn btn-ifood" ${ocupado ? 'disabled' : ''} onclick="validarCodigo('${id}')">${ocupado ? '⏳ Validando no iFood…' : '✅ Validar e entregar'}</button>
+      oninput="_cod.valor[this.dataset.pid]=this.value" onfocus="_cod.foco=this.dataset.pid" onblur="if(this.isConnected&&_cod.foco===this.dataset.pid)_cod.foco=null"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();validarCodigo(this.dataset.pid)}">
+    <button class="btn btn-ifood" data-pid="${id}" ${ocupado ? 'disabled' : ''} onclick="validarCodigo(this.dataset.pid)">${ocupado ? '⏳ Validando no iFood…' : '✅ Validar e entregar'}</button>
     ${erro ? `<div class="erro">⚠️ ${esc(erro)}</div>` : `<div class="dica">Peça ao cliente o código de entrega que aparece no app do iFood.</div>`}
   </div>`;
 }
