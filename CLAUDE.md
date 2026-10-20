@@ -212,10 +212,42 @@ se refaz a cada 60 s e na volta da aba — `_atualizarStatusSidebar`) + `firebas
   precisa ir junto). **Rollback**: worktree em `3c0d204` + a fonte + os mesmos 2 deploys (`firebase deploy --only
   "hosting:pedidos-joey-painel,hosting:pedidos-joey" --project pedidos-joey` e `firebase deploy --only "hosting:gestaojoey-painel"
   --project gestaojoey`), ou Console → Hosting → Reverter nos 3 sites.
-- **Achados NÃO corrigidos**: o aviso de WhatsApp ao motoboy (`pag`/`pagTpl`) diz "Pix (pago)" para qualquer Pix e "Dinheiro —
-  receber" para cartão e iFood online; Pix trocado na mão ainda mostra a tarja "⏳ Gerando PIX..." (sem `pixStatus`) ou o timer
-  (com `pixStatus:'pendente'` — o `startPixTimers` pode auto-cancelar quando o Pix antigo expira); `esc()` do `entregador.html`
-  não escapa `'` em `onclick`; `total`/`troco` em string quebraria `.toFixed` no kanban.
+- Os achados que ficaram de fora (aviso ao motoboy, Pix trocado na mão, `esc()` do motoboy, `total` em texto) foram
+  corrigidos no mesmo dia — seção abaixo.
+
+## Pix trocado na mão, aviso ao motoboy, escape e valor em texto — 🟢 PUBLICADO em 20/10/2026 19:59 (`95d4407`, 3 sites)
+
+Branch `fix/pagamento-pix-motoboy` (`95d4407`), fast-forward na master.
+1. **Pix trocado na mão** (`_aplicarTrocaPagamento`, qualquer sentido): Pix online NÃO pago → a troca apaga `pixStatus` e
+   `pixExpira` (e o `agendadoNaoPago`) e para o cronômetro do card (`_pararTimerPix`). Pix pago e `pixId` ficam (o webhook
+   ainda acha o pedido se o cliente pagar o QR antigo — aí `pixStatus:'pago'` volta e vale "pago"). `pixTarjaHtml` não mostra
+   nada para `_pixNaEntrega` não pago (nem "Gerando PIX..."), e `cancelarPedidoPix` nunca cancela forma trocada /
+   `_pixNaEntrega` — cobre os pedidos trocados ANTES da correção, com `pixStatus:'pendente'` gravado. No master antigo o relógio
+   do painel CANCELAVA o pedido trocado para "Pix na entrega" quando o QR vencia (reproduzido no sandbox e na prévia).
+2. **Aviso de WhatsApp ao motoboy** = `_pagamentoMotoboy(p)` → `{ txt, tpl }`, a MESMA régua do `render()` do
+   `entregador.html`: "📱 Pix · pago" (Pix online, ou `pixStatus:'pago'`) · "📱 Pix na entrega · receber R$ X" (trocado na mão /
+   Pix offline do iFood) · "💵 Dinheiro · receber R$ X · troco p/ R$ Y (levar R$ Z)" · "💳 Cartão na entrega · receber R$ X ·
+   levar maquininha" (cartao/credito/debito) · "📱 Pago no app · não cobrar" (`ifood`). Antes crédito, débito e iFood online
+   saíam "Dinheiro — receber" (nos 30 dias: 9 pedidos iFood pagos no app avisados como dinheiro). Pix criado no painel sem
+   `pixStatus` continua "Pix · pago" (igual ao app e à comanda).
+3. **App do motoboy**: `esc()` escapa `'` e `"`; id/destino dos botões vão em `data-*` e o `onclick` lê `this.dataset`
+   (escapar não protege string DENTRO de `onclick` — o navegador desfaz o `&#39;` antes do JS rodar).
+4. **Texto do cliente** escapado na comanda (entrega, produção, mesa — a caixa de OBS escapa DEPOIS de completar a linha, a
+   largura no papel não muda), na busca, no histórico e na NFC-e (tabela e modal); ids em `onclick` por `_wppIdJs`.
+5. **Valor gravado como texto** (`total`/`subtotal`/`taxaEntrega`/`troco`/`desconto.valorAplicado`): `_pedidoLido` converte
+   na LEITURA do snapshot ("57,50", "R$ 1.234,56" → número; lixo → 0). O documento no Firestore não muda.
+- Testes: `test/pagamento-pix-motoboy.test.js` (9, todos falham no `dc3290f`); `npm test` 16/16.
+- Antes × depois com 624 pedidos reais (30 dias, só leitura) em 11 telas: card, modal, comanda, produção, comanda de mesa,
+  busca, histórico, NFC-e (tabela/modal, com a nota real) IGUAIS em todos; app do motoboy: só o markup dos botões (texto e
+  valores iguais); aviso ao motoboy: só a linha de pagamento. Material em `Desktop/_resumos-claude/2026-10-20_pagamento-pix-motoboy/`.
+- Prévia `pix-motoboy` com o `clienteteste` 56/56: troca PELA TELA (Pix → na entrega/dinheiro/débito, dinheiro → Pix) e 6 min
+  sem cancelar, com um Pix online de controle que o relógio cancelou; aviso para cada forma; app do motoboy (rota com
+  apóstrofo, código, Entreguei); comanda/busca/histórico/NFC-e com `< > & ' "`.
+- **Rollback**: worktree em `2bc52bd` + `Abstante-Regular.ttf` + os mesmos 2 deploys, ou Console → Hosting → Reverter nos 3 sites.
+- **Fora (de propósito)**: `enviarLocalizacaoPedido('${_esc(p.id)}')` no balão do mapa e `abrirNegociacaoIfood('${_esc(p.id)}')`
+  na faixa da negociação (id em `onclick` com `_esc`, que não tira `'` — ids reais são números/uuid); a tela "Trocar forma"
+  mostra `#${p.id}` cru; o app do motoboy lê `total` cru (texto → "R$ NaN", não quebra); trocar a forma NÃO cancela o
+  pagamento no Mercado Pago (se o cliente pagar o QR antigo, o pedido fica `pixStatus:'pago'` com a forma trocada).
 
 ## Bairro liga/desliga (desde 15/10/2026)
 
