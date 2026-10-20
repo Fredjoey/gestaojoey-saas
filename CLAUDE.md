@@ -185,6 +185,38 @@ envio (detalhes do serviço: CLAUDE.md do joey-ifood, "Módulo Catalog"). Mesmo 
   `Desktop/_resumos-claude/2026-10-14_ifood-catalogo-homologacao/`. Publicar só depois de o Catalog estar homologado e
   ligado no joey-ifood (sem `ifoodCatalogo` nada aparece, exceto a edição de preço).
 
+## 5 bugs do painel + testes `npm test` + sidebar ao vivo — 🟢 PUBLICADO em 20/10/2026 15:07 (`2bc52bd`, 3 sites)
+
+Branch `fix/bugs-painel` (`be93e7f`) + merge da `sidebar-status-ao-vivo` (`f28b9e5`, status "Aberto/Fechado" da sidebar
+se refaz a cada 60 s e na volta da aba — `_atualizarStatusSidebar`) + `firebase.json` (`2bc52bd`), fast-forward na master.
+1. **iFood Pix OFFLINE** (o joey-ifood grava `pagamento:'pix'` só quando o iFood manda cobrar na entrega) travava em
+   "Aguardando pagamento Pix". `_pixNaEntrega(p)` = pix && (`pagamentoManual` || `_ehIfood(p)`) → `_pixLockState` destrava,
+   "(na entrega)" no card/modal, `pixTarjaHtml` vazio e sem "AUTO + PIX OK" no iFood.
+2. **Código de entrega não criava a nota pendente** (quem grava `finalizado` + `ifoodCodigoEntregaValidado` é o joey-ifood,
+   não o painel). `_notasDoCodigoDeEntrega()` no snapshot de pedidos: finalizado + código validado nas últimas 24 h →
+   `salvarNotaFiscalPedido(p)`, uma vez por sessão (a função não regrava nota que já existe).
+3. **Modal de pedido `finalizado` quebrava** (`STATUS_LABELS` sem a chave → `.cls` de undefined). Ganhou "🏁 Finalizado"
+   (`.chip-finalizado`), fallback `{label: p.status}` para status desconhecido e sem "Cancelar" em finalizado.
+4. **Card e modal do kanban**: todo texto do cliente/plataforma passa por `_esc()`; id em `onclick` por `_wppIdJs`.
+5. **App do motoboy**: `pixReceber` (pagamentoManual ou Pix offline do iFood) → "📱 Pix na entrega · receber"; "Pix · pago"
+   só para Pix online.
+- **Testes**: `npm test` (`node --test "test/*.test.js"`, sem dependências). `test/sandbox.js` roda o maior `<script>` do
+  `painel.html`/`entregador.html` num `vm` com DOM e Firebase falsos (o Firestore falso guarda listeners e registra as
+  escritas). `test/painel-bugs.test.js`: os 5 bugs + 2 controles — os 5 falham no `3c0d204` e passam no `2bc52bd`.
+- Antes × depois com 634 pedidos reais do joey (30 dias, só leitura): comanda e produção iguais; só mudaram os pedidos dos
+  bugs (3 iFood Pix offline, 254 modais de finalizado que quebravam, 4 cards no motoboy).
+- Prévia com o `clienteteste` (login temporário SÓ no domínio da prévia, pedidos de teste apagados depois): 28/28.
+- `firebase.json`: os 3 sites ignoram `.claude/**`, `.firebase/**` e `test/**` — o `.claude/settings.local.json` era público
+  (achado de 15/10); agora 404 (pedidos-joey) ou o rewrite do cardápio (gestaojoey-painel).
+- O deploy saiu de um **worktree limpo do commit** (arquivos do git em LF + `Abstante-Regular.ttf`, que NÃO é versionada e
+  precisa ir junto). **Rollback**: worktree em `3c0d204` + a fonte + os mesmos 2 deploys (`firebase deploy --only
+  "hosting:pedidos-joey-painel,hosting:pedidos-joey" --project pedidos-joey` e `firebase deploy --only "hosting:gestaojoey-painel"
+  --project gestaojoey`), ou Console → Hosting → Reverter nos 3 sites.
+- **Achados NÃO corrigidos**: o aviso de WhatsApp ao motoboy (`pag`/`pagTpl`) diz "Pix (pago)" para qualquer Pix e "Dinheiro —
+  receber" para cartão e iFood online; Pix trocado na mão ainda mostra a tarja "⏳ Gerando PIX..." (sem `pixStatus`) ou o timer
+  (com `pixStatus:'pendente'` — o `startPixTimers` pode auto-cancelar quando o Pix antigo expira); `esc()` do `entregador.html`
+  não escapa `'` em `onclick`; `total`/`troco` em string quebraria `.toFixed` no kanban.
+
 ## Bairro liga/desliga (desde 15/10/2026)
 
 Configurações > Bairros ganhou um toggle por bairro. Pausar tira o bairro do cardápio e do
@@ -321,8 +353,9 @@ entravam crus no `innerHTML` do inbox: um cliente podia mandar `<img src=x onerr
 navegador de quem atende, logado como admin. Medido num harness com as funções reais: **6 execuções antes, 0
 depois**. Regra: no inbox, nada vindo do Firestore entra em HTML sem `_esc()`; id em `onclick` passa por
 `_wppIdJs` (só `[\w@.-]`). Nenhuma das 11.636 mensagens gravadas tinha HTML — o escape não muda nada visível.
-⚠️ **Fora do inbox ainda há texto do cliente cru** (ex.: `obs` dos itens e `ref` do endereço na comanda/impressão,
-que é aberta com `window.open('')` na MESMA origem do painel) — varredura dedicada pendente.
+Card e modal do kanban escapam desde 20/10/2026 (seção dos 5 bugs). ⚠️ **Ainda há texto do cliente cru** na
+comanda/impressão (`obs` dos itens, `ref` do endereço — aberta com `window.open('')` na MESMA origem do painel), na
+tabela do histórico/NFC-e e na busca (ids crus em `onclick`) — varredura dedicada pendente.
 
 ## Faixa de espera — botão "✓ já resolvi" (desde 10/10/2026)
 Cada linha da faixa vermelha tem um **✓** que tira aquela espera da tela. Grava
