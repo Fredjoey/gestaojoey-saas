@@ -217,6 +217,43 @@ se refaz a cada 60 s e na volta da aba — `_atualizarStatusSidebar`) + `firebas
   (com `pixStatus:'pendente'` — o `startPixTimers` pode auto-cancelar quando o Pix antigo expira); `esc()` do `entregador.html`
   não escapa `'` em `onclick`; `total`/`troco` em string quebraria `.toFixed` no kanban.
 
+## Pedidos, loja e cardápio da 99Food — branch `feat/99food` (20/10/2026) — ⚠️ NÃO PUBLICADO
+
+Mesmo modelo do iFood: quem fala com a 99 é o joey-ifood (módulo `src/99food/`, tudo DESLIGADO por flag — CLAUDE.md do
+joey-ifood, seção "99Food"); o painel chama as rotas `${IFOOD_API}/99food/pedidos/:slug/:id/…` e lê/grava docs em
+`config/`. **Sem o módulo ligado nada da 99 aparece** (pedido `origem:'99food'` só existe se o serviço criar; as telas de
+loja/cardápio/conexão só aparecem com `config/food99Loja.ligado`, `config/food99Catalogo.ligado`, `config/food99Conexao.disponivel`).
+Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro · receber" em pedido da 99 já pago).
+- **Pedido** (`_eh99`, `_ehPlataforma` = iFood ou 99): card com selo 99 #`food99OrderIndex`, prazo de confirmação (5 min,
+  `food99ConfirmarAte`), pagamento (pago na 99 / dinheiro ou Pix na entrega a receber / "entregador da 99 paga em dinheiro"),
+  código do entregador/retirada; avançar → `_avancar99` (confirmar/pronto/despachar/entregue no serviço; o card só anda com
+  o ok da 99); botão do pronto conforme o tipo (`_99RotuloPronto`: cliente retirou / entregador da 99 retirou / enviar);
+  entrega PRÓPRIA com código de entrega (`_99CodigoHtml`, mesmo estado `_ifoodCod`); cancelar pelo modal `#cancel99Modal`
+  (motivos da 99); cancelado pela 99 fica no topo até "Ciente" (`food99CancelamentoVisto`); pedido de cancelamento/reembolso
+  do cliente → faixa `#food99SolFaixa` + modal `#food99SolModal` (aceitar/recusar com motivo da lista); comanda própria
+  `gerarHtmlComanda99` (pedido com entregador da 99 sai sem CPF e sem endereço). Sem WhatsApp, troca de pagamento, editar ou
+  "pedir novamente" em pedido de plataforma. Finalizar/arquivar pedido de entrega própria ainda em "entregue" avisa a 99
+  antes (`_99EntregueEArquivar`). Auto-aceitar: o do painel PULA a 99 (quem confirma é o serviço, com o mesmo toggle).
+- **Loja na 99** (`#food99LojaItem` + `#food99LojaModal`, `config/food99Comando`): abrir, fechar, pausar 10/20/30 min ou até
+  o fim do dia (com motivo), modo ocupado, enviar horários do Gestão — a 99 aceita 1 mudança por minuto (o modal mostra "vai
+  à 99 em X s"; comando novo substitui o da fila).
+- **Cardápio na 99** (`#food99CardItem` + `#food99CardModal` + Configurações → `#secao99Cardapio`): regra própria em
+  `config/precos99` `{ percentual, arredondamento }`, **padrão 0%**, **trava +10%** (contrato da 99; `_f99RegraErro` recusa
+  e explica; as regras do Firestore também); `_f99Preco` = a mesma conta do serviço (conferida em 60.018 combinações).
+  Prévia → "Enviar à 99" (⚠️ o envio SUBSTITUI o cardápio inteiro da loja na 99) → sincronização sozinha; avisos de foto,
+  itens fora, trava de massa. O iFood segue com a regra dele (`config/ifoodPreco`).
+- **Conectar meu 99Food** (`#secao99Conexao`, `config/food99ConexaoPedido`): o restaurante informa o ID da loja (só números)
+  e autoriza no link da 99; a equipe confere (admin grava `food99Conexao.equipe`) e o serviço liga.
+- **Motoboy** (`entregador.html`): selo 99Food, "📱 Pago na 99" / "📱 Pix na entrega · receber", código de entrega da 99
+  (rota `/99food/…/codigo-entrega`).
+- Conferido num sandbox (Node `vm`, DOM/Firebase simulados): pedidos normais e do iFood renderizam IGUAL ao `master` (card,
+  comanda, produção, modal — 79 comparações; motoboy 3 cards); só os da 99 mudam. Não testado em navegador nem com a 99 real.
+- **Rebaseada em 20/10/2026** sobre a master com os 5 bugs (o original ficou em `origin/feat/99food-antes-rebase`): card/modal
+  da 99 usam `pid`/`_esc` como o resto, "Pix na entrega · receber" do motoboy cobre a 99 pelo `pixReceber`, `pixTarjaHtml`
+  ignora `_ehPlataforma`. `npm test` 7/7; o sandbox da 99 só mudou o que é dos bugs (escape do nome, modal de finalizado).
+  ⚠️ **Pendente antes de ligar**: `_notasDoCodigoDeEntrega` só olha `ifoodCodigoEntregaValidado` — entrega própria concluída
+  pelo código da 99 (`food99CodigoEntregaValidado`) também não cria a nota pendente (mesmo bug 2).
+
 ## Bairro liga/desliga (desde 15/10/2026)
 
 Configurações > Bairros ganhou um toggle por bairro. Pausar tira o bairro do cardápio e do
