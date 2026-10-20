@@ -2892,13 +2892,22 @@ function atualizarSidebar() {
     if (config.logoUrl) { _logoImg.src = config.logoUrl; _logoImg.style.display = ''; }
     else { _logoImg.removeAttribute('src'); _logoImg.style.display = 'none'; }
   }
-  // Status aberto/fechado na sidebar
+  _sbStatusPronto = true;
+  _atualizarStatusSidebar();
+}
+// Status aberto/fechado na sidebar. O horário passa sem o config/loja mudar: um relógio de 60 s e a volta da aba
+// (visibilitychange) refazem SÓ o dot/texto — nome e logo ficam com o atualizarSidebar (snapshot e salvar).
+// Antes do 1º atualizarSidebar o config ainda não chegou (estaAberto daria Fechado) → o relógio não mexe.
+let _sbStatusPronto = false;
+function _atualizarStatusSidebar() {
   const aberto = estaAberto();
   const dot  = document.querySelector('.status-dot');
   const stat = document.querySelector('.sb-store-status');
   if (dot)  dot.style.background  = aberto ? '#34d399' : '#e74c3c';
   if (stat) stat.innerHTML = `<span class="status-dot" style="background:${aberto?'#34d399':'#e74c3c'}"></span>${aberto?'Aberto':'Fechado'}`;
 }
+setInterval(() => { if (_sbStatusPronto) _atualizarStatusSidebar(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && _sbStatusPronto) _atualizarStatusSidebar(); });
 function getDefaultCardapio() {
   return [
     {id:1,categoria:'Pizza',nome:'Margherita Clássica',desc:'Molho de tomate pelati, mussarela de búfala e manjericão',preco:45,emoji:'🍕',foto:null},
