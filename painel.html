@@ -2678,9 +2678,10 @@ function atualizarStatusFb(id, status) {
 function _pagamentoMotoboy(p) {
   const brl = (n) => (Number(n) || 0).toFixed(2).replace('.', ',');
   const total = brl(p.total);
-  if (p.pagamento === 'ifood') return { txt: '📱 Pago no app · não cobrar', tpl: 'Pago no app, não cobrar' };
+  // iFood/99 pagos online ('ifood' / '99food'): nada a receber. Pix da 99 é sempre na entrega (o online vem como '99food').
+  if (p.pagamento === 'ifood' || p.pagamento === '99food') return { txt: '📱 Pago no app · não cobrar', tpl: 'Pago no app, não cobrar' };
   if (p.pagamento === 'pix') {
-    const receber = p.pixStatus !== 'pago' && (p.pagamentoManual === true || _ehIfood(p));
+    const receber = p.pixStatus !== 'pago' && (p.pagamentoManual === true || _ehIfood(p) || p.origem === '99food');
     return receber ? { txt: `📱 Pix na entrega · receber R$ ${total}`, tpl: `Pix na entrega, receber ${total}` }
                    : { txt: '📱 Pix · pago', tpl: 'Pix (já pago)' };
   }
