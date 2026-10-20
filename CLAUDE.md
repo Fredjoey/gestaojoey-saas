@@ -283,8 +283,16 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
 - **Rebaseada em 20/10/2026** sobre a master com os 5 bugs (o original ficou em `origin/feat/99food-antes-rebase`): card/modal
   da 99 usam `pid`/`_esc` como o resto, "Pix na entrega · receber" do motoboy cobre a 99 pelo `pixReceber`, `pixTarjaHtml`
   ignora `_ehPlataforma`. `npm test` 7/7; o sandbox da 99 só mudou o que é dos bugs (escape do nome, modal de finalizado).
-  ⚠️ **Pendente antes de ligar**: `_notasDoCodigoDeEntrega` só olha `ifoodCodigoEntregaValidado` — entrega própria concluída
-  pelo código da 99 (`food99CodigoEntregaValidado`) também não cria a nota pendente (mesmo bug 2).
+- **20/10/2026 (2º rebase, sobre a master `82e45cc` — Pix trocado na mão/aviso ao motoboy/escape)**; original em
+  `origin/feat/99food-antes-rebase-2` (`9049005`):
+  - `_notasDoCodigoDeEntrega` olha `ifoodCodigoEntregaValidado || food99CodigoEntregaValidado` → a entrega própria concluída
+    pelo código da 99 cria a nota pendente (`test/99food-nota-codigo.test.js`).
+  - `_pagamentoMotoboy` (aviso de WhatsApp ao motoboy) conhece a 99: `'99food'` = "📱 Pago no app · não cobrar"; Pix da 99 =
+    "Pix na entrega · receber" — antes do ajuste o pedido pago na 99 sairia "Dinheiro · receber" (`test/99food-aviso-motoboy.test.js`).
+  - Conflitos resolvidos: `pixReceber` do motoboy (regra nova `pixStatus !== 'pago'` + o Pix da 99), campo do código com
+    `data-pid` + botão da 99, `pixTarjaHtml` (`_ehPlataforma` + Pix na entrega), CPF da NFC-e (`_esc` + `_ehPlataforma`).
+  - `npm test` 19/19. Antes × depois (original × rebaseada) com 90 pedidos sintéticos da 99 + 624 reais: card, modal, comanda,
+    produção, mesa, busca, histórico e NFC-e iguais; só muda a linha de pagamento do aviso ao motoboy e o markup dos botões do app.
 
 ## Bairro liga/desliga (desde 15/10/2026)
 
