@@ -343,11 +343,16 @@ function render(lista) {
     const pill = emRota ? `<span class="pill pill-rota">Em rota</span>` : `<span class="pill pill-fila">Na fila</span>`;
     const itens = (p.itens || []).map(i => `${i.qty || i.qtd || 1}× ${esc(i.nome || '')}`).join('<br>');
     const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
-    const pix = p.pagamento === 'pix';
+    // Pix NA ENTREGA (a receber): a forma trocada no painel (pagamentoManual) ou o Pix OFFLINE do iFood (o joey-ifood só
+    // grava 'pix' quando o iFood manda cobrar na entrega). "Pix · pago" fica para o Pix online do cardápio.
+    const pixReceber = p.pagamento === 'pix' && (p.pagamentoManual === true || (p.origem === 'ifood' && !!p.ifoodOrderId));
+    const pix = p.pagamento === 'pix' && !pixReceber;
     const trocoTxt = (p.pagamento === 'dinheiro' && p.troco) ? ` · troco p/ R$ ${Number(p.troco).toFixed(2).replace('.', ',')}` : '';
     const cartao = p.pagamento === 'cartao' || p.pagamento === 'credito' || p.pagamento === 'debito';
     const pagHtml = p.pagamento === 'ifood'                     // pago online no app do iFood: nada a receber
       ? `<span class="pago">📱 Pago no iFood</span>`
+      : pixReceber
+      ? `<span class="receber">📱 Pix na entrega · receber</span>`
       : pix
       ? `<span class="pago">📱 Pix · pago</span>`
       : `<span class="receber">${cartao ? '💳 Cartão na entrega' : '💵 Dinheiro' + trocoTxt} · receber</span>`;

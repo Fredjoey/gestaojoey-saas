@@ -254,6 +254,7 @@ textarea.fi{resize:vertical;min-height:60px}
 .chip-pronto{background:rgba(52,211,153,.12);color:#34d399}
 .chip-entregue{background:rgba(167,139,250,.12);color:#a78bfa}
 .chip-cancelado{background:rgba(231,76,60,.1);color:#ff6b6b}
+.chip-finalizado{background:rgba(148,163,184,.14);color:#cbd5e1}
 
 .link-row{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:1.25rem;}
 .link-url{flex:1;font-size:11px;color:var(--text2);word-break:break-all;line-height:1.5}
@@ -2529,6 +2530,7 @@ const STATUS_LABELS = {
   producao:   {label:'👨‍🍳 Produção',   cls:'chip-producao'},
   pronto:     {label:'🚀 Pronto',      cls:'chip-pronto'},
   entregue:   {label:'🎉 Entregue',    cls:'chip-entregue'},
+  finalizado: {label:'🏁 Finalizado',  cls:'chip-finalizado'},
   cancelado:  {label:'❌ Cancelado',   cls:'chip-cancelado'}
 };
 const STATUS_NEXT = {
@@ -3789,12 +3791,16 @@ function ordinalPedidoDoCliente(p) {
   }
 }
 
+// Pix pago FORA do app (na entrega), sem QR do Mercado Pago: a forma trocada na mão (pagamentoManual) ou o Pix OFFLINE do
+// iFood — o joey-ifood só grava pagamento 'pix' quando o iFood manda cobrar na entrega (o Pix online do iFood vira 'ifood').
+function _pixNaEntrega(p) { return !!p && p.pagamento === 'pix' && (p.pagamentoManual === true || _ehIfood(p)); }
+
 // Estado de bloqueio de um pedido PIX: confirmável APENAS quando pago.
 // Qualquer outro estado (gerando/pendente/redirect/erro/expirado) fica TRAVADO —
 // só o webhook (pixStatus='pago') destrava. Vale p/ Mercado Pago (e futuros gateways).
 function _pixLockState(p) {
-  // pagamentoManual = operador trocou a forma (Pix na entrega / dinheiro / cartão) → destrava o Pix online não pago
-  if (p.pagamento !== 'pix' || p.status !== 'novo' || p.pixStatus === 'pago' || p.pagamentoManual === true) return { locked: false, glow: false, erro: false, badge: '' };
+  // Pix na entrega (operador trocou a forma, ou Pix offline do iFood) → não há Pix online a esperar
+  if (p.pagamento !== 'pix' || p.status !== 'novo' || p.pixStatus === 'pago' || _pixNaEntrega(p)) return { locked: false, glow: false, erro: false, badge: '' };
   const s = p.pixStatus;
   if (s === 'expirado') return { locked: true, glow: false, erro: true, badge: '⏰ Pix expirado — cancele o pedido' };
   if (typeof s === 'string' && s.indexOf('erro') === 0) return { locked: true, glow: false, erro: true, badge: '⚠️ Falha ao gerar o Pix — cancele o pedido' };
@@ -3941,8 +3947,8 @@ function entregadorLinhaHtml(p) {
   const selSt = 'background:var(--bg4);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:10px;padding:1px 4px;font-family:inherit;cursor:pointer';
   return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#a78bfa;margin:2px 0 8px;font-weight:600" onclick="event.stopPropagation()">
     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🛵 ${_escMb(p.entregadorNome || '?')} · ${quando}</span>
-    ${_motoboysAtivos.length ? `<select title="Trocar entregador" style="${selSt}" onchange="atribuirMotoboy('${p.id}', this.value); this.selectedIndex=0"><option value="">trocar…</option>${_mbOpts()}</select>` : ''}
-    <button title="Remover entregador" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px" onclick="desatribuirMotoboy('${p.id}')">✕</button>
+    ${_motoboysAtivos.length ? `<select title="Trocar entregador" style="${selSt}" onchange="atribuirMotoboy('${_wppIdJs(p.id)}', this.value); this.selectedIndex=0"><option value="">trocar…</option>${_mbOpts()}</select>` : ''}
+    <button title="Remover entregador" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px" onclick="desatribuirMotoboy('${_wppIdJs(p.id)}')">✕</button>
   </div>`;
 }
 // Dropdown de atribuição (só quando NÃO há entregador). comEnvio=true (card 'pronto') envia p/ entrega.
@@ -3950,7 +3956,7 @@ function entregadorLinhaHtml(p) {
 function entregadorSelectHtml(p) {
   if (p.entrega !== 'delivery' || !_motoboysAtivos.length || p.entregadorId) return '';
   const st = 'width:100%;background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.3);border-radius:8px;font-size:12px;font-weight:600;padding:8px 10px;font-family:inherit;cursor:pointer';
-  return `<select style="${st}" onclick="event.stopPropagation()" onchange="atribuirMotoboy('${p.id}', this.value)"><option value="">🛵 Atribuir entregador…</option>${_mbOpts()}</select>`;
+  return `<select style="${st}" onclick="event.stopPropagation()" onchange="atribuirMotoboy('${_wppIdJs(p.id)}', this.value)"><option value="">🛵 Atribuir entregador…</option>${_mbOpts()}</select>`;
 }
 // SÓ atribui o motoboy — NÃO move o pedido de coluna. Grava entregadorId/entregadorNome/atribuidoEm.
 // Sair p/ entrega (→ "Entregues hoje") é ação SEPARADA: o botão "Enviar para entrega" (avancarStatus),
@@ -3985,7 +3991,9 @@ async function desatribuirMotoboy(pedidoId) {
 }
 
 function orderCardHtml(p) {
-  const itensStr = (p.itens||[]).map(i => `${i.qty}× ${i.nome}`).join(', ');
+  const itensStr = (p.itens||[]).map(i => `${_esc(i.qty)}× ${_esc(i.nome)}`).join(', ');
+  // id em onclick: o campo id vem de quem gravou o pedido (o cardápio grava) — o mesmo filtro do inbox
+  const pid = _wppIdJs(p.id);
 
   // PIX: estado visual do card (travado até o pagamento ser confirmado)
   const _pix       = _pixLockState(p);
@@ -3994,7 +4002,7 @@ function orderCardHtml(p) {
     ? `<div class="${_pix.erro ? 'badge-pix-expirado' : 'badge-aguardando-pix'}">${_pix.badge}</div>`
     : '';
   const _badgeAuto = (p.autoAceito && p.status === 'producao')
-    ? `<span class="badge-auto">${p.pagamento === 'pix' ? 'AUTO + PIX OK' : 'AUTO'}</span>`
+    ? `<span class="badge-auto">${p.pagamento === 'pix' && !_ehIfood(p) ? 'AUTO + PIX OK' : 'AUTO'}</span>`   // iFood: Pix offline, cobrado na entrega
     : '';
 
   // Botões específicos por status
@@ -4006,31 +4014,31 @@ function orderCardHtml(p) {
         // total, no topo). Aqui o "🔒 Aguardando pagamento" sai — o Pix não está pendente,
         // está vencido, e o badge acima já diz isso. Secundárias descem em 2 colunas.
         botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
-        <button class="oc-btn" style="width:100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700;font-size:13px;padding:11px" onclick="event.stopPropagation();regerarPix('${p.id}')">🔄 Gerar novo PIX</button>
+        <button class="oc-btn" style="width:100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700;font-size:13px;padding:11px" onclick="event.stopPropagation();regerarPix('${pid}')">🔄 Gerar novo PIX</button>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <button class="oc-btn" style="background:#232323;color:var(--text2);border:1px solid #3a3a3a;font-size:12px;padding:8px" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma</button>
-          <button class="oc-btn" style="background:#2a1414;color:#e88;border:1px solid #5a2222;font-size:12px;padding:8px" onclick="cancelarPedido('${p.id}')">Cancelar</button>
+          <button class="oc-btn" style="background:#232323;color:var(--text2);border:1px solid #3a3a3a;font-size:12px;padding:8px" onclick="trocarFormaPagamento('${pid}')">💳 Trocar forma</button>
+          <button class="oc-btn" style="background:#2a1414;color:#e88;border:1px solid #5a2222;font-size:12px;padding:8px" onclick="cancelarPedido('${pid}')">Cancelar</button>
         </div>
       </div>`;
       } else {
       botoes = `
       <button class="oc-btn" style="background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;flex:1;border:1px solid rgba(100,100,100,.2)" disabled>🔒 Aguardando pagamento Pix</button>
-      <button class="oc-btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma</button>
-      <button class="oc-btn oc-cancel" onclick="cancelarPedido('${p.id}')">Cancelar</button>`;
+      <button class="oc-btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${pid}')">💳 Trocar forma</button>
+      <button class="oc-btn oc-cancel" onclick="cancelarPedido('${pid}')">Cancelar</button>`;
       }
     } else {
       botoes = `
-      <button class="oc-btn oc-next" onclick="avancarStatus('${p.id}')">✅ Confirmar → Produção</button>
-      <button class="oc-btn oc-cancel" onclick="cancelarPedido('${p.id}')">Cancelar</button>`;
+      <button class="oc-btn oc-next" onclick="avancarStatus('${pid}')">✅ Confirmar → Produção</button>
+      <button class="oc-btn oc-cancel" onclick="cancelarPedido('${pid}')">Cancelar</button>`;
     }
   } else if (p.status === 'producao') {
     botoes = `
-      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.15);color:#34d399" onclick="avancarStatus('${p.id}')">🚀 Marcar pronto</button>
-      <button class="oc-btn oc-cancel" onclick="cancelarPedido('${p.id}')">Cancelar</button>`;
+      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.15);color:#34d399" onclick="avancarStatus('${pid}')">🚀 Marcar pronto</button>
+      <button class="oc-btn oc-cancel" onclick="cancelarPedido('${pid}')">Cancelar</button>`;
   } else if (p.status === 'pronto') {
     if (p.tipo === 'mesa' || p.origem === 'salao') {
       botoes = `
-      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.15);color:#34d399;flex:1" onclick="avancarStatus('${p.id}')">✅ Entregue na mesa</button>`;
+      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.15);color:#34d399;flex:1" onclick="avancarStatus('${pid}')">✅ Entregue na mesa</button>`;
     } else {
       // Delivery: atribuir entregador (dropdown, SÓ atribui) é SEPARADO de enviar p/ entrega (botão).
       // EMPILHADOS (coluna, largura total) — dropdown em cima, botão "Enviar para entrega" largo embaixo
@@ -4038,7 +4046,7 @@ function orderCardHtml(p) {
       const _atrib = entregadorSelectHtml(p); // só se joey+motoboys e ainda SEM entregador
       botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
         ${_atrib || ''}
-        <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;width:100%;white-space:nowrap" onclick="avancarStatus('${p.id}')">🛵 Enviar para entrega</button>
+        <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;width:100%;white-space:nowrap" onclick="avancarStatus('${pid}')">🛵 Enviar para entrega</button>
         ${_ifoodCodigoHtml(p)}
       </div>`;
     }
@@ -4047,16 +4055,16 @@ function orderCardHtml(p) {
     botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
       ${_selAtrib || ''}
       ${_ifoodCodigoHtml(p)}
-      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${p.id}')">✓ Finalizar pedido</button>
-      <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>
+      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${pid}')">✓ Finalizar pedido</button>
+      <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${pid}')">🧾 NFCe</button>
     </div>`;
   } else if (p.status === 'cancelado' && _ehIfood(p)) {
-    botoes = `<button class="oc-btn" style="width:100%;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.35)" onclick="event.stopPropagation();ifoodCancelamentoCiente('${p.id}')">✓ Ciente — tirar do quadro</button>`;
+    botoes = `<button class="oc-btn" style="width:100%;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.35)" onclick="event.stopPropagation();ifoodCancelamentoCiente('${pid}')">✓ Ciente — tirar do quadro</button>`;
   } else if (p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') {
     // Estado 2 (entregue pelo motoboy): "Finalizar pedido" ARQUIVA (sai do Kanban) + mantém NFCe, empilhados.
     botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
-      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${p.id}')">✓ Finalizar pedido</button>
-      <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${p.id}')">🧾 NFCe</button>
+      <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${pid}')">✓ Finalizar pedido</button>
+      <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${pid}')">🧾 NFCe</button>
     </div>`;
   }
 
@@ -4070,23 +4078,23 @@ function orderCardHtml(p) {
     : '';
 
   return `
-    <div class="order-card${_cardCls}${(p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') ? ' entregue-ok' : ''}"${p.status === 'cancelado' ? ' style="border-color:rgba(239,68,68,.6);opacity:.9"' : ''} onclick="openOrderModal('${p.id}')">
-      <div class="oc-top"><span style="display:flex;align-items:center;gap:6px"><span class="oc-id">${p.id}</span>${_badgeAuto}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${p.id}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${p.hora}</span></span></div>
-      <div class="oc-cliente">${p.cliente?.nome||'—'}</div>
+    <div class="order-card${_cardCls}${(p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') ? ' entregue-ok' : ''}"${p.status === 'cancelado' ? ' style="border-color:rgba(239,68,68,.6);opacity:.9"' : ''} onclick="openOrderModal('${pid}')">
+      <div class="oc-top"><span style="display:flex;align-items:center;gap:6px"><span class="oc-id">${_esc(p.id)}</span>${_badgeAuto}</span><span style="display:flex;align-items:center;gap:6px"><button onclick="event.stopPropagation();_executarImpressao(pedidos.find(x=>x.id==='${pid}'))" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px;color:var(--text2);line-height:1" title="Imprimir comanda">🖨️</button><span class="oc-time">${_esc(p.hora)}</span></span></div>
+      <div class="oc-cliente">${_esc(p.cliente?.nome||'—')}</div>
       ${_agendadoBadgeHtml(p)}
       ${_ifoodBadgesHtml(p)}
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
       ${p.status === 'cancelado' ? '' : _timerPillHtml(p)}
-      ${p.entrega==='delivery'&&p.cliente?`<div style="font-size:11px;color:var(--text2);margin:-2px 0 8px;line-height:1.35">📍 ${((p.cliente.rua||'')+(p.cliente.numero?', '+p.cliente.numero:''))||'—'}${p.cliente.bairro?' · '+p.cliente.bairro:''}${p.cliente.ref?`<br><span style="color:var(--orange)">Ref: ${p.cliente.ref}</span>`:''}</div>`:''}
-      ${p.mesa ? `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--orange);color:#fff;border-radius:6px;padding:4px 10px;margin-bottom:8px;font-size:12px;font-weight:700;letter-spacing:.2px">🍽️ ${p.mesaNome || ('Mesa ' + p.mesa)}</div>` : ''}
+      ${p.entrega==='delivery'&&p.cliente?`<div style="font-size:11px;color:var(--text2);margin:-2px 0 8px;line-height:1.35">📍 ${_esc(((p.cliente.rua||'')+(p.cliente.numero?', '+p.cliente.numero:''))||'—')}${p.cliente.bairro?' · '+_esc(p.cliente.bairro):''}${p.cliente.ref?`<br><span style="color:var(--orange)">Ref: ${_esc(p.cliente.ref)}</span>`:''}</div>`:''}
+      ${p.mesa ? `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--orange);color:#fff;border-radius:6px;padding:4px 10px;margin-bottom:8px;font-size:12px;font-weight:700;letter-spacing:.2px">🍽️ ${_esc(p.mesaNome || ('Mesa ' + p.mesa))}</div>` : ''}
       ${pixTarjaHtml(p)}
       ${_badgePix}
       <div class="oc-itens">${itensStr}</div>
       ${entregadorLinhaHtml(p)}
       ${p.desconto && p.desconto.valorAplicado > 0 ? `<div style="font-size:11px;color:#34d399;margin-top:4px">Desconto: − R$ ${p.desconto.valorAplicado.toFixed(2).replace('.',',')}</div>` : ''}
       <div class="oc-footer">
-        <span class="oc-pag">${p.pagamento?.toUpperCase()||'—'}${(p.pagamento==='pix'&&p.pagamentoManual)?' (na entrega)':''}</span>
+        <span class="oc-pag">${_esc(p.pagamento?.toUpperCase()||'—')}${_pixNaEntrega(p)?' (na entrega)':''}</span>
         <span class="oc-total">R$ ${(p.total||0).toFixed(2).replace('.',',')}</span>
       </div>
       <div class="oc-actions" onclick="event.stopPropagation()">${botoes}</div>
@@ -4103,7 +4111,7 @@ let _entregaTimerInt = null;
 // com pedido pra agora. dataHoraAgendada já vem formatada ("DD/MM HH:MM") do bot.
 function _agendadoBadgeHtml(p) {
   if (!p || p.origem !== 'whatsapp' || !p.agendado || !p.dataHoraAgendada) return '';
-  let html = `<div class="oc-agendado">📅 Agendado: ${p.dataHoraAgendada}</div>`;
+  let html = `<div class="oc-agendado">📅 Agendado: ${_esc(p.dataHoraAgendada)}</div>`;
   if (p.agendadoNaoPago === true) html += `<div class="oc-naopago">⚠️ Agendado não pago — Pix antecipado pendente</div>`;
   return html;
 }
@@ -4167,7 +4175,7 @@ function _timerPillHtml(p) {
     const cor = info.parado > info.limite ? 'red' : 'green';
     return `<div class="oc-timer-wrap"><span class="oc-timer oc-timer-${cor}" title="Tempo total do pedido (cronômetro parado)">✓ ${_mmss(info.parado - info.base)}</span></div>`;
   }
-  return `<div class="oc-timer-wrap"><span class="oc-timer" id="octimer-${p.id}" data-limite="${info.limite}"></span></div>`;
+  return `<div class="oc-timer-wrap"><span class="oc-timer" id="octimer-${_esc(p.id)}" data-limite="${info.limite}"></span></div>`;
 }
 
 function tickEntregaTimers() {
@@ -4594,6 +4602,21 @@ function _ifoodCodigoRefocar() {
   const el = document.getElementById('ifoodCod_' + id);
   if (el && document.activeElement !== el && !el.disabled) { el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (_) {} }
 }
+// Nota pendente da entrega concluída pelo CÓDIGO (painel ou app do motoboy): quem grava finalizado + entregueEm é o
+// serviço, e o pedido validado ainda em "Prontos" pula o 'entregue' — onde a conclusão manual cria a nota pendente
+// (_aplicarAvanco). Roda a cada snapshot de pedidos: uma vez por pedido na sessão (salvarNotaFiscalPedido não mexe em
+// nota que já existe) e só para validação das últimas 24 h (pedido antigo não ganha nota com a data de hoje).
+const _notaCodigoVista = new Set();
+function _notasDoCodigoDeEntrega() {
+  const desde = Date.now() - 24 * 3600 * 1000;
+  pedidos.forEach(p => {
+    const v = p.ifoodCodigoEntregaValidado;
+    if (!v || p.status !== 'finalizado' || _notaCodigoVista.has(p.id)) return;
+    if ((_tsMs(v.em) || _tsMs(p.entregueEm) || 0) < desde) return;
+    _notaCodigoVista.add(p.id);
+    salvarNotaFiscalPedido(p);
+  });
+}
 async function validarCodigoIfood(id) {
   const p = pedidos.find(x => x.id === id);
   if (!p || !_ifoodPedeCodigo(p) || _ifoodEmAndamento.has(id)) return;
@@ -4706,14 +4729,14 @@ function _ifoodModalHtml(p) {
   const out = [];
   out.push(`<div style="margin:12px 0 4px;font-size:10px;font-weight:700;color:#ea1d2c;text-transform:uppercase;letter-spacing:1px">iFood${p.ifoodDisplayId ? ' #' + _esc(p.ifoodDisplayId) : ''}</div>`);
   if (p.status === 'cancelado') out.push(row('❌ Cancelamento', _esc(_ifoodCancelTxt(p)), '#ef4444'));
-  out.push(row('Tipo', (_IFOOD_TIPO[p.ifoodTipo] || p.ifoodTipo || '—') + (p.ifoodTipo === 'DELIVERY' ? ` · entrega ${p.ifoodEntregaPor === 'IFOOD' ? 'pelo iFood' : 'da loja'}` : '')));
+  out.push(row('Tipo', _esc(_IFOOD_TIPO[p.ifoodTipo] || p.ifoodTipo || '—') + (p.ifoodTipo === 'DELIVERY' ? ` · entrega ${p.ifoodEntregaPor === 'IFOOD' ? 'pelo iFood' : 'da loja'}` : '')));
   const ag = _ifoodAgendado(p);
   if (ag) out.push(row('📅 Agendado', _esc(ag), '#a78bfa'));
   else if (_ifoodPrevisto(p)) out.push(row('Previsto', _esc(_ifoodHora(_ifoodPrevisto(p)))));
   if (_ifoodTelTxt(p)) out.push(row('Telefone (iFood)', _esc(_ifoodTelTxt(p))));
   if (p.ifoodPedidosNaLoja != null || (_ifoodRaw(p).customer || {}).ordersCountOnMerchant != null) {
     const n = p.ifoodPedidosNaLoja != null ? p.ifoodPedidosNaLoja : _ifoodRaw(p).customer.ordersCountOnMerchant;
-    out.push(row('Pedidos na loja', n > 0 ? `${n} anterior(es)` : 'primeiro pedido'));
+    out.push(row('Pedidos na loja', n > 0 ? `${_esc(n)} anterior(es)` : 'primeiro pedido'));
   }
   _ifoodPagamentos(p).forEach(m => out.push(row(m.online ? '✅ Pago online' : '💰 Cobrar na entrega',
     `${_esc(m.txt)} · ${_brlIf(m.valor)}${m.troco ? ` · troco p/ ${_brlIf(m.troco.para)} (levar ${_brlIf(m.troco.levar)})` : ''}`, m.online ? '#34d399' : '#fbbf24')));
@@ -4939,7 +4962,7 @@ function _ifoodBadgesHtml(p) {
   if (p.status !== 'cancelado' && p.ifoodCancelamentoFalhou) linhas.push(aviso('#ef4444', '⚠ iFood recusou o cancelamento: ' + _esc(p.ifoodCancelamentoFalhou.motivo || '')));
   if (p.status === 'novo' && p.ifoodAutoAceiteFalhou) linhas.push(aviso('#ef4444', '⚠ Auto-aceite no iFood falhou — confirme na mão: ' + _esc(p.ifoodAutoAceiteFalhou.mensagem || '')));
   if (p.status === 'cancelado') linhas.push(aviso('#ef4444', '❌ <b>CANCELADO</b> — ' + _esc(_ifoodCancelTxt(p))));
-  if (_ifoodNegPendente(p)) linhas.push(`<div onclick="event.stopPropagation();abrirNegociacaoIfood('${_esc(p.id)}')" style="cursor:pointer;font-size:11px;color:#f59e0b;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:5px 7px;margin:0 0 6px;line-height:1.35">⚖️ ${_esc(_ifoodNegTitulo(p.ifoodNegociacao))} — responder até ${_esc(_ifoodHora(p.ifoodNegociacao.expiraEm))} ›</div>`);
+  if (_ifoodNegPendente(p)) linhas.push(`<div onclick="event.stopPropagation();abrirNegociacaoIfood('${_wppIdJs(p.id)}')" style="cursor:pointer;font-size:11px;color:#f59e0b;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:5px 7px;margin:0 0 6px;line-height:1.35">⚖️ ${_esc(_ifoodNegTitulo(p.ifoodNegociacao))} — responder até ${_esc(_ifoodHora(p.ifoodNegociacao.expiraEm))} ›</div>`);
   const ag = _ifoodAgendado(p);
   if (ag) linhas.push(aviso('#a78bfa', '📅 <b>Agendado</b>: ' + _esc(ag)));
   else if (p.ifoodTipo === 'TAKEOUT' && _ifoodPrevisto(p)) linhas.push(aviso('var(--text2)', '🏃 Retirada às ' + _esc(_ifoodHora(_ifoodPrevisto(p)))));
@@ -5877,18 +5900,19 @@ function finalizarTodosEntregues() {
 function openOrderModal(id) {
   const p=pedidos.find(x=>x.id===id); if (!p) return;
   document.getElementById('modalTitle').textContent=`Pedido ${p.id}`;
-  const st=STATUS_LABELS[p.status], next=STATUS_NEXT[p.status];
+  const st=STATUS_LABELS[p.status]||{label:p.status,cls:''}, next=STATUS_NEXT[p.status];   // status sem rótulo não quebra o modal
+  const pid=_wppIdJs(p.id);   // id em onclick (o campo id vem de quem gravou o pedido)
   const itensHtml=(p.itens||[]).map(i=>{
     const itemTotal=totalItem(i);
     const adicionaisHtml=(i.adicionais||[]).filter(a=>a.qty>0).map(a=>{
-      const rotulo = a.grupo ? `${a.grupo}: ${a.nome}` : `+ ${a.qty}× ${a.nome}`;
+      const rotulo = a.grupo ? `${_esc(a.grupo)}: ${_esc(a.nome)}` : `+ ${_esc(a.qty)}× ${_esc(a.nome)}`;
       const val = (a.preco||0) > 0 ? ` — R$ ${((a.preco||0)*(a.qty||0)).toFixed(2).replace('.',',')}` : ' — incluso';
       return `<div style="font-size:11px;color:var(--text2);padding-left:20px;margin-top:2px">${rotulo}${val}</div>`;
     }).join('');
     return `
     <div class="detail-row" style="flex-direction:column;align-items:stretch">
       <div style="display:flex;justify-content:space-between;align-items:baseline">
-        <span class="detail-key">${i.emoji||''} ${i.qty}× ${i.nome}${i.obs?` <em style="color:var(--text3)">(${i.obs})</em>`:''}</span>
+        <span class="detail-key">${_esc(i.emoji||'')} ${_esc(i.qty)}× ${_esc(i.nome)}${i.obs?` <em style="color:var(--text3)">(${_esc(i.obs)})</em>`:''}</span>
         <span class="detail-val">R$ ${itemTotal.toFixed(2).replace('.',',')}</span>
       </div>
       ${adicionaisHtml}
@@ -5896,41 +5920,41 @@ function openOrderModal(id) {
   }).join('');
   const _ruaNum = p.cliente ? ((p.cliente.rua||'') + (p.cliente.numero ? ', ' + p.cliente.numero : '')) : ''; // compat: antigo tem rua+nº juntos
   const endHtml=p.entrega==='delivery'&&p.cliente
-    ?`${_ruaNum}${p.cliente.comp?` — ${p.cliente.comp}`:''}${p.cliente.bairro?` · ${p.cliente.bairro}`:''}`
+    ?`${_esc(_ruaNum)}${p.cliente.comp?` — ${_esc(p.cliente.comp)}`:''}${p.cliente.bairro?` · ${_esc(p.cliente.bairro)}`:''}`
     :p.entrega==='local'?'🍽️ Consumo no local':'🏠 Retirada no local';
   document.getElementById('modalBody').innerHTML=`
-    <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val"><span class="chip ${st.cls}">${st.label}</span></span></div>
-    <div class="detail-row"><span class="detail-key">Data / Hora</span><span class="detail-val">${p.data} às ${p.hora}</span></div>
-    <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${p.cliente?.nome||'—'}</span></div>
-    ${_ehIfood(p) ? '' : `<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${p.cliente?.tel||'—'}</span></div>`}
+    <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val"><span class="chip ${st.cls}">${_esc(st.label)}</span></span></div>
+    <div class="detail-row"><span class="detail-key">Data / Hora</span><span class="detail-val">${_esc(p.data)} às ${_esc(p.hora)}</span></div>
+    <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${_esc(p.cliente?.nome||'—')}</span></div>
+    ${_ehIfood(p) ? '' : `<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${_esc(p.cliente?.tel||'—')}</span></div>`}
     <div class="detail-row"><span class="detail-key">Entrega</span><span class="detail-val">${endHtml}</span></div>
-    ${p.cliente?.ref?`<div class="detail-row"><span class="detail-key">📍 Referência</span><span class="detail-val" style="color:var(--orange);font-weight:600">${p.cliente.ref}</span></div>`:''}
+    ${p.cliente?.ref?`<div class="detail-row"><span class="detail-key">📍 Referência</span><span class="detail-val" style="color:var(--orange);font-weight:600">${_esc(p.cliente.ref)}</span></div>`:''}
     <div style="margin:12px 0 4px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Itens do pedido</div>
     ${itensHtml}
     <div class="detail-row"><span class="detail-key">Subtotal</span><span class="detail-val">R$ ${(p.subtotal||p.total||0).toFixed(2).replace('.',',')}</span></div>
     <div class="detail-row"><span class="detail-key">Taxa entrega</span><span class="detail-val">${(p.taxaEntrega||0)===0?'Grátis':'R$ '+(p.taxaEntrega).toFixed(2).replace('.',',')}</span></div>
-    ${p.desconto && p.desconto.valorAplicado > 0 ? `<div class="detail-row"><span class="detail-key">Desconto</span><span class="detail-val" style="color:#34d399">− R$ ${p.desconto.valorAplicado.toFixed(2).replace('.',',')}${p.desconto.tipo==='percent'?' ('+p.desconto.valor+'%)':''}</span></div>` : ''}
+    ${p.desconto && p.desconto.valorAplicado > 0 ? `<div class="detail-row"><span class="detail-key">Desconto</span><span class="detail-val" style="color:#34d399">− R$ ${p.desconto.valorAplicado.toFixed(2).replace('.',',')}${p.desconto.tipo==='percent'?' ('+_esc(p.desconto.valor)+'%)':''}</span></div>` : ''}
     <div class="detail-row" style="font-size:15px"><span class="detail-key" style="color:var(--text);font-weight:700">Total</span><span class="detail-val" style="color:var(--orange);font-size:16px">R$ ${(p.total||0).toFixed(2).replace('.',',')}</span></div>
-    <div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">${p.pagamento?.toUpperCase()||'—'}${(p.pagamento==='pix'&&p.pagamentoManual)?' (na entrega)':''}${p.troco>0?` · troco p/ R$ ${p.troco.toFixed(2).replace('.',',')}`:''}${p.formaPagamentoAnterior?` <span style="color:var(--text3);font-size:11px">(era ${p.formaPagamentoAnterior.toUpperCase()})</span>`:''}</span></div>
+    <div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">${_esc(p.pagamento?.toUpperCase()||'—')}${_pixNaEntrega(p)?' (na entrega)':''}${p.troco>0?` · troco p/ R$ ${p.troco.toFixed(2).replace('.',',')}`:''}${p.formaPagamentoAnterior?` <span style="color:var(--text3);font-size:11px">(era ${_esc(p.formaPagamentoAnterior.toUpperCase())})</span>`:''}</span></div>
     ${_ehIfood(p) ? _ifoodModalHtml(p) : ''}
     <div style="display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap">
       ${p.status==='novo'
         ? (_pixLockState(p).locked
             ? `<button class="btn" style="flex:1;background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;border:1px solid rgba(100,100,100,.2)" disabled>🔒 ${_pixLockState(p).badge}</button>`
-            : `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Confirmar → Produção</button>`)
-          + (_ehIfood(p) ? '' : `<button class="btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${p.id}')">💳 Trocar forma de pagamento</button>`)
+            : `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${pid}');closeOrderModal()">✅ Confirmar → Produção</button>`)
+          + (_ehIfood(p) ? '' : `<button class="btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${pid}')">💳 Trocar forma de pagamento</button>`)
         : p.status==='producao'
-        ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${p.id}');closeOrderModal()">🚀 Marcar pronto</button>
-           ${_ehIfood(p) ? '' : `<button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${p.id}')">✏️ Editar pedido</button>`}`
+        ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${pid}');closeOrderModal()">🚀 Marcar pronto</button>
+           ${_ehIfood(p) ? '' : `<button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${pid}')">✏️ Editar pedido</button>`}`
         : p.status==='pronto'
         ? ((p.tipo==='mesa'||p.origem==='salao')
-            ? `<button class="btn btn-primary" style="flex:1;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3)" onclick="avancarStatus('${p.id}');closeOrderModal()">✅ Entregue na mesa</button>`
-            : `<button class="btn btn-primary" style="flex:1;background:rgba(167,139,250,.2);color:#a78bfa;border:1px solid rgba(167,139,250,.3)" onclick="avancarStatus('${p.id}');closeOrderModal()">🛵 Enviar para entrega + avisar cliente</button>`)
+            ? `<button class="btn btn-primary" style="flex:1;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3)" onclick="avancarStatus('${pid}');closeOrderModal()">✅ Entregue na mesa</button>`
+            : `<button class="btn btn-primary" style="flex:1;background:rgba(167,139,250,.2);color:#a78bfa;border:1px solid rgba(167,139,250,.3)" onclick="avancarStatus('${pid}');closeOrderModal()">🛵 Enviar para entrega + avisar cliente</button>`)
         : ''}
-      ${!['entregue','cancelado'].includes(p.status)?`<button class="btn btn-danger" onclick="cancelarPedido('${p.id}');closeOrderModal()">Cancelar</button>`:''}
-      ${_podeRegerarPix(p)?`<button class="btn" style="flex:1 1 100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();regerarPix('${p.id}')">🔄 Gerar novo PIX</button>`:''}
-      ${['entregue','cancelado','finalizado'].includes(p.status) && !_ehIfood(p)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${p.id}')">🔁 Pedir novamente</button>`:''}
-      ${_ifoodNegPendente(p)?`<button class="btn" style="flex:1 1 100%;background:#f59e0b;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();abrirNegociacaoIfood('${p.id}')">⚖️ Responder negociação do iFood</button>`:''}
+      ${!['entregue','cancelado','finalizado'].includes(p.status)?`<button class="btn btn-danger" onclick="cancelarPedido('${pid}');closeOrderModal()">Cancelar</button>`:''}
+      ${_podeRegerarPix(p)?`<button class="btn" style="flex:1 1 100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();regerarPix('${pid}')">🔄 Gerar novo PIX</button>`:''}
+      ${['entregue','cancelado','finalizado'].includes(p.status) && !_ehIfood(p)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${pid}')">🔁 Pedir novamente</button>`:''}
+      ${_ifoodNegPendente(p)?`<button class="btn" style="flex:1 1 100%;background:#f59e0b;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();abrirNegociacaoIfood('${pid}')">⚖️ Responder negociação do iFood</button>`:''}
     </div>`;
   document.getElementById('orderModal').classList.add('show');
 }
@@ -10714,6 +10738,7 @@ function iniciarListenersFirestore() {
       }
     });
 
+    _notasDoCodigoDeEntrega();
     renderKanban();
     startPixTimers();
     verificarAniversariantes();
@@ -11664,7 +11689,7 @@ function cliWppBtn(tel) {
 let pixTimerInterval = null;
 
 function pixTarjaHtml(p) {
-  if (p.pagamento !== 'pix') return '';
+  if (p.pagamento !== 'pix' || _ehIfood(p)) return '';   // iFood: Pix offline, cobrado na entrega — não há Pix a gerar nem a esperar
   if (!p.pixStatus || p.pixStatus === 'aguardando_geracao' || p.pixStatus === 'gerando') {
     return '<div class="pix-tarja pix-tarja-gerando">⏳ Gerando PIX...</div>';
   }
@@ -11676,7 +11701,7 @@ function pixTarjaHtml(p) {
     const mmss = String(min).padStart(2,'0') + ':' + String(seg).padStart(2,'0');
     const cls  = restante < 120000 ? 'pix-tarja-warn' : 'pix-tarja-pendente';
     const ico  = restante < 120000 ? '⚠️' : '⏳';
-    return `<div class="pix-tarja ${cls}" data-pix-expira="${p.pixExpira}" data-pix-pid="${p.id}">${ico} PIX Pendente — ${mmss}</div>`;
+    return `<div class="pix-tarja ${cls}" data-pix-expira="${p.pixExpira}" data-pix-pid="${_esc(p.id)}">${ico} PIX Pendente — ${mmss}</div>`;
   }
   if (p.pixStatus === 'pago') {
     return '<div class="pix-tarja pix-tarja-pago">💚 PIX Confirmado! — Pagamento recebido</div>';
