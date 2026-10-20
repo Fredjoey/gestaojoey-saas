@@ -4750,11 +4750,13 @@ function _ifoodCodigoRefocar() {
 // serviço, e o pedido validado ainda em "Prontos" pula o 'entregue' — onde a conclusão manual cria a nota pendente
 // (_aplicarAvanco). Roda a cada snapshot de pedidos: uma vez por pedido na sessão (salvarNotaFiscalPedido não mexe em
 // nota que já existe) e só para validação das últimas 24 h (pedido antigo não ganha nota com a data de hoje).
+// Vale para o iFood (ifoodCodigoEntregaValidado) e para a 99 (food99CodigoEntregaValidado — o joey-ifood grava o mesmo
+// { em, por, papel } e o mesmo finalizado + entregueEm).
 const _notaCodigoVista = new Set();
 function _notasDoCodigoDeEntrega() {
   const desde = Date.now() - 24 * 3600 * 1000;
   pedidos.forEach(p => {
-    const v = p.ifoodCodigoEntregaValidado;
+    const v = p.ifoodCodigoEntregaValidado || p.food99CodigoEntregaValidado;
     if (!v || p.status !== 'finalizado' || _notaCodigoVista.has(p.id)) return;
     if ((_tsMs(v.em) || _tsMs(p.entregueEm) || 0) < desde) return;
     _notaCodigoVista.add(p.id);
