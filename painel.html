@@ -786,6 +786,12 @@ body.suporte-on #botAlertBanner{top:36px}
     <div class="bot-item" id="ifoodCardItem" style="display:none;cursor:pointer" onclick="abrirIfoodCardapio()" title="Cardápio no iFood: regra de preço, envio e sincronização">
       <div><div class="tempo-label">Cardápio no iFood</div><div id="ifoodCardLabel" class="ifl-sel">—</div></div>
     </div>
+    <div class="bot-item" id="food99LojaItem" style="display:none;cursor:pointer" onclick="abrirLoja99()" title="Loja na 99Food: abrir, fechar, pausar e horários">
+      <div><div class="tempo-label">Loja na 99</div><div id="food99LojaLabel" class="ifl-sel">—</div></div>
+    </div>
+    <div class="bot-item" id="food99CardItem" style="display:none;cursor:pointer" onclick="abrirCardapio99()" title="Cardápio na 99Food: prévia, envio e sincronização">
+      <div><div class="tempo-label">Cardápio na 99</div><div id="food99CardLabel" class="ifl-sel">—</div></div>
+    </div>
     <div class="bot-item">
       <div><div id="autoAceitarLabel" class="auto-label-off" style="font-size:12px;font-weight:700">🤖 Auto-aceitar: OFF</div></div>
       <label class="auto-switch">
@@ -1331,6 +1337,32 @@ body.suporte-on #botAlertBanner{top:36px}
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
             <button class="btn btn-primary" onclick="salvarRegraIfood()">Salvar regra</button>
             <button class="ifl-btn" onclick="abrirIfoodCardapio()">🛵 Cardápio no iFood (envio, prévia, log)…</button>
+          </div>
+        </div>
+
+        <div class="card-box" id="secao99Conexao" style="display:none">
+          <div class="section-lbl" style="margin-top:0">🟡 99Food — conectar minha loja</div>
+          <div id="f99xCorpo"></div>
+        </div>
+
+        <div class="card-box" id="secao99Cardapio" style="display:none">
+          <div class="section-lbl" style="margin-top:0">🟡 99Food — preço no cardápio</div>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Regra SÓ da 99 (a do iFood não muda). Padrão: <b>mesmo preço do balcão</b>. O contrato da 99 permite no máximo <b>+10%</b> sobre o balcão — acima disso o Gestão recusa.</p>
+          <div style="display:grid;grid-template-columns:130px minmax(0,220px);gap:8px;align-items:center">
+            <label for="f99Pct" style="font-size:12px;color:var(--text2)">Acréscimo (%)</label>
+            <input class="fi" id="f99Pct" type="number" min="0" max="10" step="0.5" inputmode="decimal" value="0" oninput="_f99RegraSujo=true;_f99RegraExemplo()">
+            <label for="f99Arr" style="font-size:12px;color:var(--text2)">Arredondar</label>
+            <select class="fi" id="f99Arr" onchange="_f99RegraSujo=true;_f99RegraExemplo()">
+              <option value="nenhum">sem arredondar</option>
+              <option value="90">para cima no ,90 (sem passar de +10%)</option>
+              <option value="99">para cima no ,99 (sem passar de +10%)</option>
+            </select>
+          </div>
+          <div id="f99Exemplo" style="font-size:12px;color:var(--text2);margin:8px 0"></div>
+          <div id="f99TextoRegra" style="font-size:12px;color:var(--text2);margin:0 0 8px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            <button class="btn btn-primary" onclick="salvarRegra99()">Salvar regra da 99</button>
+            <button class="ifl-btn" onclick="abrirCardapio99()">🟡 Cardápio na 99 (prévia, envio, log)…</button>
           </div>
         </div>
 
@@ -2077,6 +2109,55 @@ body.suporte-on #botAlertBanner{top:36px}
     </div>
     <div id="ifoodNegCorpo"></div>
     <div id="ifoodNegErro" style="font-size:13px;color:#ef4444;margin-top:10px"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cancel99Modal" onclick="if(event.target===this)cancelar99Voltar()">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">❌ Cancelar na 99Food <span id="cancel99PedidoId" style="color:var(--text2);font-weight:600"></span></div>
+      <button class="modal-close" onclick="cancelar99Voltar()">✕</button>
+    </div>
+    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;">Motivo (lista da 99) *</label>
+    <div id="cancel99Motivos" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto"></div>
+    <textarea id="cancel99Texto" class="fi" maxlength="200" rows="2" placeholder="Descreva o motivo (obrigatório em &quot;Outro motivo&quot;)" style="display:none;width:100%;margin-top:8px"></textarea>
+    <div style="font-size:12px;color:var(--text2);margin-top:12px;line-height:1.4">A 99 cancela na hora e avisa o cliente.</div>
+    <div id="cancel99Erro" style="font-size:13px;color:#ef4444;margin-top:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;">
+      <button onclick="cancelar99Voltar()" style="padding:9px 16px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">Voltar</button>
+      <button id="cancel99Btn" onclick="cancelar99Confirmar()" disabled style="padding:9px 16px;border-radius:8px;border:none;background:#e74c3c;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Cancelar na 99</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="food99SolModal" onclick="if(event.target===this)fecharSolicitacao99()">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">🙋 Pedido do cliente na 99 <span id="food99SolTitulo" style="color:var(--text2);font-weight:600"></span></div>
+      <button class="modal-close" onclick="fecharSolicitacao99()">✕</button>
+    </div>
+    <div id="food99SolCorpo"></div>
+    <div id="food99SolErro" style="font-size:13px;color:#ef4444;margin-top:10px"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="food99LojaModal" onclick="if(event.target===this)fecharLoja99()">
+  <div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <div class="modal-title">🟡 Loja na 99Food</div>
+      <button class="modal-close" onclick="fecharLoja99()">✕</button>
+    </div>
+    <div id="food99LojaCorpo"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="food99CardModal" onclick="if(event.target===this)fecharCardapio99()">
+  <div class="modal-box" style="max-width:760px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <div class="modal-title">🟡 Cardápio na 99Food</div>
+      <button class="modal-close" onclick="fecharCardapio99()">✕</button>
+    </div>
+    <div id="food99CardCorpo"></div>
   </div>
 </div>
 
@@ -3695,7 +3776,7 @@ function renderKanban() {
     //  - Entregues hoje: inalterado (ts DESC da lista global)
     if (col.key==='novo' || col.key==='producao') cp.sort((a,b) => (a.ts||0) - (b.ts||0));
     else if (col.key==='pronto')                  cp.sort((a,b) => _prontoTs(a) - _prontoTs(b));
-    if (col.key==='novo') cp = _ifoodCanceladosNoQuadro().concat(cp);   // cancelado do iFood: no topo até o "Ciente"
+    if (col.key==='novo') cp = _ifoodCanceladosNoQuadro().concat(_99CanceladosNoQuadro(), cp);   // cancelado do iFood/99: no topo até o "Ciente"
     if (col.key==='entregue') {
       const q = buscaEntregues.toLowerCase().trim();
       let cpFiltrado = q ? cp.filter(p =>
@@ -3745,6 +3826,7 @@ function renderKanban() {
   startEntregaTimers();
   _ifoodCodigoRefocar();
   _ifoodNegRender();
+  _99SolRender();
 }
 
 // Mesmo número gravado de jeitos diferentes: "5521999884477", "21999884477",
@@ -3995,6 +4077,7 @@ function entregadorLinhaHtml(p) {
 // Dropdown que SÓ atribui (não move de coluna). Aparece só quando ainda não há entregador.
 function entregadorSelectHtml(p) {
   if (p.entrega !== 'delivery' || !_motoboysAtivos.length || p.entregadorId) return '';
+  if (_eh99(p) && !_99Propria(p)) return '';   // 99Food: entrega pelo entregador DA 99 — sem motoboy da loja
   const st = 'width:100%;background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.3);border-radius:8px;font-size:12px;font-weight:600;padding:8px 10px;font-family:inherit;cursor:pointer';
   return `<select style="${st}" onclick="event.stopPropagation()" onchange="atribuirMotoboy('${_wppIdJs(p.id)}', this.value)"><option value="">🛵 Atribuir entregador…</option>${_mbOpts()}</select>`;
 }
@@ -4086,7 +4169,7 @@ function orderCardHtml(p) {
       const _atrib = entregadorSelectHtml(p); // só se joey+motoboys e ainda SEM entregador
       botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
         ${_atrib || ''}
-        <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;width:100%;white-space:nowrap" onclick="avancarStatus('${pid}')">🛵 Enviar para entrega</button>
+        <button class="oc-btn oc-next" style="background:rgba(167,139,250,.15);color:#a78bfa;width:100%;white-space:nowrap" onclick="avancarStatus('${pid}')">${_eh99(p) ? _99RotuloPronto(p) : '🛵 Enviar para entrega'}</button>
         ${_ifoodCodigoHtml(p)}
       </div>`;
     }
@@ -4098,8 +4181,8 @@ function orderCardHtml(p) {
       <button class="oc-btn oc-next" style="background:rgba(52,211,153,.1);color:#34d399;width:100%" onclick="arquivarPedido('${pid}')">✓ Finalizar pedido</button>
       <button class="oc-btn" style="background:rgba(255,107,53,.08);color:var(--orange);border:1px solid rgba(255,107,53,.2);width:100%" onclick="openNfceModal('${pid}')">🧾 NFCe</button>
     </div>`;
-  } else if (p.status === 'cancelado' && _ehIfood(p)) {
-    botoes = `<button class="oc-btn" style="width:100%;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.35)" onclick="event.stopPropagation();ifoodCancelamentoCiente('${pid}')">✓ Ciente — tirar do quadro</button>`;
+  } else if (p.status === 'cancelado' && _ehPlataforma(p)) {
+    botoes = `<button class="oc-btn" style="width:100%;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.35)" onclick="event.stopPropagation();${_eh99(p) ? 'food99CancelamentoCiente' : 'ifoodCancelamentoCiente'}('${pid}')">✓ Ciente — tirar do quadro</button>`;
   } else if (p.status === 'finalizado' && p.entregueEm && p.entrega === 'delivery') {
     // Estado 2 (entregue pelo motoboy): "Finalizar pedido" ARQUIVA (sai do Kanban) + mantém NFCe, empilhados.
     botoes = `<div style="flex:1 1 100%;display:flex;flex-direction:column;gap:8px">
@@ -4123,6 +4206,7 @@ function orderCardHtml(p) {
       <div class="oc-cliente">${_esc(p.cliente?.nome||'—')}</div>
       ${_agendadoBadgeHtml(p)}
       ${_ifoodBadgesHtml(p)}
+      ${_99BadgesHtml(p)}
       ${_pedCounter}
       <div class="oc-tipo">${p.entrega==='delivery'?'🛵 Delivery':p.entrega==='local'?'🍽️ No local':'🏠 Retirada'}</div>
       ${p.status === 'cancelado' ? '' : _timerPillHtml(p)}
@@ -4553,6 +4637,7 @@ function avancarStatus(id) {
   if (_pixLockState(p).locked) { notify('⏳ Pedido aguardando pagamento Pix — só avança após a confirmação.', 'error'); return; }
   // iFood: primeiro o iFood aceita, DEPOIS o card anda (ver _avancarIfood).
   if (_ehIfood(p)) { _avancarIfood(p); return; }
+  if (_eh99(p)) { _avancar99(p); return; }   // 99Food: idem, pelo serviço (rotas /99food/)
   _aplicarAvanco(p);
 }
 
@@ -4569,7 +4654,7 @@ function _aplicarAvanco(p) {
   atualizarStatusFb(id, novoStatus);
   notify(`Pedido ${id} → ${STATUS_LABELS[novoStatus].label}`);
   const isMesa = !!(p.mesa || p.tipo === 'mesa' || p.origem === 'salao');
-  const semWpp = isMesa || _ehIfood(p);
+  const semWpp = isMesa || _ehPlataforma(p);   // telefone do iFood/99 é virtual, não do cliente
   if (statusAnterior === 'novo') { imprimirPedidoProducao(p); if (!semWpp) enviarWppConfirmado(p); }
   if (statusAnterior === 'producao' && novoStatus === 'pronto' && !semWpp && p.entrega === 'retirada') enviarWppProntoRetirada(p);
   if (statusAnterior === 'pronto' && novoStatus === 'entregue' && !semWpp) enviarWppEntregue(p);
@@ -4637,6 +4722,7 @@ function _ifoodPedeCodigo(p) {
     && (p.status === 'pronto' || p.status === 'entregue');
 }
 function _ifoodCodigoHtml(p) {
+  if (_eh99(p)) return _99CodigoHtml(p);
   if (!_ifoodPedeCodigo(p)) return '';
   const id = _esc(p.id);
   const ocupado = _ifoodEmAndamento.has(p.id);
@@ -5036,6 +5122,492 @@ function _ifoodBadgesHtml(p) {
   return linhas.join('');
 }
 
+// ── 99Food: o painel RESPONDE à 99 pelo serviço joey-ifood (módulo src/99food/, rotas /99food/pedidos/…) ─────────
+// Mesma régua do iFood: confirmar/pronto/despachar/entregue/cancelar de pedido origem:'99food' passam pelo serviço,
+// que chama a 99 com o token da loja; só com a 99 aceitando o card anda. Os webhooks da 99 mudam o status direto no
+// Firestore (só para frente) — nada aqui é disparado por snapshot (sem eco). Pedido da 99 só existe com o serviço
+// ligado (FOOD99_PEDIDOS=on); sem ele nada disto aparece. Tipo de entrega: 0 retirada · 1 entregador DA 99 · 2 própria.
+function _eh99(p) { return !!(p && p.origem === '99food' && p.food99OrderId); }
+function _ehPlataforma(p) { return _ehIfood(p) || _eh99(p); }
+function _99Retirada(p) { return p.food99Retirada === true || Number(p.food99TipoEntrega) === 0; }
+function _99Propria(p) { return _eh99(p) && !_99Retirada(p) && Number(p.food99TipoEntrega) === 2; }
+function _99PelaPlataforma(p) { return _eh99(p) && !_99Retirada(p) && Number(p.food99TipoEntrega) === 1; }
+const _99Num = (p) => (p && p.food99OrderIndex != null ? '#' + p.food99OrderIndex : '');
+const _99TipoTxt = (p) => (_99Retirada(p) ? 'retirada' : (_99PelaPlataforma(p) ? 'entrega pela 99' : 'entrega própria'));
+// Botão de "Pronto" do pedido da 99 (a 99 não manda WhatsApp ao cliente: nada de "avisar cliente").
+const _99RotuloPronto = (p) => (_99Retirada(p) ? '✅ Cliente retirou' : (_99PelaPlataforma(p) ? '🛵 Entregador da 99 retirou' : '🛵 Enviar para entrega'));
+const _99CanceladosAqui = new Set();   // cancelados por este painel (sem cupom/aviso de "a 99 cancelou")
+
+async function _99Chamar(p, acao, { metodo = 'POST', corpo } = {}) {
+  const u = firebase.auth().currentUser;
+  if (!u) throw new Error('Sessão expirada. Recarregue o painel.');
+  const idToken = await u.getIdToken();
+  let resp;
+  try {
+    resp = await fetch(`${IFOOD_API}/99food/pedidos/${slug}/${encodeURIComponent(p.id)}/${acao}`, {
+      method: metodo,
+      headers: { 'Authorization': 'Bearer ' + idToken, ...(corpo ? { 'Content-Type': 'application/json' } : {}) },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+  } catch (e) {
+    throw new Error('sem conexão com o serviço da 99Food — tente de novo');
+  }
+  let j = {};
+  try { j = await resp.json(); } catch (_) {}
+  if (!resp.ok || !j.ok) throw new Error(j.erro || ('erro ' + resp.status + ' no serviço da 99Food'));
+  return j;
+}
+
+// novo → confirmar · produção → pronto · pronto → saiu (entrega própria: despachar, exige o motoboy; entrega da 99:
+// sem chamada, a 99 registra quando o entregador dela retirar) ou retirado (retirada: o cliente buscou → finish).
+function _99AcaoAvanco(p) {
+  if (p.status === 'novo') return 'confirmar';
+  if (p.status === 'producao') return 'pronto';
+  if (p.status === 'pronto') return _99Retirada(p) ? 'entregue' : 'despachar';
+  return null;
+}
+async function _avancar99(p) {
+  if (_ifoodEmAndamento.has(p.id)) return;
+  const acao = _99AcaoAvanco(p);
+  if (!acao) return;
+  const de = p.status;
+  _ifoodEmAndamento.add(p.id);
+  renderKanban();
+  try {
+    const r = await _99Chamar(p, acao);
+    const atual = pedidos.find(x => x.id === p.id) || p;
+    if (atual.status === de) _aplicarAvanco(atual);
+    else if (de === 'novo') imprimirPedidoProducao(atual);   // o webhook da 99 chegou antes: imprime igual
+    if (r.semChamada && r.motivo) notify('ℹ️ 99Food: ' + r.motivo);
+  } catch (e) {
+    notify(`❌ 99Food não aceitou (pedido ${p.id}): ${e.message}`, 'error');
+  } finally {
+    _ifoodEmAndamento.delete(p.id);
+    renderKanban();
+  }
+}
+
+// "Finalizar pedido" de ENTREGA PRÓPRIA que saiu e ainda não foi concluída na 99 (sem código de entrega): avisa a 99
+// que entregou (delivered) e só então arquiva. Entrega pela 99 e retirada: a 99 já concluiu/conclui sozinha.
+function _99PrecisaEntregue(p) { return _99Propria(p) && p.status === 'entregue'; }
+async function _99EntregueEArquivar(p) {
+  if (_ifoodEmAndamento.has(p.id)) return false;
+  _ifoodEmAndamento.add(p.id);
+  renderKanban();
+  try {
+    await _99Chamar(p, 'entregue');
+    _arquivarPedido(p.id);
+    return true;
+  } catch (e) {
+    notify(`❌ 99Food não aceitou a entrega do pedido ${p.id}: ${e.message}`, 'error');
+    return false;
+  } finally {
+    _ifoodEmAndamento.delete(p.id);
+    renderKanban();
+  }
+}
+
+// Código de entrega (entrega PRÓPRIA): o cliente vê no app da 99 e fala ao motoboy; a 99 valida e o SERVIÇO conclui
+// (o app do motoboy chama a mesma rota). Usa o mesmo estado/campo do iFood (_ifoodCod, id ifoodCod_…) — o refoco
+// depois do re-render do Kanban vale para os dois.
+function _99PedeCodigo(p) { return _99Propria(p) && (p.status === 'pronto' || p.status === 'entregue'); }
+function _99CodigoHtml(p) {
+  if (!_99PedeCodigo(p)) return '';
+  const id = _esc(p.id);
+  const ocupado = _ifoodEmAndamento.has(p.id);
+  const erro = _ifoodCod.erro[p.id];
+  return `<div onclick="event.stopPropagation()" style="display:flex;flex-direction:column;gap:6px;width:100%">
+    <div style="display:flex;gap:6px">
+      <input id="ifoodCod_${id}" type="text" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="Código de entrega (99)"
+        value="${_esc(_ifoodCod.valor[p.id] || '')}" ${ocupado ? 'disabled' : ''}
+        oninput="_ifoodCod.valor['${id}']=this.value" onfocus="_ifoodCod.foco='${id}'" onblur="if(this.isConnected&&_ifoodCod.foco==='${id}')_ifoodCod.foco=null"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();validarCodigo99('${id}')}"
+        style="flex:1;min-width:0;background:var(--bg3);color:var(--text);border:1px solid rgba(250,204,21,.4);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;letter-spacing:2px">
+      <button class="oc-btn" ${ocupado ? 'disabled' : ''} onclick="validarCodigo99('${id}')"
+        style="background:rgba(250,204,21,.14);color:#facc15;border:1px solid rgba(250,204,21,.4);white-space:nowrap">${ocupado ? '⏳' : '🔑 Validar e entregar'}</button>
+    </div>
+    ${erro ? `<div style="font-size:11px;color:#ef4444;line-height:1.35">⚠ ${_esc(erro)}</div>` : ''}
+  </div>`;
+}
+async function validarCodigo99(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p || !_99PedeCodigo(p) || _ifoodEmAndamento.has(id)) return;
+  const codigo = String(_ifoodCod.valor[id] || '').replace(/\D/g, '');
+  if (codigo.length < 4) { _ifoodCod.erro[id] = 'Digite o código que o cliente vê no app da 99.'; renderKanban(); return; }
+  _ifoodCod.erro[id] = null;
+  _ifoodCod.foco = null;
+  _ifoodEmAndamento.add(id);
+  renderKanban();
+  try {
+    await _99Chamar(p, 'codigo-entrega', { corpo: { codigo } });
+    delete _ifoodCod.valor[id];
+    notify(`✅ 99Food confirmou a entrega do pedido ${id} — concluído`);
+  } catch (e) {
+    _ifoodCod.erro[id] = e.message;
+    notify(`❌ Código de entrega (pedido ${id}): ${e.message}`, 'error');
+  } finally {
+    _ifoodEmAndamento.delete(id);
+    renderKanban();
+  }
+}
+
+// Entregador DA 99 + pagamento em dinheiro: ele paga a loja ao retirar; a loja confirma que recebeu (payConfirm).
+async function food99DinheiroRecebido(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p || _ifoodEmAndamento.has(id)) return;
+  if (!confirm(`Confirmar que o entregador da 99 pagou ${_brlIf((p.food99Pagamento || {}).dinheiroDoEntregador)} em dinheiro (pedido ${id})?`)) return;
+  _ifoodEmAndamento.add(id);
+  renderKanban();
+  try {
+    await _99Chamar(p, 'dinheiro-recebido');
+    notify(`✅ 99Food: dinheiro do pedido ${id} confirmado`);
+  } catch (e) {
+    notify(`❌ 99Food (pedido ${id}): ${e.message}`, 'error');
+  } finally {
+    _ifoodEmAndamento.delete(id);
+    renderKanban();
+  }
+}
+
+function _99CancelTxt(p) {
+  const s = p.food99CancelamentoSolicitado;
+  if (s && s.descricao) return 'pela loja: ' + s.descricao;
+  return p.motivoCancelamento || 'Cancelado na 99Food';
+}
+function _99Pagamento(p) {
+  const g = p.food99Pagamento || {};
+  if (g.online !== false) return { online: true, txt: g.canalNome || 'app da 99', valor: p.total || 0 };
+  const troco = p.pagamento === 'dinheiro' && p.troco > 0
+    ? { para: p.troco, levar: Math.max(0, Math.round((p.troco - (p.total || 0)) * 100) / 100) } : null;
+  const txt = { dinheiro: 'Dinheiro', credito: 'Crédito', debito: 'Débito', pix: 'Pix' }[p.pagamento] || (g.canalNome || p.pagamento || '—');
+  return { online: false, txt: txt + (g.canalNome && g.canalNome.toLowerCase() !== txt.toLowerCase() ? ' · ' + g.canalNome : ''), valor: g.clientePaga != null ? g.clientePaga : (p.total || 0), troco, conferir: g.conferir || '' };
+}
+// Pedido do CLIENTE pendente (cancelamento ou reembolso) ainda dentro do prazo → { tipo, s } | null.
+function _99SolPendente(p) {
+  if (!_eh99(p)) return null;
+  const ok = (s) => s && s.status === 'PENDENTE' && (!s.expiraEm || Date.parse(s.expiraEm) > Date.now());
+  if (ok(p.food99SolicitacaoCancelamento)) return { tipo: 'cancelamento', s: p.food99SolicitacaoCancelamento };
+  if (ok(p.food99SolicitacaoReembolso)) return { tipo: 'reembolso', s: p.food99SolicitacaoReembolso };
+  return null;
+}
+const _99SolTitulo = (sol) => (sol.tipo === 'cancelamento' ? 'Cliente pediu para CANCELAR' : 'Cliente pediu REEMBOLSO');
+
+// Selos do card (texto vindo da 99 passa por _esc).
+function _99BadgesHtml(p) {
+  if (!_eh99(p)) return '';
+  const linhas = [`<div style="font-size:11px;color:#facc15;font-weight:700;margin:2px 0 4px">99Food${_esc(_99Num(p))} · ${_99TipoTxt(p)}</div>`];
+  const aviso = (cor, txt) => `<div style="font-size:11px;color:${cor};margin:0 0 6px;line-height:1.35">${txt}</div>`;
+  if (_ifoodEmAndamento.has(p.id)) linhas.push(aviso('var(--text2)', '⏳ Enviando à 99…'));
+  if (p.status === 'novo' && p.food99ConfirmarAte) {
+    const falta = Date.parse(p.food99ConfirmarAte) - Date.now();
+    linhas.push(aviso(falta < 90000 ? '#ef4444' : '#f59e0b', falta > 0
+      ? `⏱️ Confirme até <b>${_esc(_ifoodHora(p.food99ConfirmarAte))}</b> — senão a 99 cancela`
+      : '⏱️ Prazo de 5 min da 99 passou — a 99 pode ter cancelado'));
+  }
+  if (p.status === 'novo' && p.food99AutoAceiteFalhou) linhas.push(aviso('#ef4444', '⚠ Auto-aceite na 99 falhou — confirme na mão: ' + _esc(p.food99AutoAceiteFalhou.mensagem || '')));
+  if (p.status === 'cancelado') linhas.push(aviso('#ef4444', '❌ <b>CANCELADO</b> — ' + _esc(_99CancelTxt(p))));
+  const sol = _99SolPendente(p);
+  if (sol) linhas.push(`<div onclick="event.stopPropagation();abrirSolicitacao99('${_esc(p.id)}')" style="cursor:pointer;font-size:11px;color:#f59e0b;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:5px 7px;margin:0 0 6px;line-height:1.35">🙋 ${_99SolTitulo(sol)} — responder até ${_esc(_ifoodHora(sol.s.expiraEm))} ›</div>`);
+  const parc = p.food99CancelamentoParcial;
+  if (parc) linhas.push(aviso('#ef4444', '⚠ Cancelamento PARCIAL na 99: ' + ((parc.itens || []).map(i => `${_esc(i.qtd)}× ${_esc(i.nome)}`).join(', ') || 'confira na 99') + (parc.reembolso ? ` · reembolso ${_brlIf(parc.reembolso)}` : '')));
+  if ((p.food99ItensDesconhecidos || []).length) linhas.push(aviso('#f59e0b', '⚠ Item fora do cardápio do Gestão: ' + p.food99ItensDesconhecidos.map(_esc).join(', ') + ' — confira'));
+  if (p.food99PrevistoEntrega && !_99Retirada(p)) linhas.push(aviso('var(--text2)', '🕒 Entrega prevista ' + _esc(_ifoodHora(p.food99PrevistoEntrega))));
+  const ent = p.food99Entregador;
+  if (ent && ent.descricao) linhas.push(aviso('var(--text2)', '🛵 ' + _esc(ent.descricao) + (ent.nome ? ' · ' + _esc(ent.nome) : '')));
+  const m = _99Pagamento(p);
+  linhas.push(aviso(m.online ? '#34d399' : '#fbbf24', m.online
+    ? `✅ Pago na 99 · ${_esc(m.txt)}`
+    : `💰 Cobrar ${_brlIf(m.valor)} · ${_esc(m.txt)}${m.troco ? ` · troco p/ ${_brlIf(m.troco.para)} (levar ${_brlIf(m.troco.levar)})` : ''}${m.conferir ? ' · ' + _esc(m.conferir) : ''}`));
+  const din = (p.food99Pagamento || {}).dinheiroDoEntregador;
+  if (din && _99PelaPlataforma(p) && p.pagamento === 'dinheiro') {
+    linhas.push(p.food99DinheiroRecebido
+      ? aviso('#34d399', `💵 Dinheiro do entregador da 99 recebido (${_brlIf(din)})`)
+      : `<div onclick="event.stopPropagation();food99DinheiroRecebido('${_esc(p.id)}')" style="cursor:pointer;font-size:11px;color:#fbbf24;border:1px solid rgba(251,191,36,.4);border-radius:6px;padding:5px 7px;margin:0 0 6px">💵 Entregador da 99 paga ${_brlIf(din)} na retirada — clique quando receber ›</div>`);
+  }
+  if (_ifoodDoc(p)) linhas.push(aviso('var(--text2)', '🧾 CPF/CNPJ na nota: ' + _esc(_ifoodDoc(p))));
+  if (p.food99CodigoEntregador) linhas.push(aviso('var(--text2)', '🔐 Código do entregador da 99: <b>' + _esc(p.food99CodigoEntregador) + '</b>'));
+  if (p.food99CodigoRetirada) linhas.push(aviso('var(--text2)', '🔐 Código de retirada: <b>' + _esc(p.food99CodigoRetirada) + '</b>'));
+  if (p.obs) linhas.push(aviso('var(--orange)', '📝 ' + _esc(p.obs)));
+  if ((p.itens || []).some(i => i.obs)) linhas.push(aviso('var(--orange)', '📝 Itens: ' + p.itens.filter(i => i.obs).map(i => `${_esc(i.nome)}: ${_esc(i.obs)}`).join(' · ')));
+  return linhas.join('');
+}
+
+// Linhas extras do pedido da 99 no MODAL de detalhe.
+function _99ModalHtml(p) {
+  const row = (k, v, cor) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val"${cor ? ` style="color:${cor};font-weight:600"` : ''}>${v}</span></div>`;
+  const out = [`<div style="margin:12px 0 4px;font-size:10px;font-weight:700;color:#facc15;text-transform:uppercase;letter-spacing:1px">99Food${_esc(_99Num(p))}</div>`];
+  if (p.status === 'cancelado') out.push(row('❌ Cancelamento', _esc(_99CancelTxt(p)), '#ef4444'));
+  out.push(row('Pedido na 99', `<code style="font-size:11px">${_esc(p.food99OrderId)}</code>`));
+  out.push(row('Tipo', _99TipoTxt(p)));
+  if (p.status === 'novo' && p.food99ConfirmarAte) out.push(row('⏱️ Confirmar até', _esc(_ifoodHora(p.food99ConfirmarAte)), '#f59e0b'));
+  if (p.food99PrevistoPreparo) out.push(row('Preparo previsto', _esc(_ifoodHora(p.food99PrevistoPreparo))));
+  if (p.food99PrevistoEntrega) out.push(row('Entrega prevista', _esc(_ifoodHora(p.food99PrevistoEntrega))));
+  const tel = p.food99Telefone;
+  if (tel && tel.numero && !_99PelaPlataforma(p)) out.push(row('Telefone (99)', _esc(tel.numero + (tel.localizador ? ' · ramal ' + tel.localizador : ''))));
+  const m = _99Pagamento(p);
+  out.push(row(m.online ? '✅ Pago na 99' : '💰 Cobrar do cliente', `${_esc(m.txt)} · ${_brlIf(m.valor)}${m.troco ? ` · troco p/ ${_brlIf(m.troco.para)} (levar ${_brlIf(m.troco.levar)})` : ''}`, m.online ? '#34d399' : '#fbbf24'));
+  const pr = p.food99Precos || {};
+  if (pr.lojaRecebe != null) out.push(row('A loja recebe (99)', _brlIf(pr.lojaRecebe)));
+  if (p.food99CustoLogistica) out.push(row('Custo da entrega (99)', _brlIf(p.food99CustoLogistica)));
+  if (_ifoodDoc(p)) out.push(row('🧾 CPF/CNPJ na nota', _esc(_ifoodDoc(p))));
+  if (p.food99CodigoEntregador) out.push(row('🔐 Código do entregador da 99', _esc(p.food99CodigoEntregador)));
+  if (p.food99CodigoRetirada) out.push(row('🔐 Código de retirada', _esc(p.food99CodigoRetirada)));
+  if (p.food99CodigoEntregaValidado) out.push(row('🔑 Código de entrega', 'validado na 99', '#34d399'));
+  const ent = p.food99Entregador;
+  if (ent && ent.descricao) out.push(row('🛵 Entregador', _esc(ent.descricao + (ent.nome ? ' · ' + ent.nome : '') + (ent.telefone ? ' · ' + ent.telefone : ''))));
+  if (p.obs) out.push(row('📝 Observações', _esc(p.obs), 'var(--orange)'));
+  const sc = p.food99SolicitacaoCancelamento, sr = p.food99SolicitacaoReembolso;
+  const stTxt = { PENDENTE: 'aguardando sua resposta', ACEITA: 'aceita', RECUSADA: 'recusada' };
+  if (sc && sc.applyId) out.push(row('🙋 Pedido de cancelamento', `${_esc(sc.motivo || '—')} — ${_esc(stTxt[sc.status] || sc.status || '')}`, _99SolPendente(p) && _99SolPendente(p).tipo === 'cancelamento' ? '#f59e0b' : undefined));
+  if (sr && sr.applyId) out.push(row('💸 Pedido de reembolso', `${_esc(sr.motivo || '—')} — ${_esc(stTxt[sr.status] || sr.status || '')}`));
+  return out.join('');
+}
+
+// ── Pedido do CLIENTE na 99 (cancelamento: sem resposta em 5 min a 99 RECUSA; reembolso: sem resposta a 99 APROVA) ─
+let _99SolAberta = null;
+function _99SolRender() {
+  const board = document.getElementById('kanbanBoard');
+  if (!board) return;
+  let el = document.getElementById('food99SolFaixa');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'food99SolFaixa';
+    board.parentNode.insertBefore(el, board);
+  }
+  el.innerHTML = (pedidos || []).filter(_99SolPendente).map(p => {
+    const sol = _99SolPendente(p);
+    return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.5);border-radius:10px;padding:10px 14px;margin:0 0 10px">
+      <span style="font-size:13px;color:#f59e0b;font-weight:700">🙋 99Food · Pedido ${_esc(p.id)}${p.food99OrderIndex != null ? ' (' + _esc(_99Num(p)) + ')' : ''}: ${_99SolTitulo(sol)}</span>
+      ${sol.s.motivo ? `<span style="font-size:12px;color:var(--text2)">“${_esc(sol.s.motivo)}”</span>` : ''}
+      <span style="font-size:12px;color:var(--text2)">responda até <b style="color:var(--text)">${_esc(_ifoodHora(sol.s.expiraEm))}</b> · se não responder, ${_esc(sol.s.seNaoResponder || '—')}</span>
+      <button onclick="abrirSolicitacao99('${_esc(p.id)}')" style="margin-left:auto;background:#f59e0b;color:#1a1a1a;border:none;border-radius:8px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer">Responder</button>
+    </div>`;
+  }).join('');
+}
+function abrirSolicitacao99(id) {
+  const p = pedidos.find(x => x.id === id);
+  const sol = p && _99SolPendente(p);
+  if (!sol) { notify('Este pedido não tem pedido do cliente aberto na 99 (ou o prazo acabou).', 'warning'); return; }
+  _99SolAberta = { id, tipo: sol.tipo };
+  const s = sol.s;
+  const opcoes = s.opcoes || [];
+  const imgs = (s.imagens || []).filter(u => /^https:\/\//.test(u));
+  document.getElementById('food99SolTitulo').textContent = `Pedido ${p.id}${p.food99OrderIndex != null ? ' · 99 ' + _99Num(p) : ''}`;
+  document.getElementById('food99SolCorpo').innerHTML = `
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">${_99SolTitulo(sol)}</div>
+    ${s.motivo ? `<div style="font-size:13px;color:var(--text2);margin-bottom:6px">Cliente: “${_esc(s.motivo)}”</div>` : ''}
+    ${imgs.length ? `<div style="font-size:12px;margin-bottom:6px">📷 ${imgs.map((u, i) => `<a href="${_esc(u)}" target="_blank" rel="noopener" style="color:#60a5fa">foto ${i + 1}</a>`).join(' · ')}</div>` : ''}
+    <div style="font-size:12px;color:#f59e0b;margin-bottom:12px">Prazo: ${_esc(_ifoodHora(s.expiraEm))} · se não responder, ${_esc(s.seNaoResponder || '—')}.</div>
+    ${sol.tipo === 'cancelamento' ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:11px;color:var(--text3)">Aceitar = a 99 cancela o pedido.</div>
+          <button onclick="responderSolicitacao99('aceitar')" style="padding:9px;border-radius:8px;border:none;background:#e74c3c;color:#fff;font-weight:700;cursor:pointer">Aceitar o cancelamento</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${opcoes.length ? `<select id="food99SolMotivo" class="fi" style="padding:7px"><option value="">Motivo da recusa…</option>${opcoes.map(o => `<option value="${_esc(o)}">${_esc(o)}</option>`).join('')}</select>`
+            : '<input id="food99SolMotivo" class="fi" maxlength="200" placeholder="Motivo da recusa (opcional)" style="padding:7px">'}
+          <button onclick="responderSolicitacao99('recusar')" style="padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-weight:700;cursor:pointer">Recusar (o pedido segue)</button>
+        </div>
+      </div>` : `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:11px;color:var(--text3)">Aceitar = a 99 reembolsa o cliente.</div>
+          <button onclick="responderSolicitacao99('aceitar')" style="padding:9px;border-radius:8px;border:none;background:#e74c3c;color:#fff;font-weight:700;cursor:pointer">Aceitar o reembolso</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <select id="food99SolMotivo" class="fi" style="padding:7px"><option value="">Motivo da recusa (obrigatório)…</option>${(s.motivosRecusa || []).map(r => `<option value="${_esc(r.id)}">${_esc(r.texto || r.id)}</option>`).join('')}</select>
+          <button onclick="responderSolicitacao99('recusar')" style="padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-weight:700;cursor:pointer">Recusar o reembolso</button>
+        </div>
+      </div>`}`;
+  document.getElementById('food99SolErro').textContent = '';
+  document.getElementById('food99SolModal').classList.add('show');
+}
+function fecharSolicitacao99() { document.getElementById('food99SolModal').classList.remove('show'); _99SolAberta = null; }
+async function responderSolicitacao99(decisao) {
+  const a = _99SolAberta;
+  const p = a && pedidos.find(x => x.id === a.id);
+  if (!p) return;
+  const el = document.getElementById('food99SolMotivo');
+  const motivo = el ? String(el.value || '').trim() : '';
+  const err = document.getElementById('food99SolErro');
+  if (a.tipo === 'reembolso' && decisao === 'recusar' && !motivo) { err.textContent = 'Para recusar o reembolso a 99 exige um motivo da lista.'; return; }
+  err.textContent = 'Enviando à 99…';
+  try {
+    await _99Chamar(p, `${a.tipo}-${decisao}`, { corpo: { motivo: motivo || null } });
+    notify(`✅ Resposta enviada à 99 (pedido ${p.id}: ${decisao === 'aceitar' ? 'aceitou' : 'recusou'} o ${a.tipo})`);
+    fecharSolicitacao99();
+  } catch (e) {
+    err.textContent = '❌ ' + e.message;
+  }
+}
+
+// Pedido da 99 CANCELADO fica no quadro (em "Em análise", com o motivo) até a equipe dar ciência — igual ao iFood.
+function _99CanceladosNoQuadro() {
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  return (pedidos || []).filter(p => _eh99(p) && p.status === 'cancelado' && p.data === hoje && !p.food99CancelamentoVisto && _passaFiltroAtivo(p));
+}
+async function food99CancelamentoCiente(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (p) { p.food99CancelamentoVisto = true; renderKanban(); }
+  try { await db.collection(`clientes/${slug}/pedidos`).doc(id).update({ food99CancelamentoVisto: true }); }
+  catch (e) { notify('Não consegui salvar: ' + e.message, 'error'); }
+}
+
+// ── Cancelar pedido da 99 pela LOJA: motivos da lista da 99 (GET /motivos-cancelamento); "Outro motivo" exige texto.
+// A 99 responde NA HORA (≠ iFood): com sucesso o card já vira cancelado (o orderCancel que chega depois só registra).
+let _cancel99Id = null, _cancel99Enviando = false;
+async function cancelar99Abrir(p) {
+  _cancel99Id = p.id;
+  const lista = document.getElementById('cancel99Motivos');
+  const txt = document.getElementById('cancel99Texto');
+  const btn = document.getElementById('cancel99Btn');
+  document.getElementById('cancel99PedidoId').textContent = '#' + p.id + (p.food99OrderIndex != null ? ' (99 ' + _99Num(p) + ')' : '');
+  document.getElementById('cancel99Erro').textContent = '';
+  txt.value = ''; txt.style.display = 'none';
+  btn.disabled = true;
+  lista.innerHTML = '<div style="font-size:13px;color:var(--text2)">⏳ Buscando os motivos da 99…</div>';
+  document.getElementById('cancel99Modal').classList.add('show');
+  try {
+    const r = await _99Chamar(p, 'motivos-cancelamento', { metodo: 'GET' });
+    if (_cancel99Id !== p.id) return;
+    if (!r.podeCancelar) { lista.innerHTML = '<div style="font-size:13px;color:#ef4444">A 99 não permite cancelar este pedido agora.</div>'; return; }
+    lista.innerHTML = r.motivos.map(m =>
+      `<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px">
+        <input type="radio" name="cancel99Motivo" value="${_esc(m.codigo)}" data-texto="${m.exigeTexto ? '1' : ''}" style="width:auto;margin-top:2px;accent-color:#facc15"
+          onchange="document.getElementById('cancel99Btn').disabled=false;document.getElementById('cancel99Texto').style.display=this.dataset.texto?'':'none'">
+        <span>${_esc(m.descricao || m.codigo)}</span></label>`).join('');
+  } catch (e) {
+    if (_cancel99Id === p.id) lista.innerHTML = `<div style="font-size:13px;color:#ef4444">Não consegui buscar os motivos: ${_esc(e.message)}</div>`;
+  }
+}
+function cancelar99Voltar() { _cancel99Id = null; document.getElementById('cancel99Modal').classList.remove('show'); }
+async function cancelar99Confirmar() {
+  const p = pedidos.find(x => x.id === _cancel99Id);
+  const sel = document.querySelector('input[name="cancel99Motivo"]:checked');
+  if (!p || !sel || _cancel99Enviando) return;
+  const texto = String(document.getElementById('cancel99Texto').value || '').trim();
+  const btn = document.getElementById('cancel99Btn');
+  const erro = document.getElementById('cancel99Erro');
+  if (sel.dataset.texto && texto.length < 3) { erro.textContent = 'Em "Outro motivo" a 99 exige a descrição.'; return; }
+  _cancel99Enviando = true;
+  btn.disabled = true;
+  btn.textContent = 'Enviando à 99…';
+  erro.textContent = '';
+  try {
+    const r = await _99Chamar(p, 'cancelar', { corpo: { codigoMotivo: sel.value, texto: texto || null } });
+    _99CanceladosAqui.add(p.id);
+    const motivo = '99Food (pela loja): ' + ((r.motivo && r.motivo.descricao) || texto || sel.value);
+    p.status = 'cancelado'; p.motivoCancelamento = motivo; p.food99CancelamentoVisto = true;
+    renderKanban();
+    cancelar99Voltar();
+    await db.collection(`clientes/${slug}/pedidos`).doc(p.id).update({
+      status: 'cancelado', motivoCancelamento: motivo, food99CancelamentoVisto: true,
+      canceladoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    }).catch(e => console.warn('[99 cancelar] gravar:', e.message));
+    notify(`Pedido ${p.id} cancelado na 99.`, 'warning');
+  } catch (e) {
+    erro.textContent = '99Food não aceitou: ' + e.message;   // o modal fica aberto e o card não muda
+    btn.disabled = false;
+  } finally {
+    _cancel99Enviando = false;
+    btn.textContent = 'Cancelar na 99';
+  }
+}
+
+// ── Comanda da 99 (produção e entrega). Entrega feita PELA 99: sem CPF e sem endereço no papel (vai com o
+// entregador parceiro — mesma regra do iFood). O nº grande é o do Gestão; o da 99 (order_index) vem logo abaixo.
+function gerarHtmlComanda99(p) {
+  const W = 28, dash = '- '.repeat(Math.floor(W / 2));
+  const parceiro = _99PelaPlataforma(p);
+  const e = (t) => _esc(t == null ? '' : String(t));
+  const linha = (a, b) => `<div class="row-val"><span>${a}</span><span>${b}</span></div>`;
+  const itensHtml = (p.itens || []).map(i => {
+    const unit = precoUnitario(i);
+    const adics = (i.adicionais || []).filter(a => a && a.nome).map(a =>
+      `<div class="adic"><span>${a.qty || 1} UN ${e(a.nome)}</span>${a.preco > 0 ? `<span>${_brlIf(a.preco * (a.qty || 1))}</span>` : ''}</div>`).join('');
+    return `<div class="row-item"><span class="item-desc">${i.qty} UN ${e(i.nome)}</span><span class="item-val">${_brlIf(unit * i.qty)}</span></div>${adics}`
+      + (i.obs ? `<div class="obs">Obs: ${e(i.obs)}</div>` : '');
+  }).join('<div class="line">' + '.'.repeat(W) + '</div>');
+  const m = _99Pagamento(p);
+  const pagHtml = m.online
+    ? linha(`Pago no app da 99 (${e(m.txt)})`, _brlIf(m.valor)) + '<div class="centro-bold">* Pago no app — não cobrar *</div>'
+    : `<div class="cli">Cobrar do cliente na entrega</div>${linha('&nbsp;&nbsp;' + e(m.txt), _brlIf(m.valor))}`
+      + (m.troco ? `<div class="cli">TROCO PARA: ${_brlIf(m.troco.para)}</div><div class="centro-bold">LEVAR TROCO: ${_brlIf(m.troco.levar)}</div>` : '');
+  const din = (p.food99Pagamento || {}).dinheiroDoEntregador;
+  const c = p.cliente || {};
+  const tel = p.food99Telefone;
+  const descontoV = p.desconto && p.desconto.valorAplicado > 0 ? p.desconto.valorAplicado : 0;
+  const entregaHtml = !_99Retirada(p) ? `
+<div class="line">${dash}</div>
+<div class="tipo-ent">ENTREGA PEDIDO ${e(_99Num(p) || p.id)}</div>
+<div class="cli">Entregue por: ${parceiro ? 'ENTREGADOR 99' : 'LOJA'}</div>
+${p.food99PrevistoEntrega ? `<div class="cli">Horário da entrega: ${e(_ifoodHora(p.food99PrevistoEntrega))}</div>` : ''}
+<div class="cli">Cliente: ${e(c.nome || '-')}</div>
+${parceiro ? '' : [
+    ((c.rua || '') + (c.numero ? ', ' + c.numero : '')) && `Endereço: ${(c.rua || '') + (c.numero ? ', ' + c.numero : '')}`,
+    c.comp && `Comp: ${c.comp}`, c.ref && `Ref: ${c.ref}`, c.bairro && `Bairro: ${c.bairro}`,
+    c.cidade && `Cidade: ${c.cidade}${c.uf ? ' - ' + c.uf : ''}`, c.cep && `CEP: ${c.cep}`,
+  ].filter(Boolean).map(l => `<div class="cli">${e(l)}</div>`).join('')}` : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;color:#000;background:#fff;font-weight:normal}
+@page{margin:0;size:80mm auto}
+@media print{*{color:#000!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+body{font-family:'Arial Narrow',Arial,sans-serif;font-size:13px;width:80mm;padding:4mm;color:#000;background:#fff;line-height:1.45}
+.line{font-size:13px;text-align:center;white-space:pre}
+.tipo-ent{font-size:16px;font-weight:900;text-align:center;margin:3px 0}
+.cancel{font-size:20px;font-weight:900;text-align:center;border:2px solid #000;padding:4px;margin:4px 0}
+.info{font-size:13px;font-weight:700;text-align:center}
+.loja{font-size:15px;font-weight:700;text-align:center;margin-top:2px}
+.ped-num{font-size:26px;font-weight:900;text-align:center;letter-spacing:1px;margin:2px 0}
+.row-item{display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin:2px 0}
+.item-desc{flex:1;font-weight:700;margin-right:4px;word-break:break-word}
+.item-val{white-space:nowrap;font-weight:700}
+.adic{display:flex;justify-content:space-between;font-size:12px;padding-left:10px;margin:1px 0}
+.obs{font-size:13px;font-weight:700;margin:2px 0 2px 4px}
+.cli{font-size:13px;font-weight:700;margin:1px 0;word-break:break-word}
+.row-val{display:flex;justify-content:space-between;gap:6px;font-size:13px;font-weight:700;margin:1px 0}
+.row-total{display:flex;justify-content:space-between;font-size:17px;font-weight:900;margin-top:4px}
+.sec{font-size:13px;font-weight:700;text-align:center;margin:2px 0}
+.centro-bold{font-size:14px;font-weight:900;text-align:center;margin-top:2px}
+.rodape{text-align:center;font-size:11px;margin-top:4px}
+.mini{font-size:10px;text-align:center;word-break:break-all}
+</style></head><body>
+${p.status === 'cancelado' ? `<div class="cancel">*** PEDIDO CANCELADO ***</div><div class="cli">Motivo: ${e(_99CancelTxt(p))}</div>` : ''}
+<div class="tipo-ent">**** 99FOOD ${e(_99Num(p))} ****</div>
+<div class="info">${_99Retirada(p) ? 'PARA RETIRAR' : (parceiro ? 'ENTREGA PELA 99' : 'ENTREGA PRÓPRIA')}</div>
+<div class="loja">${e((config.nome || 'JOEY').toUpperCase())}</div>
+<div class="ped-num">Nº ${e(p.id)}</div>
+<div class="mini">Pedido 99: ${e(p.food99OrderId)}</div>
+<div class="cli">Data do pedido: ${e(p.data || '')} ${e(p.hora || '')}</div>
+${p.food99PrevistoPreparo ? `<div class="cli">Preparo até: ${e(_ifoodHora(p.food99PrevistoPreparo))}</div>` : ''}
+<div class="cli">Cliente: ${e(c.nome || '-')}</div>
+${tel && tel.numero && !parceiro ? `<div class="cli">Telefone: ${e(tel.numero)}${tel.localizador ? ' · ramal ' + e(tel.localizador) : ''}</div>` : ''}
+<div class="line">${dash}</div>
+<div class="sec">ITENS DO PEDIDO</div>
+${itensHtml}
+<div class="line">${dash}</div>
+<div class="sec">TOTAL</div>
+${linha('Valor total dos itens', _brlIf(p.subtotal))}
+${p.taxaEntrega > 0 ? linha('Taxa de entrega', _brlIf(p.taxaEntrega)) : ''}
+${descontoV ? linha('Desconto', '- ' + _brlIf(descontoV)) : ''}
+<div class="row-total"><span>VALOR TOTAL</span><span>${_brlIf(p.total)}</span></div>
+<div class="line">${dash}</div>
+<div class="sec">FORMA DE PAGAMENTO</div>
+${pagHtml}
+${din && parceiro && p.pagamento === 'dinheiro' ? `<div class="centro-bold">ENTREGADOR 99 PAGA À LOJA: ${_brlIf(din)}</div>` : ''}
+${(p.obs || p.food99CodigoEntregador || p.food99CodigoRetirada || (_ifoodDoc(p) && !parceiro)) ? `<div class="line">${dash}</div><div class="sec">INFORMAÇÕES ADICIONAIS</div>` : ''}
+${p.obs ? `<div class="obs">${e(p.obs)}</div>` : ''}
+${p.food99CodigoEntregador ? `<div class="cli">Código do entregador 99: ${e(p.food99CodigoEntregador)}</div>` : ''}
+${p.food99CodigoRetirada ? `<div class="cli">Código de retirada: ${e(p.food99CodigoRetirada)}</div>` : ''}
+${_ifoodDoc(p) && !parceiro ? `<div class="cli">Incluir CPF/CNPJ na nota fiscal:</div><div class="cli">${e(_ifoodDoc(p))}</div>` : ''}
+${entregaHtml}
+<div class="line">${dash}</div>
+<div class="rodape">Impresso por: Gestão Joey</div>
+</body></html>`;
+}
+
 async function salvarNotaFiscalPedido(p) {
   try {
     const docRef = db.collection(`clientes/${slug}/notasFiscais`).doc(String(p.id));
@@ -5078,6 +5650,7 @@ function _horaPrevista(p) {
 
 function gerarHtmlComanda(p) {
   if (_ehIfood(p)) return gerarHtmlComandaIfood(p);
+  if (_eh99(p)) return gerarHtmlComanda99(p);
   const now  = new Date();
   const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
@@ -5404,6 +5977,7 @@ function imprimirComandaMesa(comanda, mesaNome) {
 // Template: comanda de produção do kanban (delivery/retirada/local)
 function gerarHtmlPedidoProducao(p) {
   if (_ehIfood(p)) return gerarHtmlComandaIfood(p);
+  if (_eh99(p)) return gerarHtmlComanda99(p);
   const now  = new Date();
   const data = p.data || now.toLocaleDateString('pt-BR', { timeZone:'America/Sao_Paulo' });
   const hora = p.hora || now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'});
@@ -5767,6 +6341,7 @@ let _cancelPedidoId = null;
 function cancelarPedido(id) {
   const _p = pedidos.find(x => x.id === id);
   if (_ehIfood(_p)) { cancelarIfoodAbrir(_p); return; }
+  if (_eh99(_p)) { cancelar99Abrir(_p); return; }
   _cancelPedidoId = id;
   const motivoEl = document.getElementById('cancelMotivo');
   if (motivoEl) motivoEl.value = '';
@@ -5932,6 +6507,8 @@ function _arquivarPedido(id) {
 // ainda não clicou "Entreguei") E 'finalizado'+entregueEm (entregue pelo motoboy). Confirma e tira do Kanban.
 function arquivarPedido(id) {
   if (!confirm('Finalizar este pedido? Ele sairá do Kanban.')) return;
+  const _p = pedidos.find(x => x.id === id);
+  if (_99PrecisaEntregue(_p)) { _99EntregueEArquivar(_p).then(ok => { if (ok) notify(`Pedido ${id} entregue na 99 e finalizado.`); }); return; }
   _arquivarPedido(id);
   renderKanban();
   notify(`Pedido ${id} finalizado.`);
@@ -5951,7 +6528,7 @@ function finalizarTodosEntregues() {
     && (p.status === 'entregue' || (p.status === 'finalizado' && p.entregueEm)));
   if (lista.length === 0) { notify('Nenhum pedido em "Entregues hoje" para finalizar.'); return; }
   if (!confirm(`Finalizar ${lista.length} pedido(s) de "Entregues hoje"? Eles sairão do Kanban.`)) return;
-  lista.forEach(p => _arquivarPedido(p.id));
+  lista.forEach(p => { if (_99PrecisaEntregue(p)) _99EntregueEArquivar(p); else _arquivarPedido(p.id); });   // 99 entrega própria: avisa a 99 antes
   renderKanban();
   notify(`${lista.length} pedido(s) finalizado(s).`);
 }
@@ -5985,7 +6562,7 @@ function openOrderModal(id) {
     <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val"><span class="chip ${st.cls}">${_esc(st.label)}</span></span></div>
     <div class="detail-row"><span class="detail-key">Data / Hora</span><span class="detail-val">${_esc(p.data)} às ${_esc(p.hora)}</span></div>
     <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${_esc(p.cliente?.nome||'—')}</span></div>
-    ${_ehIfood(p) ? '' : `<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${_esc(p.cliente?.tel||'—')}</span></div>`}
+    ${_ehPlataforma(p) ? '' : `<div class="detail-row"><span class="detail-key">WhatsApp</span><span class="detail-val">${_esc(p.cliente?.tel||'—')}</span></div>`}
     <div class="detail-row"><span class="detail-key">Entrega</span><span class="detail-val">${endHtml}</span></div>
     ${p.cliente?.ref?`<div class="detail-row"><span class="detail-key">📍 Referência</span><span class="detail-val" style="color:var(--orange);font-weight:600">${_esc(p.cliente.ref)}</span></div>`:''}
     <div style="margin:12px 0 4px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Itens do pedido</div>
@@ -5996,24 +6573,26 @@ function openOrderModal(id) {
     <div class="detail-row" style="font-size:15px"><span class="detail-key" style="color:var(--text);font-weight:700">Total</span><span class="detail-val" style="color:var(--orange);font-size:16px">R$ ${(p.total||0).toFixed(2).replace('.',',')}</span></div>
     <div class="detail-row"><span class="detail-key">Pagamento</span><span class="detail-val">${_esc(p.pagamento?.toUpperCase()||'—')}${_pixNaEntrega(p)?' (na entrega)':''}${p.troco>0?` · troco p/ R$ ${p.troco.toFixed(2).replace('.',',')}`:''}${p.formaPagamentoAnterior?` <span style="color:var(--text3);font-size:11px">(era ${_esc(p.formaPagamentoAnterior.toUpperCase())})</span>`:''}</span></div>
     ${_ehIfood(p) ? _ifoodModalHtml(p) : ''}
+    ${_eh99(p) ? _99ModalHtml(p) : ''}
     <div style="display:flex;gap:8px;margin-top:1.25rem;flex-wrap:wrap">
       ${p.status==='novo'
         ? (_pixLockState(p).locked
             ? `<button class="btn" style="flex:1;background:rgba(100,100,100,.12);color:#888;cursor:not-allowed;border:1px solid rgba(100,100,100,.2)" disabled>🔒 ${_pixLockState(p).badge}</button>`
             : `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${pid}');closeOrderModal()">✅ Confirmar → Produção</button>`)
-          + (_ehIfood(p) ? '' : `<button class="btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${pid}')">💳 Trocar forma de pagamento</button>`)
+          + (_ehPlataforma(p) ? '' : `<button class="btn" style="background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,107,53,.3)" onclick="trocarFormaPagamento('${pid}')">💳 Trocar forma de pagamento</button>`)
         : p.status==='producao'
         ? `<button class="btn btn-primary" style="flex:1" onclick="avancarStatus('${pid}');closeOrderModal()">🚀 Marcar pronto</button>
-           ${_ehIfood(p) ? '' : `<button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${pid}')">✏️ Editar pedido</button>`}`
+           ${_ehPlataforma(p) ? '' : `<button class="btn" style="background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="abrirEditarPedido('${pid}')">✏️ Editar pedido</button>`}`
         : p.status==='pronto'
         ? ((p.tipo==='mesa'||p.origem==='salao')
             ? `<button class="btn btn-primary" style="flex:1;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3)" onclick="avancarStatus('${pid}');closeOrderModal()">✅ Entregue na mesa</button>`
-            : `<button class="btn btn-primary" style="flex:1;background:rgba(167,139,250,.2);color:#a78bfa;border:1px solid rgba(167,139,250,.3)" onclick="avancarStatus('${pid}');closeOrderModal()">🛵 Enviar para entrega + avisar cliente</button>`)
+            : `<button class="btn btn-primary" style="flex:1;background:rgba(167,139,250,.2);color:#a78bfa;border:1px solid rgba(167,139,250,.3)" onclick="avancarStatus('${pid}');closeOrderModal()">${_eh99(p) ? _99RotuloPronto(p) : '🛵 Enviar para entrega + avisar cliente'}</button>`)
         : ''}
       ${!['entregue','cancelado','finalizado'].includes(p.status)?`<button class="btn btn-danger" onclick="cancelarPedido('${pid}');closeOrderModal()">Cancelar</button>`:''}
       ${_podeRegerarPix(p)?`<button class="btn" style="flex:1 1 100%;background:#E87722;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();regerarPix('${pid}')">🔄 Gerar novo PIX</button>`:''}
-      ${['entregue','cancelado','finalizado'].includes(p.status) && !_ehIfood(p)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${pid}')">🔁 Pedir novamente</button>`:''}
+      ${['entregue','cancelado','finalizado'].includes(p.status) && !_ehPlataforma(p)?`<button class="btn" style="flex:1;background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)" onclick="pedirNovamente('${pid}')">🔁 Pedir novamente</button>`:''}
       ${_ifoodNegPendente(p)?`<button class="btn" style="flex:1 1 100%;background:#f59e0b;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();abrirNegociacaoIfood('${pid}')">⚖️ Responder negociação do iFood</button>`:''}
+      ${_99SolPendente(p)?`<button class="btn" style="flex:1 1 100%;background:#f59e0b;color:#1a1a1a;border:none;font-weight:700" onclick="closeOrderModal();abrirSolicitacao99('${pid}')">🙋 Responder pedido do cliente na 99</button>`:''}
     </div>`;
   document.getElementById('orderModal').classList.add('show');
 }
@@ -8191,7 +8770,7 @@ function openNfceModal(pedidoId) {
     </div>
     ${!jaEmitida ? `<div style="margin-bottom:16px">
       <label class="fl" style="margin-bottom:6px;display:block">CPF / CNPJ do cliente <span style="color:var(--text3)">(opcional)</span></label>
-      <input class="fi" id="nfceCpf" placeholder="000.000.000-00" style="width:100%" value="${_esc(notaExist?.cpfCnpj||(_ehIfood(p)?_ifoodDoc(p):'')||'')}">
+      <input class="fi" id="nfceCpf" placeholder="000.000.000-00" style="width:100%" value="${_esc(notaExist?.cpfCnpj||(_ehPlataforma(p)?_ifoodDoc(p):'')||'')}">
     </div>` : ''}
     <div id="nfceFooter" style="display:flex;gap:8px;margin-top:4px;align-items:center">
       ${footerHtml}
@@ -10242,6 +10821,351 @@ async function ifoodDesconectar() {
 }
 function ifoodCancelarConexao() { return _ifxPedido('cancelar', {}); }
 
+// ══ 99Food: loja, cardápio e "Conectar meu 99Food" ══════════════════════════════════════════════════════════════
+// O serviço joey-ifood (src/99food/) espelha a loja e o cardápio em config/food99Loja e config/food99Catalogo e
+// executa os comandos que o painel grava (config/food99Comando, config/food99CatalogoComando — uma vez por id,
+// recusados com mais de 2 min). Sem o módulo ligado no serviço (doc ausente ou ligado:false) nada disto aparece.
+// LIMITE da 99: loja (setStatus/update/detail) e cardápio (upload) — 1 requisição por MINUTO; o comando mais novo
+// substitui o que esperava na fila, e o painel mostra quando vai.
+const _F99_SITUACAO = {
+  online: ['🟢', 'Aberta'], pausado: ['⏸️', 'Pausada'], fechado: ['⏹', 'Fechada'], offline: ['🔴', 'Desconectada'],
+  fora_do_horario: ['🌙', 'Fora do horário'], bloqueado: ['⛔', 'Bloqueada pela 99'], sem_entregador: ['🛵', 'Sem entregador'],
+  desconhecido: ['⚪', '—'],
+};
+const _F99_MOTIVOS_PAUSA = { 1001: 'Equipamento com defeito ou falta de luz/água', 1002: 'Falta temporária de funcionários',
+  1003: 'Ingredientes insuficientes', 1004: 'Perto do horário de fechar', 1005: 'Muitos pedidos no salão', 1006: 'Outro motivo' };
+const _F99_ACAO = { abrir: 'abrir', fechar: 'fechar', pausar: 'pausar', ocupado: 'modo ocupado', normal: 'sair do modo ocupado', horarios: 'enviar horários' };
+let _f99Loja = null, _f99LojaUnsub = null, _f99CmdPendente = null, _f99Timer = null;
+let _f99Card = null, _f99CardUnsub = null, _f99CardCmdPendente = null, _f99Regra = null, _f99RegraSujo = false, _f99EnvioConfirma = false;
+
+const _f99Ms = (t) => (t && t.toMillis ? t.toMillis() : (typeof t === 'number' ? t : (t ? Date.parse(t) || 0 : 0)));
+const _f99Hora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
+function _f99Faltam(iso) { const s = Math.ceil((Date.parse(iso || '') - Date.now()) / 1000); return s > 0 ? `em ${s} s` : 'agora'; }
+function _f99LojaLigada() { return !!(_f99Loja && _f99Loja.ligado === true); }
+function _f99LojaVelha() { const t = _f99Ms(_f99Loja && _f99Loja.atualizadoEm); return !t || Date.now() - t > 12 * 60 * 1000; } // lê a cada 5 min
+function _f99CardLigado() { return !!(_f99Card && _f99Card.ligado === true); }
+
+async function _f99Gravar(doc, dados) {
+  const u = firebase.auth().currentUser;
+  const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await db.doc(`clientes/${slug}/config/${doc}`).set({ id, ...dados, por: (u && u.email) || null, em: firebase.firestore.FieldValue.serverTimestamp() });
+  return id;
+}
+
+// ── Loja na 99 ──
+function _99LojaOuvir() {
+  if (_f99LojaUnsub || !slug) return;
+  _f99LojaUnsub = db.doc(`clientes/${slug}/config/food99Loja`).onSnapshot(snap => {
+    _f99Loja = snap.exists ? snap.data() : null;
+    const c = _f99Loja && _f99Loja.comando;
+    if (c && _f99CmdPendente && c.id === _f99CmdPendente && c.fase === 'feito') {
+      _f99CmdPendente = null;
+      notify('99Food: ' + (c.mensagem || (c.ok ? 'feito' : 'falhou')), c.ok ? 'success' : 'error');
+    }
+    _99LojaRender();
+  }, e => console.warn('[99 loja] listener:', e.message));
+  // contagem do "vai à 99 em N s": só redesenha com comando na fila
+  if (!_f99Timer) _f99Timer = setInterval(() => { const c = _f99Loja && _f99Loja.comando; if (_f99LojaLigada() && c && c.fase === 'na_fila' && document.getElementById('food99LojaModal').style.display === 'flex') _99LojaModalRender(); }, 1000);
+}
+function _99LojaRender() {
+  const lig = _f99LojaLigada();
+  const item = document.getElementById('food99LojaItem');
+  if (item) item.style.display = lig ? '' : 'none';
+  if (!lig) { if (document.getElementById('food99LojaModal').style.display === 'flex') fecharLoja99(); return; }
+  const L = _f99Loja;
+  const [ico, txt] = _F99_SITUACAO[L.situacao] || _F99_SITUACAO.desconhecido;
+  let label = `${ico} ${txt}${L.ocupado ? ' · ocupado' : ''}`;
+  if (L.erro) label = '⚠️ ' + (L.erro.credencial ? 'sem autorização na 99' : 'erro ao falar com a 99');
+  if (_f99LojaVelha()) label = '⚠️ sem notícia do serviço';
+  const lbl = document.getElementById('food99LojaLabel');
+  if (lbl) { lbl.textContent = label; lbl.title = L.texto || ''; }
+  if (document.getElementById('food99LojaModal').style.display === 'flex') _99LojaModalRender();
+}
+function abrirLoja99() {
+  if (!_f99LojaLigada()) return;
+  document.getElementById('food99LojaModal').style.display = 'flex';
+  _99LojaModalRender();
+}
+function fecharLoja99() { document.getElementById('food99LojaModal').style.display = 'none'; }
+function _99LojaModalRender() {
+  const el = document.getElementById('food99LojaCorpo');
+  if (!el) return;
+  const L = _f99Loja || {};
+  const [ico, txt] = _F99_SITUACAO[L.situacao] || _F99_SITUACAO.desconhecido;
+  const c = L.comando;
+  const naFila = c && c.fase === 'na_fila';
+  const dis = '';   // comando novo SUBSTITUI o que espera na fila (o serviço junta) — os botões ficam livres
+  const manter = ['f99MotivoPausa', 'f99OcupMin', 'f99OcupAtraso'].map(id => [id, (document.getElementById(id) || {}).value]);
+  const motivos = Object.entries(_F99_MOTIVOS_PAUSA).map(([k, v]) => `<option value="${k}"${k === '1006' ? ' selected' : ''}>${_esc(v)}</option>`).join('');
+  el.innerHTML = `
+    <div class="ifl-box">
+      <div style="font-size:15px;font-weight:800">${ico} ${_esc(txt)}${L.nome ? ` <span style="font-size:12px;color:var(--text2);font-weight:600">· ${_esc(L.nome)}</span>` : ''}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">${_esc(L.texto || '')}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">${L.lidoEm ? 'Lido na 99 em ' + _esc(_f99Hora(L.lidoEm)) : 'Ainda não lido'}${_f99LojaVelha() ? ' · ⚠️ o serviço não atualiza há mais de 12 min' : ''}</div>
+      ${L.erro ? `<div style="font-size:12px;color:#ef4444;margin-top:6px">⚠️ ${_esc(L.erro.onde || '')}: ${_esc(L.erro.mensagem || '')}</div>` : ''}
+    </div>
+    ${naFila ? `<div class="ifl-box" style="border-color:rgba(245,158,11,.5)"><div style="font-size:13px;color:#f59e0b">⏳ "${_esc(_F99_ACAO[c.acao] || c.acao)}" vai à 99 ${_esc(_f99Faltam(c.previstoEm))} (a 99 aceita 1 mudança por minuto — um comando novo substitui este).</div></div>`
+      : (c && c.fase === 'feito' ? `<div style="font-size:12px;color:${c.ok ? '#34d399' : '#ef4444'};margin-bottom:10px">Último comando (${_esc(_F99_ACAO[c.acao] || c.acao || '')}): ${_esc(c.mensagem || '')}</div>` : '')}
+    <div class="ifl-h">Abrir / fechar</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="ifl-btn" ${dis} onclick="loja99('abrir')">▶️ Abrir na 99</button>
+      <button class="ifl-btn" ${dis} onclick="if(confirm('Fechar a loja na 99? Ela só volta quando alguém abrir.'))loja99('fechar')">⏹ Fechar na 99</button>
+    </div>
+    <div class="ifl-h">Pausar</div>
+    <select id="f99MotivoPausa" class="fi" style="padding:7px;margin-bottom:8px">${motivos}</select>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${[10, 20, 30].map(m => `<button class="ifl-btn" ${dis} onclick="loja99('pausar',{minutos:${m}})">⏸ ${m} min</button>`).join('')}
+      <button class="ifl-btn" ${dis} onclick="loja99('pausar',{minutos:null})">⏸ Até o fim do dia</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">A 99 não deixa pausar loja fechada.</div>
+    <div class="ifl-h">Modo ocupado (aceita pedidos com mais tempo de preparo)</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="f99OcupMin" class="fi" style="padding:7px;width:auto">${[30, 60, 90, 120, 180].map(m => `<option value="${m}">por ${m} min</option>`).join('')}</select>
+      <select id="f99OcupAtraso" class="fi" style="padding:7px;width:auto">${[5, 10, 15, 20, 30].map(m => `<option value="${m}"${m === 10 ? ' selected' : ''}>+${m} min no preparo</option>`).join('')}</select>
+      <button class="ifl-btn" ${dis} onclick="loja99('ocupado',{minutos:+document.getElementById('f99OcupMin').value,atraso:+document.getElementById('f99OcupAtraso').value})">🐢 Ligar</button>
+      ${L.ocupado ? `<button class="ifl-btn" ${dis} onclick="loja99('normal')">Sair do modo ocupado</button>` : ''}
+    </div>
+    <div class="ifl-h">Horários</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.6">Na 99: <b>${_esc(L.horarios || '—')}</b><br>No Gestão: <b>${_esc(L.horariosGestao || '—')}</b>${L.horariosDiferentes ? ' <span style="color:#f59e0b">· diferentes</span>' : ''}</div>
+    <button class="ifl-btn" style="margin-top:8px" ${dis} onclick="if(confirm('Enviar os horários do Gestão (Configurações → Horários) para a 99? Substitui os horários da loja na 99.'))loja99('horarios')">🕒 Enviar horários do Gestão à 99</button>
+    <div style="font-size:11px;color:var(--text3);margin-top:12px;line-height:1.5">${L.toggleNa99 ? 'O Aberto/Fechado das Configurações também abre/fecha a loja na 99.' : 'O Aberto/Fechado das Configurações NÃO mexe na 99 — use os botões acima.'}</div>`;
+  manter.forEach(([id, v]) => { const x = document.getElementById(id); if (x && v) x.value = v; });   // o redesenho não perde a escolha
+}
+async function loja99(acao, extra) {
+  if (!_f99LojaLigada()) return;
+  const dados = { acao, ...(extra || {}) };
+  if (acao === 'pausar') dados.motivo = Number((document.getElementById('f99MotivoPausa') || {}).value) || 1006;
+  try {
+    _f99CmdPendente = await _f99Gravar('food99Comando', dados);
+    notify(`99Food: "${_F99_ACAO[acao] || acao}" registrado — vai à 99 em até 1 min.`);
+  } catch (e) { notify('99Food: não consegui registrar — ' + e.message, 'error'); }
+}
+
+// ── Cardápio na 99 (regra de preço própria: config/precos99, padrão 0%, TRAVA de +10% do contrato da 99) ──
+const F99_MAX_PCT = 10;
+// A MESMA conta do serviço (joey-ifood/src/99food/precoRegras.js preco99): centavos; teto = balcão + 10% (para baixo);
+// arredondamento que passaria do teto fica de lado.
+function _f99Preco(preco, regra) {
+  const c = Math.round(Number(preco) * 100);
+  if (!(c > 0)) return 0;
+  const pct = Math.min(Math.max(Number(regra && regra.percentual) || 0, 0), F99_MAX_PCT);
+  const arr = (regra && regra.arredondamento) || 'nenhum';
+  const teto = Math.floor(c * (100 + F99_MAX_PCT) / 100);
+  const base = Math.min(teto, Math.round(c * (100 + pct) / 100));
+  if (arr === 'nenhum') return base / 100;
+  let n = Math.floor(base / 100) * 100 + (arr === '99' ? 99 : 90);
+  if (n < base) n += 100;
+  return (n > teto ? base : n) / 100;
+}
+function _f99RegraDoForm() {
+  return { percentual: Number(String((document.getElementById('f99Pct') || {}).value || '0').replace(',', '.')), arredondamento: (document.getElementById('f99Arr') || {}).value || 'nenhum' };
+}
+function _f99RegraErro(f) {
+  if (!Number.isFinite(f.percentual) || f.percentual < 0) return 'Percentual inválido (de 0 a 10).';
+  if (f.percentual > F99_MAX_PCT) return `A 99 permite no máximo +${F99_MAX_PCT}% sobre o preço de balcão (contrato da 99Food). Acima disso o Gestão recusa — e a 99 pode descredenciar a loja.`;
+  return null;
+}
+function _f99RegraExemplo() {
+  const el = document.getElementById('f99Exemplo');
+  if (!el) return;
+  const f = _f99RegraDoForm();
+  const err = _f99RegraErro(f);
+  if (err) { el.innerHTML = `<span style="color:#ef4444">${_esc(err)}</span>`; return; }
+  el.innerHTML = 'Exemplo: ' + [20, 25, 6, 4.5].map(v => _ifcBRL(v) + ' → <b>' + _ifcBRL(_f99Preco(v, f)) + '</b>').join(' · ') + ` · teto: +${F99_MAX_PCT}%`;
+}
+function salvarRegra99() {
+  const f = _f99RegraDoForm();
+  const err = _f99RegraErro(f);
+  if (err) { _f99RegraExemplo(); return notify(err, 'error'); }
+  const nova = { percentual: Math.round(f.percentual * 100) / 100, arredondamento: ['nenhum', '90', '99'].includes(f.arredondamento) ? f.arredondamento : 'nenhum' };
+  if (_f99CardLigado() && _f99Card.vinculado && !confirm('Isso muda agora os preços do cardápio na 99 (um envio completo, em até 1 min). Confirma?')) return;
+  const u = firebase.auth().currentUser;
+  db.doc(`clientes/${slug}/config/precos99`).set({ ...nova, por: (u && u.email) || null, em: firebase.firestore.FieldValue.serverTimestamp() })
+    .then(() => { _f99RegraSujo = false; notify('✓ Regra da 99 salva' + (_f99CardLigado() && _f99Card.vinculado ? ' — atualizando o cardápio na 99…' : '')); })
+    .catch(e => notify('Erro ao salvar a regra da 99: ' + e.message, 'error'));
+}
+function _99CardOuvir() {
+  if (_f99CardUnsub || !slug) return;
+  _f99CardUnsub = db.doc(`clientes/${slug}/config/food99Catalogo`).onSnapshot(snap => {
+    _f99Card = snap.exists ? snap.data() : null;
+    const c = _f99Card && _f99Card.comando;
+    if (c && _f99CardCmdPendente && c.id === _f99CardCmdPendente && c.fase !== 'rodando') {
+      _f99CardCmdPendente = null;
+      if (c.mensagem) notify('99Food (cardápio): ' + c.mensagem, c.ok === false ? 'error' : 'success');
+    }
+    _99CardRender();
+  }, e => console.warn('[99 cardápio] listener:', e.message));
+  db.doc(`clientes/${slug}/config/precos99`).onSnapshot(snap => {
+    _f99Regra = snap.exists ? snap.data() : null;
+    if (!_f99RegraSujo) {
+      const p = document.getElementById('f99Pct'), a = document.getElementById('f99Arr');
+      if (p) p.value = String((_f99Regra && _f99Regra.percentual) || 0);
+      if (a) a.value = (_f99Regra && _f99Regra.arredondamento) || 'nenhum';
+    }
+    _f99RegraExemplo();
+  }, e => console.warn('[99 regra] listener:', e.message));
+}
+function _99CardRender() {
+  const lig = _f99CardLigado();
+  const item = document.getElementById('food99CardItem');
+  const sec = document.getElementById('secao99Cardapio');
+  if (item) item.style.display = lig ? '' : 'none';
+  if (sec) sec.style.display = lig ? '' : 'none';
+  if (!lig) { if (document.getElementById('food99CardModal').classList.contains('show')) fecharCardapio99(); return; }
+  const C = _f99Card;
+  const fase = C.envio && C.envio.fase;
+  let label = C.vinculado ? '🟢 sincronizado' : '⚪ não enviado';
+  if (fase === 'na_fila' || fase === 'aplicando') label = '⏳ enviando…';
+  if (C.massa) label = '⚠️ trava: confira';
+  else if (C.erro) label = '⚠️ ' + (C.erro.tipo === 'parcial' ? 'envio parcial' : 'erro no envio');
+  const lbl = document.getElementById('food99CardLabel');
+  if (lbl) lbl.textContent = label;
+  const t = document.getElementById('f99TextoRegra');
+  if (t) t.innerHTML = `Valendo na 99: <b>${_esc(C.textoRegra || 'mesmo preço do balcão (0%)')}</b>${C.erroRegra ? `<br><span style="color:#ef4444">⚠️ ${_esc(C.erroRegra)}</span>` : ''}`;
+  if (document.getElementById('food99CardModal').classList.contains('show')) _99CardModalRender();
+}
+function abrirCardapio99() {
+  if (!_f99CardLigado()) return;
+  _f99EnvioConfirma = false;
+  document.getElementById('food99CardModal').classList.add('show');
+  _99CardModalRender();
+}
+function fecharCardapio99() { document.getElementById('food99CardModal').classList.remove('show'); _f99EnvioConfirma = false; }
+async function cardapio99(acao, extra) {
+  if (!_f99CardLigado()) return;
+  try {
+    _f99CardCmdPendente = await _f99Gravar('food99CatalogoComando', { acao, ...(extra || {}) });
+    notify('99Food (cardápio): pedido registrado…');
+  } catch (e) { notify('99Food: não consegui registrar — ' + e.message, 'error'); }
+}
+function _99CardModalRender() {
+  const el = document.getElementById('food99CardCorpo');
+  if (!el) return;
+  const C = _f99Card || {};
+  const E = C.envio || {};
+  const P = C.previa;
+  const lista = (arr, f) => (arr || []).length ? `<ul style="margin:4px 0 0 18px;font-size:12px;color:var(--text2)">${arr.map(f).join('')}</ul>` : '';
+  const faseTxt = { na_fila: `⏳ na fila — vai à 99 ${_f99Faltam(E.previstoEm)}`, aplicando: '⏳ a 99 está aplicando o cardápio…', ok: '✅ aplicado', parcial: '⚠️ aplicado em parte', falhou: '❌ falhou' };
+  const ACAO = { enviar: ['vai', '#34d399'], indisponivel: ['vai indisponível', '#f59e0b'], erro: ['NÃO vai', '#ef4444'] };
+  let h = `<div class="ifl-box">
+    <div style="font-size:14px;font-weight:800">${C.vinculado ? '🟢 Cardápio ligado à 99 — sincroniza sozinho' : '⚪ Ainda não enviado à 99'}</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:4px">${C.vinculado && C.vinculadoEm ? 'Desde ' + _esc(_f99Hora(C.vinculadoEm)) + ' · ' : ''}${C.itensNa99 ? C.itensNa99 + ' item(ns) na 99 · ' : ''}Regra: ${_esc(C.textoRegra || '0%')}</div>
+    ${C.erroRegra ? `<div style="font-size:12px;color:#ef4444;margin-top:4px">⚠️ ${_esc(C.erroRegra)}</div>` : ''}
+    ${E.fase ? `<div style="font-size:12px;margin-top:6px">Envio: ${_esc(faseTxt[E.fase] || E.fase)}${E.mensagem ? ' — ' + _esc(E.mensagem) : ''}</div>` : ''}
+    ${C.erro ? `<div style="font-size:12px;color:#ef4444;margin-top:4px">⚠️ ${_esc(C.erro.mensagem || '')}</div>${lista(C.erro.falhas, f => `<li>${_esc(f.id || f.operacao || '')}: ${_esc(f.mensagem || '')}</li>`)}` : ''}
+  </div>`;
+  if (C.massa) h += `<div class="ifl-box" style="border-color:rgba(239,68,68,.5)"><div style="font-size:13px;color:#ef4444">🛑 ${_esc(C.massa.mensagem)}</div>
+    <button class="ifl-btn ifl-btn-pri" style="margin-top:8px" onclick="if(confirm('Aplicar mesmo assim na 99?'))cardapio99('aplicarMassa')">Aplicar mesmo assim</button></div>`;
+  if ((C.bloqueios || []).length) h += `<div class="ifl-box" style="border-color:rgba(239,68,68,.5)"><div style="font-size:12px;color:#ef4444;font-weight:700">Limites da 99 (20 categorias · 400 itens):</div>${lista(C.bloqueios, b => `<li>${_esc(b)}</li>`)}</div>`;
+  if ((C.invalidos || []).length) h += `<div class="ifl-h">Não enviados (${C.invalidos.length})</div>${lista(C.invalidos, i => `<li>${_esc(i.nome)}: ${_esc((i.erros || []).join('; '))}</li>`)}`;
+  if ((C.semFoto || []).length) h += `<div class="ifl-h">Foto que não vai (${C.semFoto.length})</div>${lista(C.semFoto, i => `<li>${_esc(i.nome)}: ${_esc(i.motivo || '')}</li>`)}<div style="font-size:11px;color:var(--text3)">A 99 aceita JPG/PNG de até 10 MB — troque a foto no Gestão.</div>`;
+  h += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+    <button class="ifl-btn" onclick="cardapio99('previa')">🔎 Gerar prévia</button>
+    ${C.vinculado ? '<button class="ifl-btn" onclick="cardapio99(\'sincronizar\')">🔄 Sincronizar agora</button>' : ''}
+  </div>`;
+  if (P) {
+    const k = P.contagem || {};
+    h += `<div class="ifl-h">Prévia de ${_esc(_f99Hora(P.geradaEm))}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${k.enviar || 0} vão · ${k.indisponivel || 0} indisponíveis · ${k.erro || 0} com erro · ${k.fora || 0} fora do cardápio · ${k.categorias || 0}/20 categorias · ${k.complementos || 0} complementos · ${k.semFoto || 0} sem foto válida</div>
+      ${(P.avisos || []).map(a => `<div style="font-size:12px;color:#f59e0b;margin-bottom:4px">⚠️ ${_esc(a)}</div>`).join('')}
+      ${(P.apagadosNa99 || []).length ? `<div style="font-size:12px;color:#ef4444">Serão APAGADOS na 99:</div>${lista(P.apagadosNa99, i => `<li>${_esc(i.nome)}${i.preco ? ' · ' + _ifcBRL(i.preco / 100) : ''}</li>`)}` : ''}
+      <div style="max-height:320px;overflow:auto;margin-top:6px"><table class="ifl-tab"><thead><tr><th>Item</th><th>Categoria</th><th>Balcão</th><th>Na 99</th><th></th></tr></thead><tbody>
+      ${(P.linhas || []).map(l => { const [t, cor] = ACAO[l.acao] || [l.acao, 'var(--text2)']; return `<tr><td>${_esc(l.nome)}${l.nota ? `<div style="font-size:10px;color:var(--text3)">${_esc(l.nota)}</div>` : ''}${l.foto !== 'ok' ? `<div style="font-size:10px;color:var(--text3)">📷 ${_esc(l.foto)}</div>` : ''}</td><td>${_esc(l.categoria || '')}</td><td>${_ifcBRL((l.precoBalcao || 0) / 100)}</td><td><b>${_ifcBRL((l.preco99 || 0) / 100)}</b></td><td style="color:${cor};white-space:nowrap">${t}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      ${(P.foraDoCardapio || []).length ? `<div class="ifl-h">Fora (não vão à 99)</div>${lista(P.foraDoCardapio, f => `<li>${_esc(f.nome)}: ${_esc(f.motivo || '')}</li>`)}` : ''}
+      ${(P.bloqueios || []).length ? '' : (_f99EnvioConfirma
+        ? `<div class="ifl-box" style="margin-top:10px;border-color:rgba(239,68,68,.5)"><div style="font-size:12px;color:#ef4444">O envio SUBSTITUI o cardápio inteiro da loja na 99 (o que foi cadastrado à mão lá e não está aqui é apagado). Confirma?</div>
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="ifl-btn" onclick="_f99EnvioConfirma=false;_99CardModalRender()">Cancelar</button>
+            <button class="ifl-btn ifl-btn-pri" onclick="_f99EnvioConfirma=false;cardapio99('enviar',{previaId:'${_esc(P.id)}'})">Confirmar: enviar à 99</button></div></div>`
+        : `<button class="ifl-btn ifl-btn-pri" style="margin-top:10px" onclick="_f99EnvioConfirma=true;_99CardModalRender()">📤 Enviar este cardápio à 99</button>`)}`;
+  }
+  if ((C.log || []).length) h += `<div class="ifl-h">Histórico</div>${lista(C.log.slice(0, 12), x => `<li><span style="color:var(--text3)">${_esc(_f99Hora(x.em))}</span> ${_esc(x.mensagem || x.tipo || '')}</li>`)}`;
+  el.innerHTML = h;
+}
+
+// ── "Conectar meu 99Food" (Configurações → 99Food). O painel grava o PEDIDO em config/food99ConexaoPedido; o serviço
+// devolve o estado em config/food99Conexao (disponivel:true = o módulo está ligado; sem ele a seção nem aparece).
+// Fluxo: o restaurante informa o ID da loja na 99 → o serviço devolve a página de autorização da 99 → o dono (super-admin
+// da loja na 99) autoriza o "Gestão Joey" → a equipe confere o par loja × restaurante no admin → conectado.
+let _f99Cx = null, _f99CxPed = null, _f99CxUnsub = null, _f99CxEnviando = false, _f99CxConfirmaDesc = false, _f99CxRascunho = '';
+function _99ConexaoOuvir() {
+  if (_f99CxUnsub || !slug) return;
+  _f99CxUnsub = db.doc(`clientes/${slug}/config/food99Conexao`).onSnapshot(s => {
+    const antes = _f99Cx && _f99Cx.status;
+    _f99Cx = s.exists ? s.data() : null;
+    if (antes && _f99Cx && antes !== _f99Cx.status) {
+      if (_f99Cx.status === 'conectado') notify('🟢 99Food conectada — os pedidos da 99 entram no quadro.', 'success');
+      else if (_f99Cx.status === 'erro' && _f99Cx.erro) notify('⚠️ 99Food: ' + _f99Cx.erro.mensagem, 'error');
+    }
+    _99ConexaoRender();
+  }, e => console.warn('[99 conexão] listener:', e.message));
+  db.doc(`clientes/${slug}/config/food99ConexaoPedido`).onSnapshot(s => { _f99CxPed = s.exists ? s.data() : null; _99ConexaoRender(); },
+    e => console.warn('[99 conexão] pedido:', e.message));
+}
+function _99ConexaoRender() {
+  const sec = document.getElementById('secao99Conexao');
+  const el = document.getElementById('f99xCorpo');
+  if (!sec || !el) return;
+  const C = _f99Cx || {};
+  sec.style.display = C.disponivel === true ? '' : 'none';
+  if (C.disponivel !== true) return;
+  const P = _f99CxPed || {};
+  const st = C.status || 'nenhum';
+  const loja = C.shopId ? `<code style="font-size:11px">${_esc(C.shopId)}</code>` : '';
+  const semResposta = P.id && C.pedidoVisto !== P.id;
+  const cancelar = '<button class="ifl-btn" onclick="conexao99(\'cancelar\')">Cancelar pedido</button>';
+  const form = (titulo) => (titulo || '') + `<p style="font-size:12px;color:var(--text2);margin:0 0 10px">Receba os pedidos da 99Food direto no quadro do Gestão Joey — comanda, motoboy, NFC-e e caixa, sem digitar nada duas vezes.</p>
+    <div style="display:grid;grid-template-columns:150px minmax(0,260px);gap:8px;align-items:center">
+      <label for="f99xShop" style="font-size:12px;color:var(--text2)">ID da loja na 99</label>
+      <input class="fi" id="f99xShop" placeholder="só números" inputmode="numeric" autocomplete="off" value="${_esc(_f99CxRascunho)}" oninput="_f99CxRascunho=this.value">
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin:8px 0 10px;line-height:1.6">O ID aparece no portal da 99 (Minha loja). <b>Como funciona:</b> 1) você informa o ID; 2) abre a página de autorização da 99 com o login de administrador da loja e autoriza o <b>Gestão Joey</b>; 3) a nossa equipe confere e os pedidos passam a entrar no quadro.</div>
+    <button class="btn btn-primary" onclick="conectar99()" ${_f99CxEnviando ? 'disabled' : ''}>Conectar minha 99Food</button>`;
+  let h = '';
+  if (semResposta && P.acao !== 'cancelar') {
+    h = _ifxCaixa('amarelo', '⏳ Pedido registrado', 'Aguardando o serviço da 99Food do Gestão Joey responder…') + (P.acao === 'conectar' ? cancelar : '');
+  } else if (st === 'conectado') {
+    h = _ifxCaixa('verde', '🟢 Conectada à 99Food', `Loja ${loja}${C.conectadoEm ? ' · desde ' + _ifxData(C.conectadoEm) : ''}.<br>Os pedidos da 99 entram sozinhos no quadro (em <b>Em análise</b>). A 99 cancela pedido não confirmado em <b>5 minutos</b> — para confirmar sozinho, ligue <b>Auto-aceitar</b> no topo.`);
+    if (C.protegido) h += `<div style="font-size:12px;color:var(--text3)">Conexão gerenciada pelo suporte Gestão Joey.${C.erro && C.erro.codigo === 'protegido' ? ' ' + _esc(C.erro.mensagem) : ''}</div>`;
+    else if (_f99CxConfirmaDesc) h += `<div style="font-size:12px;color:#f87171;margin-bottom:8px">Desconectar faz os pedidos da 99 pararem de entrar no Gestão Joey (a loja continua na 99). Confirma?</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ifl-btn" onclick="_f99CxConfirmaDesc=false;_99ConexaoRender()">Cancelar</button>
+      <button class="ifl-btn ifl-btn-pri" onclick="_f99CxConfirmaDesc=false;conexao99('desconectar')">Confirmar: desconectar a 99</button></div>`;
+    else h += '<button class="ifl-btn" onclick="_f99CxConfirmaDesc=true;_99ConexaoRender()">Desconectar 99Food</button>';
+  } else if (st === 'aguardando_loja') {
+    const url = C.url && /^https:\/\//.test(C.url) ? C.url : '';
+    h = _ifxCaixa('amarelo', '⏳ Falta você autorizar na 99', `Loja ${loja}.<ol style="margin:6px 0 0 18px;padding:0">
+      <li>Abra ${url ? `<a href="${_esc(url)}" target="_blank" rel="noopener" style="color:#60a5fa">a página de autorização da 99</a>` : 'a página de autorização da 99 (o link aparece aqui em instantes)'} com o login de <b>administrador</b> da loja.</li>
+      <li>Escolha a sua loja e clique em <b>Autorizar</b> o aplicativo <b>Gestão Joey</b>.</li>
+      <li>Pronto: esta tela muda sozinha.</li></ol>${C.erro ? `<div style="color:#f87171;margin-top:6px">${_esc(C.erro.mensagem)}</div>` : ''}`) + cancelar;
+  } else if (st === 'aguardando_equipe') {
+    h = _ifxCaixa('amarelo', '⏳ Autorizado na 99 — a equipe vai conferir', `Loja ${loja}. A equipe Gestão Joey confere que esta loja é sua (normalmente no mesmo dia útil) e libera os pedidos. Você não precisa fazer nada.`) + cancelar;
+  } else if (st === 'erro') {
+    h = form(_ifxCaixa('vermelho', '⚠️ Não deu para conectar', _esc((C.erro && C.erro.mensagem) || 'Erro na conexão com a 99.')));
+  } else {
+    h = form(st === 'desconectado' ? _ifxCaixa('cinza', '99Food desconectada', `Loja ${loja}${C.desconectadoEm ? ' · desde ' + _ifxData(C.desconectadoEm) : ''}.${C.erro && C.erro.mensagem ? ' ' + _esc(C.erro.mensagem) + '.' : ''} Para voltar, conecte de novo abaixo.`) : '');
+  }
+  el.innerHTML = h;
+}
+async function conexao99(acao, shopId) {
+  if (!slug || _f99CxEnviando) return false;
+  _f99CxEnviando = true;
+  try {
+    await _f99Gravar('food99ConexaoPedido', { acao, shopId: shopId || null });
+    return true;
+  } catch (e) {
+    notify('99Food: não consegui registrar o pedido — ' + e.message, 'error');
+    return false;
+  } finally {
+    _f99CxEnviando = false;
+    _99ConexaoRender();
+  }
+}
+async function conectar99() {
+  const shopId = String((document.getElementById('f99xShop') || {}).value || '').replace(/\D/g, '');
+  if (shopId.length < 6 || shopId.length > 20) { notify('Informe o ID da loja na 99 (só números — aparece no portal da 99 em Minha loja).', 'warning'); return; }
+  if (await conexao99('conectar', shopId)) { _f99CxRascunho = ''; notify('Pedido de conexão com a 99Food registrado.', 'success'); }
+}
+
 function _ifoodCardOuvir() {
   if (_ifcUnsub || !slug) return;
   _ifcUnsub = db.doc(`clientes/${slug}/config/ifoodCatalogo`).onSnapshot(snap => {
@@ -10630,6 +11554,9 @@ function iniciarListenersFirestore() {
   _ifoodLojaOuvir();     // loja no iFood (status/pausa/horários) — só aparece com loja iFood ligada
   _ifoodCardOuvir();     // cardápio no iFood (regra de preço, envio, sincronização) — só com cardápio iFood ligado
   _ifoodConexaoOuvir();  // "Conectar meu iFood" (Configurações → iFood) — todos os tenants
+  _99LojaOuvir();        // loja na 99Food — só aparece com o módulo de loja da 99 ligado no serviço (config/food99Loja)
+  _99CardOuvir();        // cardápio na 99Food + regra de preço da 99 (config/precos99) — só com o módulo ligado
+  _99ConexaoOuvir();     // "Conectar meu 99Food" — só com o módulo ligado (config/food99Conexao.disponivel)
   iniciarIaListeners();
   _wacListenerConfig();   // estado conectado do WhatsApp Cloud API (config/whatsappCloud)
   db.doc(`clientes/${slug}/config/loja`).onSnapshot(snap => {
@@ -10756,6 +11683,41 @@ function iniciarListenersFirestore() {
           mostrarNotificacaoPush('⚖️ Negociação no iFood', `Pedido ${d.id}: ${_ifoodNegTitulo(n)}`);
         }
       });
+      // 99Food auto-aceito pelo serviço (confirmou na 99 e pôs em produção): imprime a comanda uma vez, como o do iFood.
+      snap.docs.forEach(d => {
+        const ped = d.data();
+        if (ped.origem !== '99food' || !ped.autoAceito || ped.status !== 'producao' || _autoProcessados.has(d.id)) return;
+        const ant = _pedidosAnt.find(x => x.id === d.id);
+        if (_knownPedidoIds.has(d.id) && !(ant && ant.status === 'novo')) return;   // já estava em produção antes
+        _autoProcessados.add(d.id);
+        try { imprimirPedidoProducao(ped); } catch (e) { console.warn('[99 auto print]', e); }
+        notify(`🤖 Pedido 99Food ${d.id} auto-aceito → Produção`);
+        if (_somAtivo) tocarSomPedido();
+      });
+      // 99Food: cancelamento que não partiu daqui (cliente, entregador, 99, prazo de 5 min) e pedido novo do cliente.
+      snap.docs.forEach(d => {
+        const ped = d.data();
+        if (ped.origem !== '99food') return;
+        const ant = _pedidosAnt.find(x => x.id === d.id);
+        if (!ant) return;
+        if (ped.status === 'cancelado' && ant.status !== 'cancelado' && !_99CanceladosAqui.has(d.id)) {
+          notify(`❌ 99Food cancelou o pedido ${d.id}${ped.food99OrderIndex != null ? ' (#' + ped.food99OrderIndex + ')' : ''}: ${ped.motivoCancelamento || ''}`, 'error');
+          if (_somAtivo) tocarSomPedido();
+          mostrarNotificacaoPush('❌ Pedido 99Food cancelado', `Pedido ${d.id}: ${ped.motivoCancelamento || ''}`);
+          // A cozinha já tinha a comanda (confirmado): sai o cupom de cancelado.
+          if (ant.status !== 'novo') {
+            try { _dispararHtml(gerarHtmlComanda99({ ...ped, id: d.id })); } catch (e) { console.warn('[99 cancel print]', e); }
+          }
+        }
+        for (const [campo, txt] of [['food99SolicitacaoCancelamento', 'pediu para CANCELAR'], ['food99SolicitacaoReembolso', 'pediu REEMBOLSO']]) {
+          const s = ped[campo], sa = ant[campo];
+          if (s && s.status === 'PENDENTE' && (!sa || sa.applyId !== s.applyId)) {
+            notify(`🙋 99Food: o cliente ${txt} — pedido ${d.id}, responda até ${_ifoodHora(s.expiraEm)}`, 'warning');
+            if (_somAtivo) tocarSomPedido();
+            mostrarNotificacaoPush('🙋 Pedido do cliente na 99', `Pedido ${d.id}: o cliente ${txt}`);
+          }
+        }
+      });
       const chegaram = snap.docs.filter(d => !_knownPedidoIds.has(d.id) && d.data().status === 'novo');
       if (chegaram.length > 0) {
         const qtd = chegaram.length;
@@ -10768,7 +11730,7 @@ function iniciarListenersFirestore() {
           chegaram.forEach(d => {
             const ped = d.data();
             if (ped.agendado) return;   // pedido AGENDADO não é auto-aceito (é p/ depois) — staff confirma na hora
-            if (ped.origem === 'ifood') return;   // iFood: quem auto-aceita é o serviço joey-ifood (confirma no iFood)
+            if (ped.origem === 'ifood' || ped.origem === '99food') return;   // iFood/99: quem auto-aceita é o serviço joey-ifood (confirma na plataforma)
             if (ped.pagamento === 'pix') _autoMarcarAguardandoPix(ped);
             else                        _autoAceitarDinheiro(ped);
           });
@@ -11751,7 +12713,7 @@ function cliWppBtn(tel) {
 let pixTimerInterval = null;
 
 function pixTarjaHtml(p) {
-  if (p.pagamento !== 'pix' || _ehIfood(p)) return '';   // iFood: Pix offline, cobrado na entrega — não há Pix a gerar nem a esperar
+  if (p.pagamento !== 'pix' || _ehPlataforma(p)) return '';   // iFood: Pix offline, cobrado na entrega; 99: Pix da 99 (online) ou na entrega — o Gestão não gera nem espera Pix
   // Pix trocado na mão ("na entrega"): também não há Pix online — nem "Gerando PIX..." (sem pixStatus) nem o cronômetro do
   // Pix antigo (troca feita antes de 20/10/2026 deixou pixStatus 'pendente' gravado). Pago continua aparecendo como pago.
   if (_pixNaEntrega(p) && p.pixStatus !== 'pago') return '';
