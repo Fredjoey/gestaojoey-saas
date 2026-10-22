@@ -257,13 +257,12 @@ joey-ifood, seção "99Food"); o painel chama as rotas `${IFOOD_API}/99food/pedi
 loja/cardápio/conexão só aparecem com `config/food99Loja.ligado`, `config/food99Catalogo.ligado`, `config/food99Conexao.disponivel`).
 Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro · receber" em pedido da 99 já pago).
 - **Pedido** (`_eh99`, `_ehPlataforma` = iFood ou 99): card com selo 99 #`food99OrderIndex`, prazo de confirmação (5 min,
-  `food99ConfirmarAte`), pagamento (pago na 99 / dinheiro ou Pix na entrega a receber / "entregador da 99 paga em dinheiro"),
-  código do entregador/retirada; avançar → `_avancar99` (confirmar/pronto/despachar/entregue no serviço; o card só anda com
+  `food99ConfirmarAte`), pagamento (pago na 99 / dinheiro ou Pix na entrega a receber), código do entregador/retirada; avançar → `_avancar99` (confirmar/pronto/despachar/entregue no serviço; o card só anda com
   o ok da 99); botão do pronto conforme o tipo (`_99RotuloPronto`: cliente retirou / entregador da 99 retirou / enviar);
   entrega PRÓPRIA com código de entrega (`_99CodigoHtml`, mesmo estado `_ifoodCod`); cancelar pelo modal `#cancel99Modal`
   (motivos da 99); cancelado pela 99 fica no topo até "Ciente" (`food99CancelamentoVisto`); pedido de cancelamento/reembolso
   do cliente → faixa `#food99SolFaixa` + modal `#food99SolModal` (aceitar/recusar com motivo da lista); comanda própria
-  `gerarHtmlComanda99` (pedido com entregador da 99 sai sem CPF e sem endereço). Sem WhatsApp, troca de pagamento, editar ou
+  `gerarHtmlComanda99` (pedido com entregador da 99 sai sem CPF). Sem WhatsApp, troca de pagamento, editar ou
   "pedir novamente" em pedido de plataforma. Finalizar/arquivar pedido de entrega própria ainda em "entregue" avisa a 99
   antes (`_99EntregueEArquivar`). Auto-aceitar: o do painel PULA a 99 (quem confirma é o serviço, com o mesmo toggle).
 - **Loja na 99** (`#food99LojaItem` + `#food99LojaModal`, `config/food99Comando`): abrir, fechar, pausar 10/20/30 min ou até
@@ -275,9 +274,25 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
   Prévia → "Enviar à 99" (⚠️ o envio SUBSTITUI o cardápio inteiro da loja na 99) → sincronização sozinha; avisos de foto,
   itens fora, trava de massa. O iFood segue com a regra dele (`config/ifoodPreco`).
 - **Conectar meu 99Food** (`#secao99Conexao`, `config/food99ConexaoPedido`): o restaurante informa o ID da loja (só números)
-  e autoriza no link da 99; a equipe confere (admin grava `food99Conexao.equipe`) e o serviço liga.
+  e autoriza no link da 99; o serviço vê a autorização pelo `getAuthorizedShops` (em até 2 min); a equipe confere (admin
+  grava `food99Conexao.equipe`) e o serviço faz o `shopBind` e liga.
 - **Motoboy** (`entregador.html`): selo 99Food, "📱 Pago na 99" / "📱 Pix na entrega · receber", código de entrega da 99
-  (rota `/99food/…/codigo-entrega`).
+  (rota `/99food/…/codigo-entrega`), localizador da 99 (`localizador99Html`).
+- **Roteiro de Integração oficial da 99 (22/10/2026)** — o que mudou no painel/motoboy (o serviço: CLAUDE.md do joey-ifood):
+  - **Valores** (`_99Valores`, lê `food99Precos` do serviço): card, modal e comanda mostram valor dos itens, entrega, desconto
+    da LOJA × desconto da 99 (`🎟️ Desconto: loja … · 99 …`), total, **já pago** e **falta pagar**; modal também "A loja
+    recebe" e cada promoção (`food99Promocoes`). Comanda: **order_index da 99 é o número grande** (`99 #37`), o Nº do
+    Gestão logo abaixo; nome e endereço em toda entrega (também na da 99 — o roteiro pede); selo `🧪 teste` (`food99Teste`).
+  - **Pagamento** (`_99Pagamento`): entrega da 99 é SEMPRE paga (`food99Pagamento.pagoNa99`) — em dinheiro, quem cobra é o
+    entregador da 99 (`entregador99Cobra`, só informativo); o "💵 entregador da 99 paga na retirada" + `food99DinheiroRecebido`
+    (payConfirm) SAÍRAM. Cobrar = `food99Precos.faltaPagar` (também no aviso ao motoboy `_pagamentoMotoboy` e no app).
+  - **Localizador** (`_99Localizador`, só entrega PRÓPRIA): telefone virtual + localizador no card/modal/comanda, link da
+    página de entrega da 99 no modal e no app do motoboy. `food99Telefone`/`food99LinkEntrega` não existem mais.
+  - **Fluxos**: o painel já seguia confirmar → pronto → (despachar | finish); o despachar agora não chama a 99 (o serviço só
+    registra). Retirada com endereço vazio/ausente/nulo não quebra card, modal, comanda nem o app do motoboy.
+  - **Loja na 99**: mostra o método de confirmação (`_f99MetodoHtml`, `food99Loja.metodoConfirmacao`; com B-App a loja só
+    fica online com o app 99Store aberto).
+  - `test/99food-roteiro.test.js` (6 testes; 5 falhavam no código anterior). `npm test` 25/25.
 - Conferido num sandbox (Node `vm`, DOM/Firebase simulados): pedidos normais e do iFood renderizam IGUAL ao `master` (card,
   comanda, produção, modal — 79 comparações; motoboy 3 cards); só os da 99 mudam. Não testado em navegador nem com a 99 real.
 - **Rebaseada em 20/10/2026** sobre a master com os 5 bugs (o original ficou em `origin/feat/99food-antes-rebase`): card/modal

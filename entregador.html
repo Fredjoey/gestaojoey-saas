@@ -50,6 +50,8 @@
   .cod input::placeholder{letter-spacing:normal;font-size:15px;font-weight:600;color:var(--text3)}
   .cod .btn-ifood{background:#ea1d2c;color:#fff}
   .tag99{font-size:11px;font-weight:800;color:#facc15;margin:0 0 4px}
+  .loc99{font-size:13px;color:var(--text);background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.35);border-radius:8px;padding:8px 10px;margin:6px 0;line-height:1.5}
+  .loc99 a{color:#facc15;font-weight:700}
   .cod .btn-99{background:#facc15;color:#1a1a1a}
   .cod .erro{font-size:13.5px;color:#ff7b7b;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:10px;padding:9px 11px;line-height:1.4}
   .cod .dica{font-size:12px;color:var(--text2);line-height:1.4}
@@ -346,7 +348,10 @@ function render(lista) {
     const emRota = p.status === 'entregue';                 // 'entregue' (Fase 2) = saiu p/ entrega
     const pill = emRota ? `<span class="pill pill-rota">Em rota</span>` : `<span class="pill pill-fila">Na fila</span>`;
     const itens = (p.itens || []).map(i => `${i.qty || i.qtd || 1}× ${esc(i.nome || '')}`).join('<br>');
-    const total = 'R$ ' + Number(p.total || 0).toFixed(2).replace('.', ',');
+    // 99Food: o que cobrar na porta é o "falta pagar" do roteiro (customer_need_paying_money → food99Precos.faltaPagar)
+    const falta99 = p.origem === '99food' && p.pagamento !== '99food' && p.food99Precos && p.food99Precos.faltaPagar != null && isFinite(Number(p.food99Precos.faltaPagar))
+      ? Number(p.food99Precos.faltaPagar) : null;
+    const total = 'R$ ' + Number(falta99 != null ? falta99 : (p.total || 0)).toFixed(2).replace('.', ',');
     // Pix NA ENTREGA (a receber): a forma trocada no painel (pagamentoManual), o Pix OFFLINE do iFood (o joey-ifood só
     // grava 'pix' quando o iFood manda cobrar na entrega) ou o Pix da 99 (o online vem como '99food'). "Pix · pago" fica
     // para o Pix online do cardápio — e vale antes de tudo quando o webhook confirmou (pixStatus 'pago': o cliente pagou o
@@ -372,6 +377,7 @@ function render(lista) {
       ${p.origem === '99food' ? `<div class="tag99">99Food${p.food99OrderIndex != null ? ' #' + esc(p.food99OrderIndex) : ''}</div>` : ''}
       <div class="cli">${esc(c.nome || '—')}</div>
       ${tel ? `<a class="tel" href="tel:${tel}">📞 ${esc(c.tel)}</a>` : ''}
+      ${localizador99Html(p)}
       <div class="end">📍 ${esc(enderecoTxt(c)) || '—'}${c.ref ? `<br><span class="ref">Ref: ${esc(c.ref)}</span>` : ''}${c.complemento ? `<br>${esc(c.complemento)}` : ''}</div>
       ${_dr.fonte === 'gps' ? `<div class="gps-cli">📡 Localização enviada pelo cliente${p.gpsPrecisaoM ? ` (±${Number(p.gpsPrecisaoM)} m)` : ''} — a rota vai direto ao ponto dele</div>` : ''}
       <div class="itens">${itens || '—'}</div>
@@ -402,6 +408,17 @@ function eh99Propria(p) {
   return p.origem === '99food' && !!p.food99OrderId && Number(p.food99TipoEntrega) === 2 && p.food99Retirada !== true;
 }
 const nomePlataforma = (p) => (eh99Propria(p) ? 'da 99' : 'do iFood');
+// Localizador da 99 (entrega PRÓPRIA, roteiro da 99): o telefone do cliente é VIRTUAL — liga e informa o localizador;
+// a página de entrega da 99 também conclui a entrega com o código do cliente.
+function localizador99Html(p) {
+  const l = eh99Propria(p) && p.food99Localizador;
+  if (!l || !(l.telefone || l.localizador)) return '';
+  const tel = String(l.telefone || '').replace(/[^\d+]/g, '');
+  const link = /^https:\/\//.test(l.link || '') ? l.link : '';
+  return `<div class="loc99">📞 Cliente pela 99: ${tel ? `<a href="tel:${esc(tel)}">${esc(l.telefone)}</a>` : '—'}`
+    + (l.localizador ? `<br>Informe o localizador <b>${esc(l.localizador)}</b>` : '')
+    + (link ? `<br><a href="${esc(link)}" target="_blank" rel="noopener">Página de entrega da 99 ›</a>` : '') + '</div>';
+}
 function codigoHtml(p) {
   const id = esc(p.id);
   const ocupado = _cod.ocupado.has(p.id);
