@@ -5106,9 +5106,28 @@
             });
         }
 
+        // ⚠️ CORRIDA DE RECÁLCULO (25/10/2026). updateAnalysis() é chamada por DOIS listeners do
+        // Firestore (onSnapshot de `recipes` e de `historicoFaturamento`), que disparam sozinhos a
+        // qualquer momento — inclusive no exato instante do clique no filtro de período.
+        //
+        // O que acontecia: um recálculo B começava pelo listener lendo o período "Tudo"; o dono
+        // clicava em "Mês anterior" e começava o recálculo A, lendo setembro; A terminava primeiro
+        // e pintava setembro; B terminava atrasado e pintava "Tudo" POR CIMA. O botão continuava
+        // aceso em "Mês anterior" (isso é marcado no clique e nenhum recálculo mexe), então a tela
+        // mostrava o histórico de 6 anos com o rótulo de setembro. O dono quase decidiu compra em
+        // cima de R$ 2,2 milhões, quando setembro foi R$ 41.896.
+        //
+        // A trava: cada recálculo tira uma senha. Antes de PINTAR, confere se ainda é o mais
+        // recente; se não for, desiste calado — quem veio depois tem o dado certo.
+        // O período também é CONGELADO no início: ler `_anaPeriod` lá embaixo pegaria o valor novo
+        // numa conta feita com o antigo, que é como o rótulo saía trocado.
+        let _anaRun = 0;
+
         async function updateAnalysis() {
-            const cur  = _anaRangeWrap(_anaPeriod);
-            const prev = _anaPrevWrap(_anaPeriod);
+            const meuRun  = ++_anaRun;
+            const periodo = _anaPeriod;            // congela: a conta inteira usa ESTE período
+            const cur  = _anaRangeWrap(periodo);
+            const prev = _anaPrevWrap(periodo);
             const cfg  = _anaPrecConfig();
 
             const [aggC, aggP] = await Promise.all([
@@ -5118,14 +5137,17 @@
 
             // DRE pela fonte única (_dreDoPeriodo) — Lucro Líquido/Margem idênticos ao Financeiro.
             const [dreC, dreP] = await Promise.all([
-                _dreDoPeriodo(cur.start, cur.end, _anaPeriod),
-                prev ? _dreDoPeriodo(prev.start, prev.end, _anaPeriod) : Promise.resolve(null)
+                _dreDoPeriodo(cur.start, cur.end, periodo),
+                prev ? _dreDoPeriodo(prev.start, prev.end, periodo) : Promise.resolve(null)
             ]);
+
+            // Chegou atrasado: outro recálculo mais novo já está no ar. Não pinta nada.
+            if (meuRun !== _anaRun) return;
 
             // Label do período
             const lbl = document.getElementById('anaPeriodLabel');
             if (lbl) {
-                if (_anaPeriod === 'todos') lbl.textContent = 'Todos os relatórios cadastrados + pedidos reais';
+                if (periodo === 'todos') lbl.textContent = 'Todos os relatórios cadastrados + pedidos reais';
                 else lbl.textContent = `${_anaFmtDate(cur.start)} → ${_anaFmtDate(cur.end)}` +
                     (prev ? ` · vs ${_anaFmtDate(prev.start)}–${_anaFmtDate(prev.end)}` : '');
             }
@@ -5138,6 +5160,7 @@
 
             // Gráficos (precisa de Chart.js)
             await _anaEnsureChart();
+            if (meuRun !== _anaRun) return;   // o carregamento do Chart.js também dá tempo de chegar outro
             await _renderHistChart();
 
             // ③ Performance (tabela usa mês atual via Firestore — independente do filtro de período)

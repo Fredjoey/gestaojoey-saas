@@ -309,6 +309,47 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
   - `npm test` 19/19. Antes × depois (original × rebaseada) com 90 pedidos sintéticos da 99 + 624 reais: card, modal, comanda,
     produção, mesa, busca, histórico e NFC-e iguais; só muda a linha de pagamento do aviso ao motoboy e o markup dos botões do app.
 
+## Análise: corrida de recálculo mostrava o período errado (desde 25/10/2026)
+
+**25/10, 00h15.** O Fred abriu a aba Análise, clicou em **"Mês anterior"** e a tela mostrou
+faturamento de **R$ 2.259.142,18** — o histórico de 6 anos — com o botão de setembro aceso.
+Setembro foi **R$ 41.896,00**. Ele ia pensar em compras do mês em cima daquilo.
+
+**Não era exceção.** O Claude in Chrome rodou `updateAnalysis()` na mão, pôs listener de
+`unhandledrejection`, conferiu a aba Network: nada. Tudo 200, `_anaPeriod === 'mesAnt'`, e a
+tela trocou certinho. O bug não reproduziu.
+
+**Era CORRIDA.** `updateAnalysis()` é chamada por **dois listeners do Firestore** (`onSnapshot`
+de `recipes`, linha ~2278, e de `historicoFaturamento`, ~2354), que disparam sozinhos a
+qualquer momento — inclusive no instante do clique. A sequência:
+
+1. Listener dispara o recálculo **B**, que lê `_anaPeriod` = `'todos'` e sai buscar os 4.120 pedidos
+2. O dono clica em "Mês anterior" → o botão acende na hora, e começa o recálculo **A** com `'mesAnt'`
+3. **A** termina primeiro e pinta setembro
+4. **B** termina atrasado e pinta "Tudo" **por cima** — rótulo incluído
+
+O botão continua aceso em "Mês anterior" porque isso é marcado no clique e nenhum recálculo
+mexe nele. Daí a tela com botão e números discordando.
+
+**A prova que fechou o caso foi o RÓTULO:** o print dizia *"Todos os relatórios cadastrados +
+pedidos reais"*, texto que só é escrito por um cálculo cujo período era `'todos'`. Se fosse
+exceção, o rótulo nem teria sido reescrito.
+
+**A trava:** `_anaRun`, um contador de geração. Cada recálculo tira uma senha (`++_anaRun`) e,
+**antes de pintar**, confere se ainda é o mais recente — se não for, desiste calado. Há duas
+conferências: depois das buscas e depois do `_anaEnsureChart()` (carregar o Chart.js também dá
+tempo de chegar outro).
+
+⚠️ **O período é CONGELADO no início** (`const periodo = _anaPeriod`) e usado na conta inteira.
+Ler `_anaPeriod` lá embaixo pegava o valor NOVO dentro de uma conta feita com o ANTIGO — é
+como o rótulo saía trocado. Se mexer aqui, não volte a ler a global no meio.
+
+Teste: `node testes/analise-corrida.js` (8 verificações, hermético — simula a corrida sem
+navegador). Ele **falha com o código antigo**, reproduzindo o print.
+
+**Pendência conhecida (não é o bug, é desperdício):** um clique dispara o cálculo 2 a 3 vezes,
+e cada um busca os 4.120 pedidos inteiros antes de filtrar por período.
+
 ## Bairro liga/desliga (desde 15/10/2026)
 
 Configurações > Bairros ganhou um toggle por bairro. Pausar tira o bairro do cardápio e do
