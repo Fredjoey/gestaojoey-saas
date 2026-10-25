@@ -2,7 +2,8 @@
   "projects": {
     "default": "gestaojoey",
     "pedidos": "pedidos-joey",
-    "gestaojoey": "gestaojoey"
+    "gestaojoey": "gestaojoey",
+    "sistemajoey": "sistema-joey"
   },
   "targets": {
     "gestaojoey": {

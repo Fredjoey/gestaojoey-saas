@@ -4,6 +4,49 @@
 
 O Fred trabalha em duas máquinas (desktop e notebook). ANTES de qualquer leitura ou mudança, rodar git fetch e conferir se o branch local está sincronizado com o origin. Se estiver atrás, avisar o Fred e não começar o trabalho até resolver.
 
+## ⚠️ São QUATRO sites, não três — `sistema-joey` é o que o Fred usa
+
+**`gestao.hamburgueriajoey.com.br` é o endereço do dia a dia do Fred**, e ele NÃO está em
+nenhum dos três projetos óbvios. Está num quarto: **`sistema-joey`** (projeto Firebase próprio,
+credencial `serviceAccount-sistema-joey.json`).
+
+Em 25/10/2026 isso apareceu do pior jeito: publiquei uma correção nos três sites de sempre,
+mandei o Fred conferir e nada tinha mudado para ele. O site dele servia um arquivo de **7 de
+outubro** — 18 dias parado. Nada tinha se perdido só porque o `gestao-joey.html` não mudou nesse
+intervalo; da próxima teria.
+
+**Publicar no `gestao-joey.html`, no `cardapio.html` ou no `painel.html` exige os QUATRO:**
+
+```
+# pedidos-joey  (serviceAccount-pedidos-joey.json)
+firebase deploy --only hosting:pedidos-joey,hosting:pedidos-joey-painel --project pedidos-joey
+# gestaojoey    (serviceAccount-gestaojoey.json)
+firebase deploy --only hosting:gestaojoey-painel --project gestaojoey
+# sistema-joey  (serviceAccount-sistema-joey.json)  ← o do Fred
+firebase deploy --only hosting:sistema-joey --project sistema-joey
+```
+
+**Como o `sistema-joey` está montado:** antes era UM arquivo só — um `index.html` de 3,5 MB (cópia
+velha do `gestao-joey.html`) com regra de "tudo cai no index", então até `/icon-192.png` devolvia o
+app. Agora ele recebe os arquivos do repositório como os outros, com `"**" → /gestao-joey.html`
+no fim das rewrites, para `/` continuar abrindo o sistema como sempre abriu. O `index.html` velho
+sai no deploy (ele está na lista de `ignore`).
+
+⚠️ **O tenant é descoberto pelo HOSTNAME**, em `gestao-joey.html`:
+
+```js
+const slug = (hostname === 'gestao.hamburgueriajoey.com.br' ||
+              hostname === 'sistema-joey.web.app' || …) ? 'joey' : hostname.split('.')[0];
+```
+
+Por isso o sistema abre **vazio** (R$ 0,00 em tudo) em qualquer endereço fora dessa lista: em
+`gestaojoey-painel.web.app` o slug vira `"gestaojoey-painel"`, uma loja que não existe. **Nunca
+peça ao Fred para conferir alguma coisa por um endereço que não esteja nessa lista** — vai parecer
+que o sistema quebrou. Se um endereço novo precisar servir o Joey, ele entra NA LISTA primeiro.
+
+Reverter, se um deploy sair ruim: Console → Hosting → histórico de versões → Reverter, **no site
+certo** (para o Fred, `sistema-joey`).
+
 ## Projetos Firebase e deploy das functions
 
 São **dois** projetos, e o `--project` no deploy **não é opcional**:
@@ -137,7 +180,7 @@ CLAUDE.md de lá. No painel (`_ehIfood(p)`):
   e em produção: Joey com "🟢 Conectado ao iFood … Conexão gerenciada pelo suporte" (sem Desconectar); card no `clienteteste`;
   motoboy no `clienteteste` (atribuir no card em "Prontos" → app "clienteteste · Entregas" → "Entreguei"); pedido manual
   sem chamar o iFood. Antes estava no ar o `1c5e19c` (painel) / `68224a4` (motoboy) — **rollback**: worktree em `1c5e19c` +
-  os mesmos `firebase deploy --only hosting:…`, ou Console → Hosting → histórico de versões → Reverter (em cada um dos 3 sites).
+  os mesmos `firebase deploy --only hosting:…`, ou Console → Hosting → histórico de versões → Reverter (em cada um dos **4** sites — ver a seção dos quatro sites acima).
 
 ### Loja no iFood (módulo Merchant) — código PUBLICADO em 15/10/2026 junto com o pacote SaaS, mas INVISÍVEL (o serviço está com `IFOOD_MERCHANT` desligado)
 

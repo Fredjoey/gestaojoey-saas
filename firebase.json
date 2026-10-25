@@ -67,17 +67,33 @@
       "headers": [
         {
           "source": "/sw.js",
-          "headers": [{"key": "Cache-Control", "value": "no-cache"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
         },
         {
           "source": "/cardapio.html",
-          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/**",
           "headers": [
-            { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+            {
+              "key": "X-Frame-Options",
+              "value": "SAMEORIGIN"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
           ]
         }
       ],
@@ -169,19 +185,39 @@
       "headers": [
         {
           "source": "/sw.js",
-          "headers": [{"key": "Cache-Control", "value": "no-cache"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
         },
         {
           "source": "/painel.html",
-          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/cardapio.html",
-          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
         },
         {
           "source": "/**",
-          "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
         }
       ],
       "rewrites": [
@@ -270,21 +306,173 @@
         "package-lock.json"
       ],
       "headers": [
-        { "source": "/painel.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
-        { "source": "/cardapio.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
-        { "source": "/gestao-joey.html", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] },
-        { "source": "/**", "headers": [{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"}] }
+        {
+          "source": "/painel.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/cardapio.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/gestao-joey.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        }
       ],
       "rewrites": [
-        { "source": "/pedidos",          "destination": "/painel.html" },
-        { "source": "/pedidos/**",       "destination": "/painel.html" },
-        { "source": "/gestao",           "destination": "/gestao-joey.html" },
-        { "source": "/gestao/**",        "destination": "/gestao-joey.html" },
-        { "source": "/garcom",           "destination": "/garcom.html" },
-        { "source": "/entregador/**",    "destination": "/entregador.html" },
-        { "source": "/l",                "function": "ogCardapio", "region": "southamerica-east1" },
-        { "source": "/l/**",             "function": "ogCardapio", "region": "southamerica-east1" },
-        { "source": "**",                "destination": "/cardapio.html" }
+        {
+          "source": "/pedidos",
+          "destination": "/painel.html"
+        },
+        {
+          "source": "/pedidos/**",
+          "destination": "/painel.html"
+        },
+        {
+          "source": "/gestao",
+          "destination": "/gestao-joey.html"
+        },
+        {
+          "source": "/gestao/**",
+          "destination": "/gestao-joey.html"
+        },
+        {
+          "source": "/garcom",
+          "destination": "/garcom.html"
+        },
+        {
+          "source": "/entregador/**",
+          "destination": "/entregador.html"
+        },
+        {
+          "source": "/l",
+          "function": "ogCardapio",
+          "region": "southamerica-east1"
+        },
+        {
+          "source": "/l/**",
+          "function": "ogCardapio",
+          "region": "southamerica-east1"
+        },
+        {
+          "source": "**",
+          "destination": "/cardapio.html"
+        }
+      ]
+    },
+    {
+      "site": "sistema-joey",
+      "public": ".",
+      "ignore": [
+        "scripts/**",
+        ".claude/**",
+        ".firebase/**",
+        "test/**",
+        ".git",
+        ".git/**",
+        "firebase.json",
+        ".firebaserc",
+        ".gitignore",
+        "firebase-debug.log",
+        "**/node_modules/**",
+        "*.bat",
+        "*.exe",
+        "index.html",
+        "serviceAccount*.json",
+        "**/serviceAccount*.json",
+        ".env",
+        ".env.*",
+        "*.key",
+        "*.pem",
+        "functions/**",
+        "*.backup*.html",
+        "gestao-joey.backup*.html",
+        "migrar*.js",
+        "atualizar*.js",
+        "trocar*.js",
+        "limpar*.js",
+        "gerar*.js",
+        "ativar*.js",
+        "backup*.js",
+        "buscar*.js",
+        "comparar*.js",
+        "corrigir*.js",
+        "criar*.js",
+        "deletar*.js",
+        "desativar*.js",
+        "descobrir*.js",
+        "estrutura*.js",
+        "inspecionar*.js",
+        "listar*.js",
+        "monitor*.js",
+        "pegar*.js",
+        "redeploy*.js",
+        "renomear*.js",
+        "seed*.js",
+        "*.md",
+        "docs/**",
+        "config/**",
+        "clientes*.json",
+        "contatos*.json",
+        "backup_*.json",
+        "backup_*/**",
+        "*.rules",
+        "package.json",
+        "package-lock.json"
+      ],
+      "rewrites": [
+        {
+          "source": "/pedidos",
+          "destination": "/painel.html"
+        },
+        {
+          "source": "/pedidos/**",
+          "destination": "/painel.html"
+        },
+        {
+          "source": "/gestao",
+          "destination": "/gestao-joey.html"
+        },
+        {
+          "source": "/gestao/**",
+          "destination": "/gestao-joey.html"
+        },
+        {
+          "source": "/garcom",
+          "destination": "/garcom.html"
+        },
+        {
+          "source": "/entregador/**",
+          "destination": "/entregador.html"
+        },
+        {
+          "source": "**",
+          "destination": "/gestao-joey.html"
+        }
       ]
     }
   ]
