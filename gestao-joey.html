@@ -1139,6 +1139,7 @@
             <div id="anaKpis" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:2rem;"></div>
             <div id="anaRetiradasBox" style="margin-bottom:2rem;"></div>
             <div id="anaHistFatBox" style="margin-bottom:2rem;"></div>
+            <div id="anaComparativoBox" style="margin-bottom:2rem;"></div>
             <div id="anaHistChartWrap" style="display:none; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:1.25rem; margin-bottom:2rem;">
                 <div style="font-size:13px; font-weight:700; color:#E87722; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">📊 Faturamento mês a mês (desde mai/2021)</div>
                 <div style="position:relative; height:260px;"><canvas id="anaHistChart"></canvas></div>
@@ -5071,6 +5072,129 @@
             }
             return null;
         }
+        // ── COMPARATIVO MÊS A MÊS ────────────────────────────────────────────────
+        // A loja abre de quarta a domingo, então mês não é mês: julho/2026 teve 24 dias
+        // abertos e junho teve 21. Comparar os TOTAIS faz o mês comprido parecer melhor do que
+        // foi — julho apareceu +27,7% sobre junho, mas por dia aberto foram só +11,8%. E o mês
+        // em curso parece sempre em queda, porque ainda não terminou: em 25/10 outubro estava
+        // -6,2% no total e +9,4% por dia aberto.
+        //
+        // Esta tabela mostra TODOS os meses de uma vez e NÃO obedece ao filtro de período (mesma
+        // regra do gráfico logo abaixo) — a graça é justamente não ter que clicar de um mês para
+        // o outro e comparar de cabeça.
+        let _anaMesesCache = null;   // { 'AAAA-MM': { n, v, dias:Set } }
+        let _anaModoComp = 'dia';    // 'dia' = por dia aberto (padrão) | 'total'
+
+        // Dia do pedido como 'AAAA-MM-DD'. Sai de `p.data` (DD/MM/AAAA), que é o MESMO campo
+        // pelo qual fbQueryPedidos filtra — usar p.ts aqui jogaria pedidos da virada para o mês
+        // vizinho e os dois números não bateriam.
+        function _compDia(p) {
+            const s = String((p && p.data) || '');
+            const a = s.split('/');
+            if (a.length === 3) return a[2] + '-' + a[1].padStart(2, '0') + '-' + a[0].padStart(2, '0');
+            if (typeof p.ts === 'number' && p.ts > 0) {
+                const d = new Date(p.ts);
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+            return null;
+        }
+
+        // Uma busca só, em cache. fbQueryPedidos já exclui cancelado.
+        async function _anaMesesReais() {
+            if (_anaMesesCache) return _anaMesesCache;
+            if (!window._fb || !window._fb.fbQueryPedidos) return null;
+            try {
+                const peds = await window._fb.fbQueryPedidos(_anaDateToStr(_ANA_CORTE_PEDIDOS), _anaDateToStr(new Date()));
+                const out = {};
+                for (const ped of peds) {
+                    const dia = _compDia(ped);
+                    if (!dia) continue;
+                    const ym = dia.slice(0, 7);
+                    const b = out[ym] || (out[ym] = { n: 0, v: 0, dias: new Set() });
+                    b.n++; b.v += Number(ped.total) || 0; b.dias.add(dia);
+                }
+                _anaMesesCache = out;
+                return out;
+            } catch (e) {
+                console.warn('[comparativo] não consegui ler os pedidos:', e);
+                return null;
+            }
+        }
+
+        function _anaSetModoComp(modo) {
+            _anaModoComp = modo;
+            _anaRenderComparativo();
+        }
+
+        async function _anaRenderComparativo() {
+            const box = document.getElementById('anaComparativoBox');
+            if (!box) return;
+            const meses = await _anaMesesReais();
+            if (!meses || !Object.keys(meses).length) { box.innerHTML = ''; return; }
+
+            const porDia = _anaModoComp === 'dia';
+            const NM = ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+            const hojeYM = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); })();
+            const brl0 = v => 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+            const brl2 = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            const yms = Object.keys(meses).sort();
+            const linhas = yms.map((ym, i) => {
+                const m = meses[ym], dias = m.dias.size || 1;
+                const valor = porDia ? m.v / dias : m.v;
+                let pct = null;
+                if (i > 0) {
+                    const a = meses[yms[i - 1]], diasA = a.dias.size || 1;
+                    const ant = porDia ? a.v / diasA : a.v;
+                    if (ant > 0) pct = (valor / ant - 1) * 100;
+                }
+                const sobe = pct !== null && pct >= 0;
+                const cor = pct === null ? '#8f8f8f' : (sobe ? '#3ddc97' : '#f0a23b');
+                const parcial = ym === hojeYM;
+                const mesTxt = NM[Number(ym.slice(5, 7))] + '/' + ym.slice(2, 4);
+                const cel = 'text-align:right;padding:13px 16px;border-bottom:1px solid #222;font-variant-numeric:tabular-nums;';
+                return '<tr' + (parcial ? ' style="background:#17130e"' : '') + '>'
+                    + '<th scope="row" style="text-align:left;padding:13px 16px;border-bottom:1px solid #222;font-weight:600;color:#eee;white-space:nowrap">'
+                    + mesTxt + (parcial ? ' <span style="font-weight:400;color:#9a9a9a;font-size:11px">· em curso</span>' : '') + '</th>'
+                    + '<td style="' + cel + 'color:#b9b4ad">' + dias + '</td>'
+                    + '<td style="' + cel + 'color:#b9b4ad">' + (porDia ? (m.n / dias).toFixed(1).replace('.', ',') : m.n.toLocaleString('pt-BR')) + '</td>'
+                    + '<td style="' + cel + 'color:#eee;font-weight:700">' + brl0(valor) + '</td>'
+                    + '<td style="' + cel + 'color:' + cor + ';font-weight:700">'
+                    + (pct === null ? '—' : (sobe ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1).replace('.', ',') + '%') + '</td>'
+                    + '<td style="' + cel + 'color:#b9b4ad">' + brl2(m.n ? m.v / m.n : 0) + '</td>'
+                    + '</tr>';
+            }).join('');
+
+            const bt = (ativo, modo, txt) => '<button type="button" onclick="_anaSetModoComp(\'' + modo + '\')" '
+                + 'style="padding:8px 16px;min-height:40px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;'
+                + (ativo ? 'background:#E87722;color:#1a0f05' : 'background:transparent;color:#b9b4ad') + '">' + txt + '</button>';
+
+            const th = 'text-align:right;padding:12px 16px;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:#a5a5a5;font-weight:700;border-bottom:1px solid #2a2a2a;';
+            box.innerHTML =
+                '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:1.25rem">'
+                + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:14px">'
+                +   '<div style="font-size:13px;font-weight:700;color:#E87722;text-transform:uppercase;letter-spacing:.5px">📅 Comparativo mês a mês</div>'
+                +   '<div style="display:inline-flex;background:#111;border:1px solid #2a2a2a;border-radius:9px;padding:3px;gap:3px;margin-left:auto">'
+                +     bt(!porDia, 'total', 'Total do mês') + bt(porDia, 'dia', 'Por dia aberto')
+                +   '</div>'
+                + '</div>'
+                + '<p style="margin:0 0 14px;font-size:12px;color:#9a9a9a;line-height:1.55">'
+                +   (porDia
+                      ? 'Cada mês dividido pelos dias em que a loja abriu — é a comparação justa, e a única que enxerga o mês em curso direito.'
+                      : 'Soma bruta do mês. Mês com mais dias abertos parece melhor do que foi, e o mês em curso parece sempre em queda.')
+                + '</p>'
+                + '<div style="overflow-x:auto">'
+                + '<table style="width:100%;min-width:720px;border-collapse:collapse;font-size:13.5px">'
+                + '<thead><tr style="background:#161616">'
+                +   '<th scope="col" style="' + th + 'text-align:left">Mês</th>'
+                +   '<th scope="col" style="' + th + '">Dias abertos</th>'
+                +   '<th scope="col" style="' + th + '">' + (porDia ? 'Pedidos / dia' : 'Pedidos') + '</th>'
+                +   '<th scope="col" style="' + th + '">' + (porDia ? 'Faturamento / dia' : 'Faturamento') + '</th>'
+                +   '<th scope="col" style="' + th + '">vs mês anterior</th>'
+                +   '<th scope="col" style="' + th + '">Ticket médio</th>'
+                + '</tr></thead><tbody>' + linhas + '</tbody></table></div></div>';
+        }
+
         async function _renderHistChart() {
             const wrap = document.getElementById('anaHistChartWrap');
             const ctx = document.getElementById('anaHistChart');
@@ -5157,6 +5281,10 @@
 
             // ② Insights
             _anaRenderInsights(aggC, aggP, cfg, prev != null, dreC, dreP);
+
+            // Comparativo mês a mês (não obedece ao filtro de período, igual ao gráfico abaixo)
+            await _anaRenderComparativo();
+            if (meuRun !== _anaRun) return;
 
             // Gráficos (precisa de Chart.js)
             await _anaEnsureChart();

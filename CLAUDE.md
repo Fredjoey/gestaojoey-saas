@@ -309,6 +309,38 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
   - `npm test` 19/19. Antes × depois (original × rebaseada) com 90 pedidos sintéticos da 99 + 624 reais: card, modal, comanda,
     produção, mesa, busca, histórico e NFC-e iguais; só muda a linha de pagamento do aviso ao motoboy e o markup dos botões do app.
 
+## Comparativo mês a mês na aba Análise (desde 25/10/2026)
+
+Tabela com **todos os meses de uma vez**, logo acima do gráfico "Faturamento mês a mês" (os dois
+são a mesma história: a tabela dá os números, o gráfico dá a forma). **Não obedece ao filtro de
+período** — mesma regra do gráfico. A graça é não ter que clicar de um mês pro outro e comparar
+de cabeça.
+
+**Por que "dias abertos" é a coluna que importa:** a loja abre de quarta a domingo, então mês não
+é mês. Julho/2026 teve **24** dias abertos e junho teve **21**. Pelo total, julho apareceu
+**+27,7%** sobre junho; por dia aberto, **+11,7%** — mais da metade da alta era calendário, não
+movimento. E o mês em curso parece sempre em queda: em 25/10 outubro estava **−6,2%** no total e
+**+9,4%** por dia aberto. O botão "Total do mês / Por dia aberto" é o que desfaz isso; o padrão é
+**por dia aberto**.
+
+Como funciona:
+
+- `_anaMesesReais()` faz **uma** busca, em cache (`_anaMesesCache`), e monta
+  `{ 'AAAA-MM': { n, v, dias:Set } }`. `fbQueryPedidos` já exclui cancelado.
+- ⚠️ O dia sai de **`p.data`** (`DD/MM/AAAA`) via `_compDia`, **não de `p.ts`** — é o mesmo campo
+  pelo qual `fbQueryPedidos` filtra. Usar `p.ts` jogaria pedidos da virada para o mês vizinho e a
+  contagem de dias não bateria com o faturamento.
+- "Dias abertos" = dias DISTINTOS com pedido. Dia sem pedido não conta como aberto, o que é o
+  certo para esta conta.
+- Variação: sempre contra o mês anterior, no **mesmo modo** da tabela. Mês anterior zerado →
+  `—`, nunca `Infinity`.
+- O mês corrente leva fundo diferente e o selo "· em curso".
+
+⚠️ **Ao calcular variação, divida os valores CHEIOS, nunca os já arredondados.** 2.263 ÷ 2.025 dá
+11,8%; 54318/24 ÷ 42533/21 dá **11,7%**. O teste trava o número certo.
+
+Teste: `node testes/comparativo-mes.js` (13 verificações, com os números reais de mai–out/2026).
+
 ## Análise: corrida de recálculo mostrava o período errado (desde 25/10/2026)
 
 **25/10, 00h15.** O Fred abriu a aba Análise, clicou em **"Mês anterior"** e a tela mostrou
