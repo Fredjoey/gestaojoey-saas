@@ -352,6 +352,33 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
   - `npm test` 19/19. Antes × depois (original × rebaseada) com 90 pedidos sintéticos da 99 + 624 reais: card, modal, comanda,
     produção, mesa, busca, histórico e NFC-e iguais; só muda a linha de pagamento do aviso ao motoboy e o markup dos botões do app.
 
+## Embalagem do insumo — grama para a receita, pote para consultar (desde 27/10/2026)
+
+**Grama/ml é a unidade CERTA para a ficha técnica e a precificação** — ninguém usa "meio pote"
+de mostarda num hambúrguer, usa 15 g. Mas **na hora de CONSULTAR preço, grama atrapalha**: o Fred
+compra em pote, e pote de Dijon Maille tem **865 g**, não 1 kg. Ele não reconhece "R$ 0,0744/g".
+
+`embalagem: { qtd, nome }` no insumo (`insumos/dados`, no mesmo objeto de `price`/`unit`/`costUnit`).
+**`qtd` vem SEMPRE na unidade de custo do insumo** (g, ml ou un) — `_parseEmbalagem` converte kg→g
+e L→ml na entrada. É **só lente de leitura**: não entra em conta de receita e não mexe em `price`.
+A lista de Insumos passa a mostrar "📦 1 pote = 865 g · R$ 64,40" ao lado do preço por kg.
+
+⚠️ **Não deixa misturar peso com contagem**: `2 kg` num insumo medido em `un` é recusado, e
+vice-versa. Sem isso, um erro de digitação viraria preço de insumo silenciosamente.
+
+**O caso que motivou isto, e que vale como alerta:** a nota de 06/10 entrou como
+`1,7 kg × R$ 92,20 = R$ 128,80`. **A conta não fecha** — 1,7 × 92,20 = 156,74. Eram **2 potes =
+1,730 kg** a R$ 74,45/kg. O R$ 92,20 furado virou o `price` do insumo (0,0922/g), e **toda receita
+com Dijon ficou 24% mais cara do que é**. Com a embalagem cadastrada, "1,7 kg" é na hora legível
+como **1,97 potes** — quantidade quebrada é sinal de erro.
+
+**Pendente (não feito ainda):** usar a embalagem para CONFERIR nota no lançamento (quantidade que
+não é múltiplo da embalagem → alerta) e mostrar o preço por embalagem também na consulta do
+assessor (`precoInsumo`, no joey-secretário).
+
+Teste: `node testes/insumo-embalagem.js` (26 verificações, hermético — extrai as funções do HTML
+por `vm`, sem navegador).
+
 ## Comparativo mês a mês na aba Análise (desde 25/10/2026)
 
 Tabela com **todos os meses de uma vez**, logo acima do gráfico "Faturamento mês a mês" (os dois

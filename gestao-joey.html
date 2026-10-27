@@ -2814,6 +2814,23 @@
             return price.toFixed(2);
         }
 
+        // Linha da embalagem na lista de insumos: o preço que o Fred reconhece (o do pote),
+        // ao lado do preço por grama que a receita usa.
+        function _linhaEmbalagem(nome, data, ingKey) {
+            const emb = data.embalagem;
+            if (emb && emb.qtd > 0) {
+                const porEmb = (Number(data.price) || 0) * emb.qtd;
+                return '<div style="margin-top:5px; font-size:11.5px; color:#E87722; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+                    + '<span>📦 1 ' + (emb.nome || 'embalagem') + ' = <strong>' + _embTxt(emb, data.unit) + '</strong>'
+                    + ' · <strong>R$ ' + porEmb.toFixed(2).replace('.', ',') + '</strong></span>'
+                    + '<button onclick="definirEmbalagem(\'' + ingKey + '\')" style="background:transparent; border:1px solid #E87722; color:#E87722; border-radius:5px; padding:2px 8px; font-size:11px; font-weight:600; cursor:pointer;">alterar</button>'
+                    + '</div>';
+            }
+            return '<div style="margin-top:5px;">'
+                + '<button onclick="definirEmbalagem(\'' + ingKey + '\')" style="background:transparent; border:1px dashed #555; color:#8a8a8a; border-radius:5px; padding:2px 8px; font-size:11px; cursor:pointer;">📦 informar embalagem</button>'
+                + '</div>';
+        }
+
         function renderInsumosList() {
             const list = document.getElementById('insumosList');
             const searchTerm = document.getElementById('insumoSearch').value.toLowerCase();
@@ -2847,6 +2864,7 @@
                         <div>
                             <div class="insumo-name">${ing}</div>
                             <div class="insumo-unit">Unidade: ${data.unit}</div>
+                            ${_linhaEmbalagem(ing, data, ingKey)}
                             ${usageLabel}
                             ${subReceitaHtml}
                         </div>
@@ -2876,6 +2894,79 @@
         }
 
         function filterInsumos() {
+            renderInsumosList();
+        }
+
+        // ── EMBALAGEM DO INSUMO ──────────────────────────────────────────────────
+        // Grama/ml é a unidade CERTA para a receita e a precificação: ninguém usa "meio pote" de
+        // mostarda num hambúrguer, usa 15 g. Mas na hora de CONSULTAR preço, grama atrapalha — o
+        // Fred compra pote, e pote de Dijon tem 865 g, não 1 kg.
+        //
+        // `embalagem: { qtd, nome }` (qtd SEMPRE na unidade de custo do insumo: g, ml ou un) é só
+        // uma lente de leitura: não entra em nenhuma conta de receita, não muda `price`. Serve para
+        // mostrar "R$ 64,40 o pote (865 g)" ao lado de "R$ 74,45/kg", e para conferir nota.
+        //
+        // ⚠️ 27/10/2026, o caso que motivou isto: a nota de 06/10 entrou como "1,7 kg × R$ 92,20 =
+        // R$ 128,80". A conta não fecha (1,7 × 92,20 = 156,74). Eram 2 potes = 1,730 kg a R$ 74,45/kg.
+        // O erro virou preço de insumo e inflou em 24% toda receita com Dijon. Com a embalagem
+        // cadastrada, "1,7 kg" é na hora visível como 1,97 potes — quantidade quebrada = algo errado.
+        const _EMB_FATOR = { g: 1, ml: 1, un: 1, kg: 1000, l: 1000, litro: 1000 };
+
+        // Aceita "865 g", "2 kg", "1,5 L", "6 un", "865g pote", "2kg saco".
+        // Devolve { qtd, nome } com qtd na unidade de custo do insumo, ou null.
+        function _parseEmbalagem(txt, unidadeCusto) {
+            const t = String(txt || '').trim().toLowerCase().replace(',', '.');
+            const m = t.match(/^([0-9]*\.?[0-9]+)\s*(kg|g|l|litros?|ml|un|und|unidades?)?\s*(.*)$/);
+            if (!m) return null;
+            const n = parseFloat(m[1]);
+            if (!(n > 0)) return null;
+            let un = (m[2] || '').replace(/s$/, '');
+            if (un === 'litro' || un === 'l') un = 'l';
+            if (un === 'und' || un === 'unidade') un = 'un';
+            if (!un) un = unidadeCusto;            // sem unidade escrita: assume a do insumo
+            const base = unidadeCusto === 'un' ? 'un' : (unidadeCusto === 'ml' ? 'ml' : 'g');
+            // g↔kg e ml↔l convertem; un não mistura com peso.
+            const compativel = (base === 'un') ? (un === 'un')
+                             : (base === 'ml') ? (un === 'ml' || un === 'l')
+                             : (un === 'g' || un === 'kg');
+            if (!compativel) return null;
+            const qtd = n * (_EMB_FATOR[un] || 1);
+            const nome = (m[3] || '').trim().replace(/[^a-zà-ú0-9 ]/gi, '').slice(0, 20) || 'embalagem';
+            return { qtd: Math.round(qtd * 1000) / 1000, nome };
+        }
+
+        // Texto curto da embalagem: "865 g" ou "2 kg".
+        function _embTxt(emb, unidadeCusto) {
+            if (!emb || !(emb.qtd > 0)) return '';
+            const q = emb.qtd;
+            if (unidadeCusto === 'un') return q + (q > 1 ? ' un' : ' un');
+            const grande = unidadeCusto === 'ml' ? 'L' : 'kg';
+            const peq = unidadeCusto === 'ml' ? 'ml' : 'g';
+            return q >= 1000 ? (q / 1000).toString().replace('.', ',') + ' ' + grande : q.toString().replace('.', ',') + ' ' + peq;
+        }
+
+        function definirEmbalagem(nome) {
+            const d = ingredientsData[nome];
+            if (!d) return;
+            const atual = d.embalagem ? (_embTxt(d.embalagem, d.unit) + ' ' + (d.embalagem.nome || '')).trim() : '';
+            const txt = prompt(
+                'Quanto vem em 1 embalagem de "' + nome + '"?\n\n' +
+                'Ex.: 865 g pote · 2 kg saco · 1,5 L garrafa · 6 un caixa\n' +
+                'Deixe vazio para remover.',
+                atual
+            );
+            if (txt === null) return;                       // cancelou
+            if (!txt.trim()) {                              // limpar
+                delete d.embalagem;
+            } else {
+                const emb = _parseEmbalagem(txt, d.unit);
+                if (!emb) { alert('⚠️ Não entendi "' + txt + '".\nUse algo como: 865 g pote, 2 kg, 1,5 L, 6 un.'); return; }
+                d.embalagem = emb;
+            }
+            if (window._fb) {
+                window._fb.fbSaveAll('insumos', { data: ingredientsData }).catch(e => console.error('Erro ao salvar insumos:', e));
+                window._fb.fbLog('ajustou', 'Insumo', nome, d.embalagem ? ('embalagem: ' + _embTxt(d.embalagem, d.unit) + ' ' + d.embalagem.nome) : 'embalagem removida').catch(()=>{});
+            }
             renderInsumosList();
         }
 
