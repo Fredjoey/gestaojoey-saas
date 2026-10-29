@@ -352,6 +352,28 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
   - `npm test` 19/19. Antes × depois (original × rebaseada) com 90 pedidos sintéticos da 99 + 624 reais: card, modal, comanda,
     produção, mesa, busca, histórico e NFC-e iguais; só muda a linha de pagamento do aviso ao motoboy e o markup dos botões do app.
 
+## Relatório de Clientes: o 💬 WhatsApp abre a conversa NO PAINEL (desde 29/10/2026)
+
+O botão do Top 10 Clientes era um `<a href="https://wa.me/…" target="_blank">`: tirava o Fred do
+relatório e jogava no WhatsApp. Agora é um `<button>` que chama `cliAbrirWpp(tel)`, abre a gaveta
+(`abrirWppPanel()`) e seleciona a conversa (`wppSelecionarConv(id)`). Ele continua no painel, com
+o relatório atrás.
+
+Não precisa buscar nada: as conversas já estão em `_wppConversas` desde o load da página (o
+`onSnapshot` de `clientes/<slug>/conversas` roda sempre, não só com a gaveta aberta).
+
+⚠️ **O casamento telefone → conversa é pelos 8 ÚLTIMOS dígitos** (`_cliConvDoTelefone`), a mesma
+regra do `ehDaEquipe` no joeyapi. Comparar a string inteira erra em todos os casos reais: o
+relatório mostra `(21) 99983-5738`, e a conversa pode estar gravada como `5521999835738`,
+`21999835738` (sem o 55) ou **sob um LID** (`100292435665097`) com o telefone só no campo
+`numero` — por isso a busca olha `numero` E, como reserva, o id do documento.
+
+**Cliente sem conversa** (nunca falou com o bot): não há o que abrir. Um `confirm` avisa e oferece
+o WhatsApp — em vez de um clique que não faz nada. **Não troque isso por um clique mudo.**
+
+Teste: `node testes/cliente-abrir-conversa.js` (14 verificações, hermético — extrai as funções do
+HTML por `vm`).
+
 ## Embalagem do insumo — grama para a receita, pote para consultar (desde 27/10/2026)
 
 **Grama/ml é a unidade CERTA para a ficha técnica e a precificação** — ninguém usa "meio pote"

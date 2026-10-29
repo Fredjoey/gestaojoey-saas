@@ -12758,9 +12758,40 @@ function cliEndereco(c) {
 function cliWppBtn(tel) {
   const d = (tel || '').replace(/\D/g, '');
   if (!d) return '—';
+  return `<button type="button" onclick="cliAbrirWpp('${d}')" title="Abrir a conversa aqui no painel"
+    style="padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;background:rgba(37,211,102,.12);color:#4ade80;border:1px solid rgba(37,211,102,.2)">💬 WhatsApp</button>`;
+}
+
+// Acha a conversa do cliente comparando os 8 ÚLTIMOS dígitos — mesma regra do
+// ehDaEquipe no joeyapi. O relatório traz "(21) 99983-5738", a conversa pode estar gravada
+// como 5521999835738, 21999835738, ou sob um LID (100292435665097) com o telefone no campo
+// `numero`. Comparar a string inteira erraria em todos esses casos.
+function _cliConvDoTelefone(tel) {
+  const fim = String(tel || '').replace(/\D/g, '').slice(-8);
+  if (fim.length < 8) return null;
+  return (_wppConversas || []).find(c => {
+    const n = String((c && c.numero) || (c && c.id) || '').replace(/\D/g, '');
+    return n.slice(-8) === fim;
+  }) || null;
+}
+
+// Abre a conversa DENTRO do painel, em vez de jogar o Fred pro WhatsApp e perder o contexto
+// do relatório. As conversas já estão em memória desde o load da página (onSnapshot de
+// clientes/<slug>/conversas), então não precisa buscar nada.
+function cliAbrirWpp(tel) {
+  const conv = _cliConvDoTelefone(tel);
+  if (conv) {
+    abrirWppPanel();
+    wppSelecionarConv(conv.id);
+    return;
+  }
+  // Sem conversa registrada (cliente que nunca falou com o bot): não há o que abrir aqui.
+  // Avisa e deixa o WhatsApp como saída — em vez de um clique que não faz nada.
+  const d = String(tel || '').replace(/\D/g, '');
   const wppNum = (d.length >= 12 && d.startsWith('55')) ? d : '55' + d;
-  return `<a href="https://wa.me/${wppNum}" target="_blank" rel="noopener"
-    style="display:inline-block;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;background:rgba(37,211,102,.12);color:#4ade80;border:1px solid rgba(37,211,102,.2)">💬 WhatsApp</a>`;
+  if (confirm('Esse cliente ainda não tem conversa registrada no sistema.\n\nAbrir no WhatsApp?')) {
+    window.open(`https://wa.me/${wppNum}`, '_blank', 'noopener');
+  }
 }
 
 
