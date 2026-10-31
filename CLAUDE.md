@@ -352,6 +352,59 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
   - `npm test` 19/19. Antes × depois (original × rebaseada) com 90 pedidos sintéticos da 99 + 624 reais: card, modal, comanda,
     produção, mesa, busca, histórico e NFC-e iguais; só muda a linha de pagamento do aviso ao motoboy e o markup dos botões do app.
 
+## ⚠️ Horário: um dia pode ter MAIS DE UM TURNO (desde 31/10/2026)
+
+O Joey vai abrir no almoço. Antes cada dia tinha um intervalo só, então pôr 11:00–14:00 na
+quarta **apagava a noite**.
+
+```js
+config/loja.horarios[dow] = {
+  ativo: true,
+  abre:  '11:00',          // ← espelho do PRIMEIRO turno
+  fecha: '14:00',          // ← espelho do PRIMEIRO turno
+  turnos: [{ abre: '11:00', fecha: '14:00' }, { abre: '18:30', fecha: '23:00' }],
+}
+```
+
+**`turnos` é a verdade. `abre`/`fecha` continuam sendo gravados de propósito**, espelhando o
+primeiro turno: existem leitores que ainda não conhecem `turnos` (o serviço do iFood, o da 99,
+relatórios), e sem o espelho eles quebrariam em vez de só ficarem desatualizados.
+
+Quem lê horário usa `_turnosDoDia(h)` (ou `turnosDoDia`), que devolve `[]` com o dia desligado e
+cai no par `abre`/`fecha` quando `turnos` não existe. **Nunca leia `h.abre`/`h.fecha` direto.**
+Cópias dessa função — repositórios diferentes, mesma regra:
+
+| Onde | Função |
+|---|---|
+| `painel.html` | `_turnosDoDia`, `_dentroDoTurno`, `estaAberto`, `_horEdit`/`lerHorariosDias`, `_iflTurnosDoPainel` |
+| `cardapio.html` | `_turnosDoDia`, `estaAberto`, `horarioHoje`, `proximoAbertura`, `renderInfoLoja` |
+| `joeyapi/src/bot.js` | `turnosDoDia`, `montarHorarioTxt` |
+| `joeyapi/src/claudeIA.js` | `_turnosDoDia`, `_contextoTemporal`, `_lojaAbertaAgora` |
+| `gestaojoey-admin/functions/index.js` | `_lojaAbertaAgora` |
+| `gestaojoey-admin/functions/joeyia.js` | `montarFuncionamento`, `_abertoAgora`, `statusLoja` |
+| `joey-secretario/src/gestao/negocio.js` | `turnosDoDia`, `estadoDeHoje`, `abreEm` |
+
+A armadilha que custa dinheiro é a do assessor: `estadoDeHoje` decide se HOJE ainda conta como
+dia de venda. Lendo o `fecha` do primeiro turno, às 15h de uma quarta ele daria o dia por
+encerrado e jogaria fora a noite inteira — **`fecha` tem que vir do ÚLTIMO turno**.
+
+**Pendente (outro repositório, não está nesta máquina):** `joey-ifood/src/lojaRegras.js`
+`turnosDoPainel` e o cálculo de `horariosGestao` da 99 fazem a mesma conversão do lado do
+serviço. Enquanto não forem atualizados, o iFood e a 99 recebem **só o primeiro turno** do dia.
+
+## Formas de atendimento liga/desliga (desde 31/10/2026)
+
+`config/loja.modos = { delivery, retirada, local }`. **Campo ausente = LIGADO** — nenhuma loja que
+nunca abriu esse modal pode acordar sem delivery.
+
+- Painel: modal "Formas de atendimento" (era "Tempo de entrega"), um toggle por forma. O
+  **último ligado não desliga** — para fechar a loja existe o botão Aberto/Fechado.
+- `cardapio.html`: `_opcoesEntrega(mesa)` monta o checkout; `_ajustarTipoEntrega` troca o tipo
+  quando o escolhido some. Com os três desligados, **mostra os três** — travar o cliente com o
+  carrinho pronto e sem botão de finalizar é pior que ignorar a configuração.
+- Bot: `_linhasModos` avisa a IA, e **`setTipo` recusa** (`erro: 'modo_desligado'`). O prompt é um
+  pedido a um modelo; a trava tem que estar na ferramenta.
+
 ## Relatório de Clientes: o 💬 WhatsApp abre a conversa NO PAINEL (desde 29/10/2026)
 
 O botão do Top 10 Clientes era um `<a href="https://wa.me/…" target="_blank">`: tirava o Fred do
