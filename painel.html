@@ -2176,8 +2176,8 @@ body.suporte-on #botAlertBanner{top:36px}
   <div class="tm-box">
     <div class="tm-head">
       <div>
-        <div class="tm-title">Tempo de entrega</div>
-        <div class="tm-sub">Defina o intervalo em minutos.</div>
+        <div class="tm-title">Formas de atendimento</div>
+        <div class="tm-sub">Ligue ou desligue cada uma e defina o tempo em minutos.</div>
       </div>
       <button class="tm-close-btn" onclick="fecharModalTempo()">✕</button>
     </div>
@@ -2969,6 +2969,29 @@ function _agoraBRT() {
   return new Date(brtStr.replace(' ', 'T'));
 }
 
+// ── Turnos do dia ──
+// Um dia pode ter MAIS DE UM turno (almoço 11:00–14:00 + noite 18:30–23:00).
+// Formato gravado em config.horarios[dow]:
+//   { ativo, abre, fecha, turnos: [{abre,fecha}, …] }
+// `turnos` é a verdade. `abre`/`fecha` continuam espelhando o PRIMEIRO turno de
+// propósito: qualquer leitor que ainda não conheça `turnos` (integrações, relatórios
+// antigos) segue lendo o que lia antes em vez de quebrar.
+function _turnosDoDia(h) {
+  if (!h || !h.ativo) return [];
+  const t = Array.isArray(h.turnos)
+    ? h.turnos.filter(x => x && x.abre && x.fecha).map(x => ({ abre: x.abre, fecha: x.fecha }))
+    : [];
+  if (t.length) return t;
+  return [{ abre: h.abre || '18:00', fecha: h.fecha || '23:00' }];
+}
+// Agora está dentro deste turno? fecha > abre = mesmo dia; fecha <= abre = vira a meia-noite.
+function _dentroDoTurno(minAgora, abre, fecha) {
+  const [hA, mA] = String(abre  || '00:00').split(':').map(Number);
+  const [hF, mF] = String(fecha || '23:59').split(':').map(Number);
+  const a = hA * 60 + mA, f = hF * 60 + mF;
+  return (f > a) ? (minAgora >= a && minAgora < f) : (minAgora >= a);
+}
+
 function estaAberto() {
   // Toggle manual tem prioridade
   if (config.aberto === false) return false;
@@ -2977,12 +3000,10 @@ function estaAberto() {
   const agora     = _agoraBRT();
   const diaSemana = agora.getDay(); // 0=Dom ... 6=Sáb (em BRT)
   const horarios  = config.horarios || {};
-  const h = horarios[diaSemana];
-  if (!h || !h.ativo) return false;
-  const [hA, mA] = (h.abre  || '00:00').split(':').map(Number);
-  const [hF, mF] = (h.fecha || '23:59').split(':').map(Number);
-  const minAgora = agora.getHours() * 60 + agora.getMinutes();
-  return minAgora >= hA * 60 + mA && minAgora < hF * 60 + mF;
+  const minAgora  = agora.getHours() * 60 + agora.getMinutes();
+  // Aberto se AGORA cai em QUALQUER um dos turnos do dia (entre o almoço e a noite
+  // a loja fica fechada — nenhum turno cobre aquele intervalo).
+  return _turnosDoDia(horarios[diaSemana]).some(t => _dentroDoTurno(minAgora, t.abre, t.fecha));
 }
 
 function atualizarSidebar() {
@@ -7063,40 +7084,103 @@ function exportarHistorico(){
 
 const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
+// Estado de edição dos horários. A tela mexe NISTO (não no DOM): com turnos que
+// entram e saem, ler os campos pelo id virava uma fonte de verdade frágil.
+let _horEdit = {};
+const MAX_TURNOS = 3;
+
 function renderHorariosDias() {
   const horarios = config.horarios || {};
-  // Ordem de EXIBIÇÃO começando na segunda (Seg→Dom). É SÓ visual: o índice `i` de cada dia
-  // (0=Dom .. 6=Sáb) continua sendo a CHAVE salva em config.horarios — os dados e a leitura
-  // dos horários em outros lugares (bot etc.) NÃO mudam.
-  const ORDEM_EXIBICAO = [1, 2, 3, 4, 5, 6, 0];
-  document.getElementById('horariosDias').innerHTML = ORDEM_EXIBICAO.map((i) => {
-    const dia = DIAS_SEMANA[i];
-    const h = horarios[i] || { ativo: false, abre: '18:00', fecha: '23:00' };
-    return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;min-height:44px">
-        <label class="toggle-switch" style="flex-shrink:0">
-          <input type="checkbox" id="dia-ativo-${i}" ${h.ativo ? 'checked' : ''} onchange="toggleDia(${i})">
-          <span class="toggle-slider"></span>
-        </label>
-        <span style="font-size:13px;font-weight:600;color:var(--text);min-width:32px;flex-shrink:0">${dia}</span>
-        <span id="dia-label-${i}" style="font-size:11px;font-weight:700;min-width:52px;color:${h.ativo ? '#34d399' : 'var(--text3)'}">
-          ${h.ativo ? 'Aberto' : 'Fechado'}
-        </span>
-        <div id="dia-horas-${i}" style="display:${h.ativo ? 'flex' : 'none'};align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
-          <input class="fi" type="time" id="dia-abre-${i}"  value="${h.abre  || '18:00'}" style="padding:5px 8px;font-size:12px;width:90px">
-          <span style="font-size:11px;color:var(--text3)">às</span>
-          <input class="fi" type="time" id="dia-fecha-${i}" value="${h.fecha || '23:00'}" style="padding:5px 8px;font-size:12px;width:90px">
-        </div>
-      </div>`;
-  }).join('');
+  _horEdit = {};
+  for (let i = 0; i < 7; i++) {
+    const h = horarios[i] || {};
+    // força ativo:true só pra extrair os turnos — um dia fechado também guarda
+    // o horário que tinha, pra não perder quando o dono religa o dia.
+    const t = _turnosDoDia(Object.assign({}, h, { ativo: true }));
+    _horEdit[i] = { ativo: h.ativo === true, turnos: t.length ? t : [{ abre: '18:00', fecha: '23:00' }] };
+  }
+  _renderHorTodos();
 }
 
-function toggleDia(i) {
-  const ativo = document.getElementById(`dia-ativo-${i}`).checked;
-  const lbl   = document.getElementById(`dia-label-${i}`);
-  const horas = document.getElementById(`dia-horas-${i}`);
-  if (lbl)   { lbl.textContent = ativo ? 'Aberto' : 'Fechado'; lbl.style.color = ativo ? '#34d399' : 'var(--text3)'; }
-  if (horas) { horas.style.display = ativo ? 'flex' : 'none'; }
+function _renderHorTodos() {
+  // Ordem de EXIBIÇÃO começando na segunda (Seg→Dom). É SÓ visual: o índice `i` de cada dia
+  // (0=Dom .. 6=Sáb) continua sendo a CHAVE salva em config.horarios.
+  const ORDEM_EXIBICAO = [1, 2, 3, 4, 5, 6, 0];
+  const el = document.getElementById('horariosDias');
+  if (el) el.innerHTML = ORDEM_EXIBICAO.map(_horDiaHtml).join('');
+}
+
+function _horDiaHtml(i) {
+  const d   = _horEdit[i];
+  const dia = DIAS_SEMANA[i];
+  const linhas = d.turnos.map((t, k) => `
+    <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+      <input class="fi" type="time" value="${t.abre}"  onchange="_horSetHora(${i},${k},'abre',this.value)"
+             style="padding:5px 8px;font-size:12px;width:90px">
+      <span style="font-size:11px;color:var(--text3)">às</span>
+      <input class="fi" type="time" value="${t.fecha}" onchange="_horSetHora(${i},${k},'fecha',this.value)"
+             style="padding:5px 8px;font-size:12px;width:90px">
+      ${d.turnos.length > 1
+        ? `<button type="button" title="Remover este turno" onclick="_horRemTurno(${i},${k})"
+             style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px 6px;line-height:1">✕</button>`
+        : `<span style="display:inline-block;width:26px"></span>`}
+    </div>`).join('');
+
+  const btnAdd = (d.ativo && d.turnos.length < MAX_TURNOS)
+    ? `<div style="display:flex;justify-content:flex-end;margin-top:2px">
+         <button type="button" onclick="_horAddTurno(${i})"
+           style="background:none;border:none;color:var(--orange);cursor:pointer;font-size:11px;font-weight:700;padding:2px 32px 2px 6px">
+           + turno
+         </button>
+       </div>`
+    : '';
+
+  return `
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;min-height:44px">
+      <label class="toggle-switch" style="flex-shrink:0;margin-top:3px">
+        <input type="checkbox" ${d.ativo ? 'checked' : ''} onchange="toggleDia(${i}, this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+      <span style="font-size:13px;font-weight:600;color:var(--text);min-width:32px;flex-shrink:0;margin-top:5px">${dia}</span>
+      <span style="font-size:11px;font-weight:700;min-width:52px;margin-top:5px;color:${d.ativo ? '#34d399' : 'var(--text3)'}">
+        ${d.ativo ? 'Aberto' : 'Fechado'}
+      </span>
+      <div style="margin-left:auto;flex-shrink:0;display:${d.ativo ? 'block' : 'none'}">
+        <div style="display:flex;flex-direction:column;gap:6px">${linhas}</div>
+        ${btnAdd}
+      </div>
+    </div>`;
+}
+
+function toggleDia(i, ativo) {
+  if (!_horEdit[i]) return;
+  _horEdit[i].ativo = !!ativo;
+  _renderHorTodos();
+}
+
+function _horSetHora(i, k, campo, valor) {
+  const t = _horEdit[i] && _horEdit[i].turnos[k];
+  if (!t || !valor) return;
+  t[campo] = valor;   // sem re-render: re-desenhar aqui tiraria o foco do campo enquanto o dono digita
+}
+
+function _horAddTurno(i) {
+  const d = _horEdit[i];
+  if (!d || d.turnos.length >= MAX_TURNOS) return;
+  // Turno novo começa DEPOIS do último — o caso real é almoço já posto e a noite entrando.
+  const ult = d.turnos[d.turnos.length - 1];
+  d.turnos.push(ult && ult.fecha < '18:00' ? { abre: '18:30', fecha: '23:00' } : { abre: '11:00', fecha: '14:00' });
+  // Ordena na hora: a tela tem de mostrar almoço em cima e noite embaixo, na ordem
+  // em que o dia acontece — a lista fora de ordem confundia e não batia com o salvo.
+  d.turnos.sort((a, b) => String(a.abre).localeCompare(String(b.abre)));
+  _renderHorTodos();
+}
+
+function _horRemTurno(i, k) {
+  const d = _horEdit[i];
+  if (!d || d.turnos.length <= 1) return;
+  d.turnos.splice(k, 1);
+  _renderHorTodos();
 }
 
 function ajustarVias(delta) {
@@ -7155,15 +7239,20 @@ function toggleStatusLoja(cb) {
 }
 
 function lerHorariosDias() {
+  // Configurações nunca foi aberta nesta sessão → nada a reescrever. Devolver o que
+  // já está salvo evita apagar os horários num save disparado de outra tela.
+  if (!Object.keys(_horEdit).length) return config.horarios || {};
   const horarios = {};
-  DIAS_SEMANA.forEach((_, i) => {
-    const ativo = document.getElementById(`dia-ativo-${i}`)?.checked || false;
-    horarios[i] = {
-      ativo,
-      abre:  document.getElementById(`dia-abre-${i}`)?.value  || '18:00',
-      fecha: document.getElementById(`dia-fecha-${i}`)?.value || '23:00'
-    };
-  });
+  for (let i = 0; i < 7; i++) {
+    const d = _horEdit[i] || { ativo: false, turnos: [] };
+    const turnos = (d.turnos || [])
+      .filter(t => t && t.abre && t.fecha)
+      .map(t => ({ abre: t.abre, fecha: t.fecha }))
+      .sort((a, b) => a.abre.localeCompare(b.abre));
+    const t0 = turnos[0] || { abre: '18:00', fecha: '23:00' };
+    // abre/fecha = PRIMEIRO turno. É o que leitor antigo lê; `turnos` é a verdade.
+    horarios[i] = { ativo: !!d.ativo, abre: t0.abre, fecha: t0.fecha, turnos: turnos.length ? turnos : [t0] };
+  }
   return horarios;
 }
 
@@ -7513,6 +7602,7 @@ function salvarConfig() {
     aberto:        document.getElementById('cfgAberto').checked,
     horarios:      lerHorariosDias(),
     bairros:        config.bairros        || [],
+    modos:          config.modos || { delivery: true, retirada: true, local: true },
     tempo_delivery: config.tempo_delivery || '40-60 min',
     tempo_retirada: config.tempo_retirada || '20-30 min',
     tempo_local:    config.tempo_local    || '15-20 min',
@@ -9557,13 +9647,29 @@ window.deletarTodosPedidosTeste = async function() {
 };
 
 // =================== TEMPO ESTIMADO + BOT ===================
+// ── Formas de atendimento ──
+// config.modos = { delivery, retirada, local }. Campo AUSENTE = ligado: quem nunca
+// mexeu no modal segue com os três, como sempre foi.
+function modosAtivos(cfg) {
+  const m = (cfg || config || {}).modos || {};
+  return {
+    delivery: m.delivery !== false,
+    retirada: m.retirada !== false,
+    local:    m.local    !== false,
+  };
+}
+
 function atualizarTempoStrip() {
-  const d = document.getElementById('tempoDelivery');
-  const r = document.getElementById('tempoRetirada');
-  const l = document.getElementById('tempoLocal');
-  if (d) d.textContent = config.tempo_delivery || '40-60 min';
-  if (r) r.textContent = config.tempo_retirada || '20-30 min';
-  if (l) l.textContent = config.tempo_local    || '15-20 min';
+  const on = modosAtivos();
+  const pinta = (id, txt, ligado) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = ligado ? txt : 'desligado';
+    el.style.opacity = ligado ? '' : '.45';
+  };
+  pinta('tempoDelivery', config.tempo_delivery || '40-60 min', on.delivery);
+  pinta('tempoRetirada', config.tempo_retirada || '20-30 min', on.retirada);
+  pinta('tempoLocal',    config.tempo_local    || '15-20 min', on.local);
 }
 
 let _tv = {};
@@ -9577,10 +9683,12 @@ function abrirModalTempo() {
   const d = _parseTempo(config.tempo_delivery) || { min:40, max:60 };
   const r = _parseTempo(config.tempo_retirada) || { min:20, max:30 };
   const l = _parseTempo(config.tempo_local)    || { min:15, max:20 };
+  const on = modosAtivos();
   _tv = {
     delivery_min: d.min, delivery_max: d.max,
     retirada_min: r.min, retirada_max: r.max,
     local_min:    l.min, local_max:    l.max,
+    on_delivery: on.delivery, on_retirada: on.retirada, on_local: on.local,
   };
   _renderModalTempo();
   document.getElementById('tmOverlay').classList.add('show');
@@ -9606,10 +9714,18 @@ function _renderModalTempo() {
     { key:'local',    icon:'🍽️', label:'No local'           },
     { key:'delivery', icon:'🛵', label:'Entrega delivery'   },
   ];
-  document.getElementById('tmBody').innerHTML = secoes.map(s => `
-    <div class="tm-section">
-      <div class="tm-section-lbl">${s.icon} ${s.label}</div>
-      <div class="tm-row">
+  document.getElementById('tmBody').innerHTML = secoes.map(s => {
+    const on = _tv['on_' + s.key] !== false;
+    return `
+    <div class="tm-section" style="${on ? '' : 'opacity:.5'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div class="tm-section-lbl" style="margin:0">${s.icon} ${s.label}</div>
+        <label class="toggle-switch" style="flex-shrink:0">
+          <input type="checkbox" ${on ? 'checked' : ''} onchange="_toggleModo('${s.key}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      ${on ? `<div class="tm-row">
         ${['min','max'].map(t => `
           <div class="tm-field">
             <div class="tm-field-lbl">${t === 'min' ? 'Mínimo' : 'Máximo'}</div>
@@ -9620,18 +9736,37 @@ function _renderModalTempo() {
             </div>
             <div class="tm-spin-unit">Minutos</div>
           </div>`).join('')}
-      </div>
-    </div>`).join('');
+      </div>`
+      : `<div style="font-size:12px;color:var(--text3);padding:10px 2px 2px">Desligado — some do cardápio e o robô não oferece.</div>`}
+    </div>`;
+  }).join('');
+}
+
+function _toggleModo(key, ligado) {
+  // Desligar os três deixaria o cliente sem nenhum jeito de pedir — o último ligado
+  // não desliga. Pra fechar a loja existe o botão Aberto/Fechado, que é outra coisa.
+  if (!ligado) {
+    const restantes = ['delivery', 'retirada', 'local'].filter(k => k !== key && _tv['on_' + k] !== false);
+    if (!restantes.length) {
+      notify('Deixe ao menos uma forma de atendimento ligada. Para fechar a loja, use o botão Aberto/Fechado.', 'error');
+      _renderModalTempo();
+      return;
+    }
+  }
+  _tv['on_' + key] = !!ligado;
+  _renderModalTempo();
 }
 
 function salvarModalTempo() {
   config.tempo_delivery = `${_tv.delivery_min}-${_tv.delivery_max} min`;
   config.tempo_retirada = `${_tv.retirada_min}-${_tv.retirada_max} min`;
   config.tempo_local    = `${_tv.local_min}-${_tv.local_max} min`;
+  config.modos = { delivery: _tv.on_delivery !== false, retirada: _tv.on_retirada !== false, local: _tv.on_local !== false };
   saveConfig();
   atualizarTempoStrip();
   fecharModalTempo();
-  notify('Tempos de entrega atualizados!');
+  const desligados = Object.entries(config.modos).filter(([, v]) => !v).length;
+  notify(desligados ? 'Atendimento atualizado.' : 'Tempos de entrega atualizados!');
 }
 
 // ── Instruções do bot (config/iaInstrucoes) — só Joey. O bot (joeyapi) lê fresco e injeta no prompt.
@@ -10551,11 +10686,15 @@ function _iflTurnosDoPainel() {
   for (let i = 0; i < 7; i++) {
     const d = h[i] || h[String(i)];
     if (!d || !d.ativo) continue;
-    const a = mm(d.abre); let f = mm(d.fecha);
-    if (a === null || f === null) return { erro: 'horário inválido em ' + DIAS_SEMANA[i] };
-    if (f === 0) f = 23 * 60 + 59;
-    if (f <= a) return { erro: DIAS_SEMANA[i] + ': fecha antes de abrir (' + d.abre + '–' + d.fecha + ') — ajuste em Configurações' };
-    turnos.push({ dayOfWeek: _IFL_DIAS[i], start: String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0') + ':00', duration: f - a });
+    // O iFood já aceita vários turnos no mesmo dia (uma entrada por turno) — almoço e
+    // noite vão como dois blocos, com a loja fechada no intervalo.
+    for (const t of _turnosDoDia(d)) {
+      const a = mm(t.abre); let f = mm(t.fecha);
+      if (a === null || f === null) return { erro: 'horário inválido em ' + DIAS_SEMANA[i] };
+      if (f === 0) f = 23 * 60 + 59;
+      if (f <= a) return { erro: DIAS_SEMANA[i] + ': fecha antes de abrir (' + t.abre + '–' + t.fecha + ') — ajuste em Configurações' };
+      turnos.push({ dayOfWeek: _IFL_DIAS[i], start: String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0') + ':00', duration: f - a });
+    }
   }
   if (!turnos.length) return { erro: 'nenhum dia aberto nos horários do Gestão Joey (Configurações)' };
   return { turnos };

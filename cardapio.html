@@ -951,6 +951,7 @@ function carregarDadosPainel() {
     CONFIG.end      = cfg.end      || '';
     CONFIG.bairros  = cfg.bairros  || [];
     CONFIG.horarios = cfg.horarios || {};
+    CONFIG.modos    = cfg.modos || null;   // null = nunca configurado → as três formas ligadas
     CONFIG.aberto          = cfg.aberto          !== undefined ? cfg.aberto : true;
     CONFIG.tempo_delivery  = cfg.tempo_delivery  || '40-60 min';
     CONFIG.tempo_retirada  = cfg.tempo_retirada  || '20-30 min';
@@ -1076,7 +1077,7 @@ function carregarDadosPainel() {
 
 const CARDAPIO   = [];
 const CATEGORIAS = [];
-const CONFIG     = { nome:'Joey Pizza', wpp:'', taxa:5, pedidoMinimo:0, horario:'', end:'', bairros:[], horarios:{}, aberto:true, tempo_delivery:'40-60 min', tempo_retirada:'20-30 min', tempo_local:'15-20 min', destaque:null };
+const CONFIG     = { nome:'Joey Pizza', wpp:'', taxa:5, pedidoMinimo:0, horario:'', end:'', bairros:[], horarios:{}, aberto:true, modos:null, tempo_delivery:'40-60 min', tempo_retirada:'20-30 min', tempo_local:'15-20 min', destaque:null };
 let EMOJI_CAT  = {};  // preenchido dinamicamente pela coleção 'categorias' do sistema-joey
 let CAT_ORDER  = [];  // preenchido dinamicamente pela coleção 'categorias' do sistema-joey
 let _catOrdem  = [];  // ordem dinâmica do Firestore (config/catOrdem)
@@ -1119,24 +1120,45 @@ function _agoraBRT() {
   return new Date(brtStr.replace(' ', 'T'));
 }
 
+// ── Turnos do dia ──
+// Um dia pode ter mais de um turno (almoço 11:00–14:00 + noite 18:30–23:00).
+// `turnos` é a verdade; `abre`/`fecha` espelham o primeiro turno (compatibilidade).
+function _turnosDoDia(h) {
+  if (!h || !h.ativo) return [];
+  const t = Array.isArray(h.turnos)
+    ? h.turnos.filter(x => x && x.abre && x.fecha).map(x => ({ abre: x.abre, fecha: x.fecha }))
+    : [];
+  if (t.length) return t;
+  return [{ abre: h.abre || '18:00', fecha: h.fecha || '23:00' }];
+}
+const _hhmm = (x) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(x || '')); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+function _dentroDoTurno(minAgora, abre, fecha) {
+  const a = _hhmm(abre), f = _hhmm(fecha);
+  if (a === null || f === null) return false;
+  return (f > a) ? (minAgora >= a && minAgora < f) : (minAgora >= a);
+}
+
 function estaAberto() {
   if (CONFIG.aberto === false) return false;
   if (CONFIG.aberto === true && (!CONFIG.horarios || !Object.keys(CONFIG.horarios).length)) return true;
   const agora = _agoraBRT();
-  const dia   = agora.getDay();
-  const h     = (CONFIG.horarios || {})[dia];
-  if (!h || !h.ativo) return false;
-  const [hA, mA] = (h.abre  || '00:00').split(':').map(Number);
-  const [hF, mF] = (h.fecha || '23:59').split(':').map(Number);
-  const min = agora.getHours() * 60 + agora.getMinutes();
-  return min >= hA * 60 + mA && min < hF * 60 + mF;
+  const min   = agora.getHours() * 60 + agora.getMinutes();
+  return _turnosDoDia((CONFIG.horarios || {})[agora.getDay()])
+    .some(t => _dentroDoTurno(min, t.abre, t.fecha));
 }
 
+// 18:00 → 18h · 18:30 → 18h30 (mesma regra do texto que o bot manda no WhatsApp).
+const _fmtH = (t) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
+  if (!m) return String(t || '');
+  return m[2] === '00' ? `${+m[1]}h` : `${+m[1]}h${m[2]}`;
+};
+
 function horarioHoje() {
-  const h = (CONFIG.horarios || {})[_agoraBRT().getDay()];
-  if (!h || !h.ativo) return '';
-  const fmt = t => t.replace(':', 'h');
-  return `${fmt(h.abre)} – ${fmt(h.fecha)}`;
+  const turnos = _turnosDoDia((CONFIG.horarios || {})[_agoraBRT().getDay()]);
+  if (!turnos.length) return '';
+  // Dois turnos viram "11h – 14h · 18h30 – 23h" — o cliente precisa ver o buraco do meio.
+  return turnos.map(t => `${_fmtH(t.abre)} – ${_fmtH(t.fecha)}`).join(' · ');
 }
 
 function proximoAbertura() {
@@ -1145,19 +1167,20 @@ function proximoAbertura() {
   const hoje     = agora.getDay();
   const minAgora = agora.getHours() * 60 + agora.getMinutes();
   const DIAS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const fmt  = t => t.replace(':', 'h');
-  const hHoje = horarios[hoje];
-  if (hHoje && hHoje.ativo) {
-    const [hA, mA] = (hHoje.abre || '00:00').split(':').map(Number);
-    if (minAgora < hA * 60 + mA) return `Loja fechada · Abre hoje às ${fmt(hHoje.abre)}`;
-  }
+  // Hoje ainda tem turno pela frente? Entre o almoço e a noite isso acha o 18:30,
+  // em vez de pular pro dia seguinte como fazia antes.
+  const prox = _turnosDoDia(horarios[hoje])
+    .map(t => ({ t, a: _hhmm(t.abre) }))
+    .filter(x => x.a !== null && minAgora < x.a)
+    .sort((x, y) => x.a - y.a)[0];
+  if (prox) return `Loja fechada · Abre hoje às ${_fmtH(prox.t.abre)}`;
   for (let d = 1; d <= 7; d++) {
     const dia = (hoje + d) % 7;
-    const h   = horarios[dia];
-    if (h && h.ativo) {
-      if (d === 1) return `Loja fechada · Abre amanhã às ${fmt(h.abre)}`;
-      return `Loja fechada · Abre ${DIAS[dia]} às ${fmt(h.abre)}`;
-    }
+    const turnos = _turnosDoDia(horarios[dia]);
+    if (!turnos.length) continue;
+    const primeiro = turnos.slice().sort((a, b) => String(a.abre).localeCompare(String(b.abre)))[0];
+    if (d === 1) return `Loja fechada · Abre amanhã às ${_fmtH(primeiro.abre)}`;
+    return `Loja fechada · Abre ${DIAS[dia]} às ${_fmtH(primeiro.abre)}`;
   }
   return 'Loja fechada no momento';
 }
@@ -1992,6 +2015,8 @@ function onSemNumero(cb) {
 function renderStepDados(el) {
   const _mesaNum = sessionStorage.getItem('mesaAtiva');
   if (_mesaNum && !tipoEntrega) tipoEntrega = 'local';
+  // O dono pode ter desligado a forma que estava escolhida (ou a loja só oferecer uma).
+  _ajustarTipoEntrega(_mesaNum);
   const c = clienteData || {};
   const cEnd = _enderecoSalvo() || {};
   // `ativo !== false` = o restaurante esta entregando la agora. Bairro antigo nao
@@ -2047,31 +2072,15 @@ function renderStepDados(el) {
     </div>
     <div class="form-group">
       <label class="form-label">Tipo de entrega *</label>
-      ${_mesaNum ? `
-        <div class="delivery-grid" style="grid-template-columns:1fr 1fr">
-          <div class="delivery-option ${tipoEntrega!=='retirada'?'selected':''}" onclick="setEntrega('local')">
-            <span class="del-icon">🍽️</span>
-            <span class="del-name">No local</span>
-          </div>
-          <div class="delivery-option ${tipoEntrega==='retirada'?'selected':''}" onclick="setEntrega('retirada')">
-            <span class="del-icon">🥡</span>
-            <span class="del-name">Para levar</span>
-          </div>
-        </div>` : `
-        <div class="delivery-grid">
-          <div class="delivery-option ${tipoEntrega==='delivery'?'selected':''}" onclick="setEntrega('delivery')">
-            <span class="del-icon">🛵</span>
-            <span class="del-name">Delivery</span>
-          </div>
-          <div class="delivery-option ${tipoEntrega==='retirada'?'selected':''}" onclick="setEntrega('retirada')">
-            <span class="del-icon">🏠</span>
-            <span class="del-name">Retirada</span>
-          </div>
-          <div class="delivery-option ${tipoEntrega==='local'?'selected':''}" onclick="setEntrega('local')">
-            <span class="del-icon">🍽️</span>
-            <span class="del-name">No local</span>
-          </div>
-        </div>`}
+      ${(() => {
+        const op = _opcoesEntrega(_mesaNum);
+        const cols = (_mesaNum || op.length === 2) ? 'grid-template-columns:1fr 1fr' : '';
+        return `<div class="delivery-grid" style="${cols}">` + op.map(o => `
+          <div class="delivery-option ${tipoEntrega === o.key ? 'selected' : ''}" onclick="setEntrega('${o.key}')">
+            <span class="del-icon">${o.icon}</span>
+            <span class="del-name">${o.nome}</span>
+          </div>`).join('') + '</div>';
+      })()}
     </div>
     <div id="enderecoFields" style="display:${tipoEntrega==='delivery'?'block':'none'}">
       <div class="form-group">
@@ -2140,6 +2149,35 @@ function onBairroChange(sel) {
     bairroSelecionado = null;
     const info = document.getElementById('taxaInfo');
     if (info) info.style.display = 'none';
+  }
+}
+
+// Quais formas de atendimento a loja oferece AGORA (config/loja.modos, do painel).
+// Campo ausente = ligado — loja que nunca mexeu nisso segue com as três.
+function _modosAtivos() {
+  const m = CONFIG.modos || {};
+  return { delivery: m.delivery !== false, retirada: m.retirada !== false, local: m.local !== false };
+}
+// As opções que aparecem no checkout, na ordem. Com mesa (QR na mesa) o cliente já
+// está dentro da loja: delivery não faz sentido ali.
+function _opcoesEntrega(mesa) {
+  const on = _modosAtivos();
+  const todas = mesa
+    ? [{ key: 'local', icon: '🍽️', nome: 'No local' }, { key: 'retirada', icon: '🥡', nome: 'Para levar' }]
+    : [{ key: 'delivery', icon: '🛵', nome: 'Delivery' },
+       { key: 'retirada', icon: '🏠', nome: 'Retirada' },
+       { key: 'local',    icon: '🍽️', nome: 'No local' }];
+  const ativas = todas.filter(o => on[o.key]);
+  // Trava de segurança: se tudo foi desligado, mostra tudo. Ficar sem nenhuma opção
+  // deixaria o cliente com o carrinho pronto e sem botão pra finalizar.
+  return ativas.length ? ativas : todas;
+}
+// O tipo escolhido ainda existe? Senão, cai na primeira opção disponível.
+function _ajustarTipoEntrega(mesa) {
+  const op = _opcoesEntrega(mesa);
+  if (!op.some(o => o.key === tipoEntrega)) {
+    tipoEntrega = op[0].key;
+    if (tipoEntrega !== 'delivery') { bairroSelecionado = null; _gpsEntrega = null; }
   }
 }
 
@@ -2610,16 +2648,16 @@ function renderInfoLoja() {
   const horarios = CONFIG.horarios || {};
 
   const diasAtivos = DIAS.map((nome, i) => {
-    const h = horarios[i];
-    if (!h || !h.ativo) return null;
-    return { nome, abre: h.abre || '', fecha: h.fecha || '' };
+    const turnos = _turnosDoDia(horarios[i]);
+    if (!turnos.length) return null;
+    return { nome, turnos };
   }).filter(Boolean);
 
   const horariosHtml = diasAtivos.length
     ? diasAtivos.map(d => `
         <div class="info-row">
           <span class="info-day">${d.nome}</span>
-          <span class="info-hours">${d.abre} – ${d.fecha}</span>
+          <span class="info-hours">${d.turnos.map(t => `${t.abre} – ${t.fecha}`).join('<br>')}</span>
         </div>`).join('')
     : `<p style="font-size:13px;color:var(--text3);padding:6px 0">Horários não configurados.</p>`;
 
