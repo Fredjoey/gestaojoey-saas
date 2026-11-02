@@ -1451,14 +1451,14 @@ body.suporte-on #botAlertBanner{top:36px}
             <label class="fl" style="display:block;margin-bottom:4px">Promoção / recado que muda</label>
             <textarea id="ia-aviso" class="fi" rows="5" maxlength="1500" oninput="_iaAutoResize(this)" style="width:100%;min-height:120px;resize:vertical;margin-bottom:16px;font-family:inherit;font-size:12px" placeholder="Ex.: Hoje, na compra de 2 burgers a Coca vem grátis! 🥤"></textarea>
 
-            <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Sugestão da noite</div>
+            <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Sugestão do dia</div>
             <label class="fl" style="display:block;margin-bottom:4px">O que o atendente oferece ao abrir a conversa — vale só HOJE</label>
             <textarea id="ia-sugestao" class="fi" rows="2" maxlength="200" oninput="_iaAutoResize(this);_iaSugStatus()" style="width:100%;min-height:58px;resize:vertical;margin-bottom:6px;font-family:inherit;font-size:12px" placeholder="Ex.: hoje a pizza de calabresa tá saindo em dobro 🍕"></textarea>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
               <span id="ia-sugestao-st" style="font-size:11px;color:var(--text3)"></span>
               <button type="button" onclick="limparSugestaoNoite()" style="font-size:11px;padding:3px 10px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:5px;cursor:pointer">Limpar</button>
             </div>
-            <p style="font-size:11px;color:var(--text3);margin-bottom:16px">Com a sugestão preenchida, o atendente abre oferecendo ela em vez de repetir o último pedido do cliente. No dia seguinte ela expira sozinha.</p>
+            <p style="font-size:11px;color:var(--text3);margin-bottom:16px">É a única coisa que o atendente oferece ao abrir a conversa. <b>Vazio, ele só cumprimenta</b> — não repete o último pedido do cliente nem inventa promoção. No dia seguinte ela expira sozinha, então escreva de novo a cada dia.</p>
 
 
             <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">O que nunca fazer</div>
