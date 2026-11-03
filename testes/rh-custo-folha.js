@@ -31,6 +31,7 @@ function trecho(nome) {
   }
 }
 const ctx = { console, Date, Number, Math, String, isNaN };
+ctx._rhBRL = (n) => 'R$ ' + (Number(n) || 0).toFixed(2);
 vm.createContext(ctx);
 const iConst = SRC.indexOf('const RH_FGTS');
 vm.runInContext(
@@ -208,6 +209,62 @@ console.log('\n=== 9) não contar a folha duas vezes no DRE ===');
   ok('lista vazia não quebra',        conf([]), []);
   ok('sem lista não quebra',          conf(null), []);
   ok('nome ausente não quebra',       conf([{ id: 1, value: 10 }]), []);
+}
+
+console.log('\n=== 10) o detalhe de cada cartão ===');
+{
+  // Os cartões do topo só mostravam o total. O Fred pediu para abrir. Cada
+  // cartão tem de bater EXATAMENTE com o número que ele mostra fechado — um
+  // detalhe que não soma o mesmo faz o dono desconfiar de tudo, com razão.
+  const iCor = SRC.indexOf('const RH_COR');
+  vm.runInContext(SRC.slice(iCor, SRC.indexOf('};', iCor) + 2) + '\n' + trecho('rhDetalheCartao'), ctx);
+  const det = ctx.rhDetalheCartao;
+  const somaLinhas = (d) => c2(d.linhas.reduce((a, l) => a + l.v, 0));
+
+  const equipe = [
+    { nome: 'A', tipo: 'clt', salario: MIN, admissao: '2026-03-01', vt: 200, ativo: true },
+    { nome: 'B', tipo: 'pj',  salario: 3000, ativo: true },
+    { nome: 'C', tipo: 'clt', salario: 2200, admissao: '2024-01-01', ativo: false },
+  ];
+  const HOJE = '2026-11-02';
+  const t = totais(equipe, SEM_ANEXO_IV, HOJE);
+
+  ok('detalhe "custo real" soma o cartão',  somaLinhas(det('total', equipe, SEM_ANEXO_IV, HOJE)), c2(t.total));
+  ok('detalhe "sai do caixa" soma o cartão', somaLinhas(det('caixa', equipe, SEM_ANEXO_IV, HOJE)), c2(t.caixa));
+  ok('detalhe "provisão" soma o cartão',    somaLinhas(det('provisao', equipe, SEM_ANEXO_IV, HOJE)), c2(t.provisao));
+  ok('detalhe "já devido" soma o cartão',    somaLinhas(det('acumulado', equipe, SEM_ANEXO_IV, HOJE)), c2(t.provisaoAcum));
+
+  ok('cartão desconhecido cai no custo real', somaLinhas(det('qualquer', equipe, SEM_ANEXO_IV, HOJE)), c2(t.total));
+  ok('ignora quem está desligado',            det('caixa', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => l.nome === 'Salários').v, MIN + 3000);
+
+  // O INSS patronal aparece ZERADO quando não se paga. Sumir com a linha
+  // esconderia do dono a melhor notícia da conta.
+  const semIV = det('total', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => /INSS patronal/.test(l.nome));
+  ok('linha do patronal existe mesmo zerada',  !!semIV, true);
+  ok('e vale zero no Anexo I/III',             semIV.v, 0);
+  ok('e a nota explica por quê',               /DAS/.test(semIV.nota), true);
+
+  const comIV = det('total', equipe, { anexoIV: true, provisionarMulta: true }, HOJE).linhas.find((l) => /INSS patronal/.test(l.nome));
+  ok('no Anexo IV a linha ganha valor',        c2(comIV.v), c2(MIN * 0.20));
+
+  // O VT entra líquido: o que a loja paga de fato, já tirado o desconto de 6%.
+  ok('VT entra líquido no caixa',             c2(det('caixa', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => /Vale-transporte/.test(l.nome)).v), 102.74);
+
+  // Equipe vazia não pode quebrar nem inventar número.
+  ['total', 'caixa', 'provisao', 'acumulado'].forEach((k) => {
+    ok(`"${k}" com equipe vazia`,              somaLinhas(det(k, [], SEM_ANEXO_IV, HOJE)), 0);
+  });
+
+  // Cada detalhe se explica: título e resumo sempre preenchidos.
+  ['total', 'caixa', 'provisao', 'acumulado'].forEach((k) => {
+    const d = det(k, equipe, SEM_ANEXO_IV, HOJE);
+    ok(`"${k}" tem título e resumo`,           !!(d.titulo && d.resumo), true);
+  });
+  // Toda linha tem cor conhecida — senão a barra sai com buraco.
+  // `const` dentro do vm não vira propriedade do contexto; lê-se avaliando.
+  const CORES = vm.runInContext('RH_COR', ctx);
+  ok('toda linha tem cor definida', ['total','caixa','provisao','acumulado']
+      .every((k) => det(k, equipe, SEM_ANEXO_IV, HOJE).linhas.every((l) => !!CORES[l.k])), true);
 }
 
 console.log(`\n${falhas ? '❌' : '✅'}  ${total - falhas}/${total} passaram\n`);
