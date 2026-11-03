@@ -4932,7 +4932,7 @@
             const jaTem = (fixedCosts || []).find((c) => String(c.id) === RH_FIXO_ID);
             const conflitos = rhConflitosFolha(fixedCosts);
             const somaConf = conflitos.reduce((s2, c) => s2 + (Number(c.value) || 0), 0);
-            const depois = atual - somaConf - (jaTem ? Number(jaTem.value) || 0) + t.total;
+            const depois = atual - somaConf - (jaTem ? (Number(jaTem.value) || 0) : 0) + t.total;
 
             if (!t.pessoas) { box.innerHTML = '<p class="text-secondary">Cadastre a equipe primeiro.</p>'; return; }
 

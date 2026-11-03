@@ -352,6 +352,27 @@ Publicar ANTES de ligar as flags (o app do motoboy antigo mostraria "Dinheiro ·
   - `npm test` 19/19. Antes × depois (original × rebaseada) com 90 pedidos sintéticos da 99 + 624 reais: card, modal, comanda,
     produção, mesa, busca, histórico e NFC-e iguais; só muda a linha de pagamento do aviso ao motoboy e o markup dos botões do app.
 
+## ⚠️ Antes de publicar HTML: `node scripts/checar-blocos.js`
+
+```
+node scripts/checar-blocos.js gestao-joey.html painel.html cardapio.html
+```
+
+Em 02/11/2026 subiu um `(jaTem ? Number(jaTem.value) || 0)` — **ternário sem o `:`**. A página
+inteira parou: "Carregando categorias…" para sempre, nenhuma aba funcionando. Um `SyntaxError`
+derruba o **bloco `<script>` inteiro**, não só a função onde está.
+
+**Por que passou:** a conferência era extrair todos os `<script>` inline, **juntar num arquivo
+só** e rodar `node --check`. Juntado, o parser NÃO acusa — o primeiro bloco do `gestao-joey.html`
+tem 1,4 MB e engole o resto. Reproduzido: o arquivo junto com o bug passa; separado, acusa na linha.
+**Nunca mais junte os blocos para checar.**
+
+O script respeita `type="module"` (checa como `.mjs`) e o resto como `.cjs` — checar com a
+semântica errada dá erro falso, e erro falso treina a ignorar o verificador.
+
+⚠️ **Sintaxe ok não é página ok.** Variável inexistente, função não definida e ordem de
+carregamento só aparecem ABRINDO a página publicada e lendo o console.
+
 ## ⚠️ Horário: um dia pode ter MAIS DE UM TURNO (desde 31/10/2026)
 
 O Joey vai abrir no almoço. Antes cada dia tinha um intervalo só, então pôr 11:00–14:00 na
