@@ -4746,6 +4746,66 @@
             return o;
         }
 
+        // Tabela do INSS do empregado — 2026. MUDA TODO JANEIRO junto com o
+        // salário mínimo: quando virar o ano, atualizar aqui (e o rótulo RH_ANO_TABELA,
+        // que aparece na tela para o dono saber de que ano é a conta).
+        const RH_ANO_TABELA = 2026;
+        const RH_INSS_FAIXAS = [
+            { ate: 1621.00, aliq: 0.075 },
+            { ate: 2902.84, aliq: 0.09 },
+            { ate: 4354.27, aliq: 0.12 },
+            { ate: 8475.55, aliq: 0.14 },
+        ];
+        // Acima deste rendimento tributável mensal pode haver IRRF. Até aí o redutor
+        // zera o imposto. NÃO calculamos o IR: depende de dependentes, pensão e do
+        // desconto simplificado — chutar seria pior que avisar.
+        const RH_IRRF_LIMITE_SEGURO = 5000;
+
+        // Arredonda para centavos sem cair na representação binária. O caso real:
+        // 1.621,00 × 7,5% = 121,575, mas 121.575*100 vale 12157.499999999998 em
+        // ponto flutuante, e o Math.round devolvia 121,57 em vez de 121,58 — um
+        // centavo errado na guia do INSS.
+        const _rhCentavos = (n) => Math.round(Number((Number(n) * 100).toFixed(6))) / 100;
+
+        // INSS do empregado, FAIXA A FAIXA (progressivo). Uma alíquota única sobre o
+        // salário inteiro dá valor errado — é o erro mais comum nessa conta.
+        function rhInssEmpregado(salario) {
+            let base = Math.max(0, _rhN(salario)), anterior = 0, total = 0;
+            for (const f of RH_INSS_FAIXAS) {
+                if (base <= anterior) break;
+                total += (Math.min(base, f.ate) - anterior) * f.aliq;
+                anterior = f.ate;
+            }
+            return _rhCentavos(total);
+        }
+
+        // O que cai na conta do funcionário no dia do pagamento, e para onde vai o
+        // resto. Pergunta do dono: "o salário é 1.800, quanto eu transfiro?"
+        function rhPagamento(f, cfg) {
+            cfg = cfg || rhCfg;
+            const c = rhCustoFuncionario(f, cfg);
+            const tipo = (f && f.tipo) || 'clt';
+            let inss = 0;
+            if (tipo === 'clt') inss = rhInssEmpregado(c.salario);
+            // Sócio (contribuinte individual): 11% retidos, limitados ao teto.
+            else if (tipo === 'prolabore') inss = _rhCentavos(Math.min(c.salario, 8475.55) * 0.11);
+            // PJ e diarista não têm INSS retido pela loja.
+
+            const liquido = c.salario - inss - c.vtDesconto;
+            return {
+                bruto: c.salario,
+                inss,
+                vtDesconto: c.vtDesconto,
+                liquido: _rhCentavos(liquido),
+                fgts: c.fgts,
+                cpp: c.cpp,
+                vtBruto: c.vtBruto,
+                outrosBen: c.outrosBen,
+                // Base do IR = bruto menos INSS. Acima do limite, avisamos em vez de calcular.
+                podeTerIrrf: tipo !== 'pj' && (c.salario - inss) > RH_IRRF_LIMITE_SEGURO,
+            };
+        }
+
         // Meses inteiros entre duas datas (AAAA-MM-DD). Fração de mês com 15 dias ou
         // mais conta como mês cheio — é a regra da CLT para 13º e férias.
         function rhMesesTrabalhados(desdeYMD, ateYMD) {
@@ -4815,16 +4875,24 @@
             const somaProv = (fn) => ativos.reduce((a, f) => a + fn(rhProvisaoAcumulada(f, hojeYMD, cfg), f), 0);
 
             if (cartao === 'caixa') {
+                // A visão do DIA DO PAGAMENTO: o dono não quer "salário + encargos",
+                // quer saber quanto transferir e para onde vai o resto.
+                const somaPg = (fn) => ativos.reduce((a, f) => a + fn(rhPagamento(f, cfg), f), 0);
+                const temIrrf = ativos.some((f) => rhPagamento(f, cfg).podeTerIrrf);
                 return {
-                    titulo: 'O que sai do caixa neste mês',
-                    resumo: 'Dinheiro que some da conta agora. O FGTS vai para a conta do funcionário na Caixa — é dele, mas sai de você todo mês.',
+                    titulo: 'O dia do pagamento',
+                    resumo: 'Para onde vai cada pedaço. Só a primeira linha é transferência; o resto você recolhe ou deposita.',
                     linhas: [
-                        { k: 'salario',   nome: 'Salários', v: soma((c) => c.salario), nota: 'o combinado com cada um' },
-                        { k: 'fgts',      nome: 'FGTS (8%)', v: soma((c) => c.fgts), nota: 'depositado na conta dele' },
-                        { k: 'cpp',       nome: 'INSS patronal (20%)', v: soma((c) => c.cpp), nota: cfg.anexoIV ? 'Anexo IV recolhe por fora' : 'já está no DAS — não paga de novo' },
-                        { k: 'beneficio', nome: 'Vale-transporte', v: soma((c) => c.vtLiquido), nota: 'já descontado o que sai do funcionário' },
-                        { k: 'beneficio', nome: 'Outros benefícios', v: soma((c) => c.outrosBen), nota: '' },
+                        { k: 'salario',   nome: 'Transfere para a conta dele', v: somaPg((p) => p.liquido), nota: 'o líquido, já descontado o INSS dele' },
+                        { k: 'fgts',      nome: 'INSS do funcionário, em guia', v: somaPg((p) => p.inss), nota: `descontado dele, você só repassa — tabela de ${RH_ANO_TABELA}` },
+                        { k: 'decimo',    nome: 'FGTS, na conta dele na Caixa', v: somaPg((p) => p.fgts), nota: 'este é custo SEU, 8% em cima do salário' },
+                        { k: 'cpp',       nome: 'INSS patronal (20%)', v: somaPg((p) => p.cpp), nota: cfg.anexoIV ? 'Anexo IV recolhe por fora' : 'já está no DAS — não paga de novo' },
+                        { k: 'beneficio', nome: 'Vale-transporte', v: somaPg((p) => p.vtBruto), nota: somaPg((p) => p.vtDesconto) > 0 ? `você compra tudo e desconta ${_rhBRL(somaPg((p) => p.vtDesconto))} dele` : '' },
+                        { k: 'beneficio', nome: 'Outros benefícios', v: somaPg((p) => p.outrosBen), nota: '' },
                     ],
+                    rodape: temIrrf
+                        ? 'Alguém da equipe passa do limite onde o Imposto de Renda zera. O IR depende de dependentes e pensão — peça o valor ao contador e desconte da transferência.'
+                        : `Imposto de Renda: ninguém da equipe chega no limite, então não há desconto. (Em ${RH_ANO_TABELA} o IR zera até ${_rhBRL(RH_IRRF_LIMITE_SEGURO)} de rendimento tributável por mês.)`,
                 };
             }
             if (cartao === 'provisao') {

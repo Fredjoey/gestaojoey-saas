@@ -34,11 +34,17 @@ const ctx = { console, Date, Number, Math, String, isNaN };
 ctx._rhBRL = (n) => 'R$ ' + (Number(n) || 0).toFixed(2);
 vm.createContext(ctx);
 const iConst = SRC.indexOf('const RH_FGTS');
+const iIn = SRC.indexOf('const RH_ANO_TABELA');
+const iCor = SRC.indexOf('const RH_COR');
 vm.runInContext(
   SRC.slice(iConst, SRC.indexOf('let funcionarios', iConst)) +
   '\nvar rhCfg = { anexoIV: false, provisionarMulta: true };\n' +
   SRC.match(/const _rhN = .*/)[0] + '\n' +
-  [trecho('rhCustoFuncionario'), trecho('rhMesesTrabalhados'), trecho('rhProvisaoAcumulada'), trecho('rhTotais')].join('\n'),
+  // As tabelas de INSS/IRRF e as cores, do próprio fonte — nada reescrito aqui.
+  SRC.slice(iIn, SRC.indexOf('// INSS do empregado', iIn)) + '\n' +
+  SRC.slice(iCor, SRC.indexOf('};', iCor) + 2) + '\n' +
+  [trecho('rhCustoFuncionario'), trecho('rhMesesTrabalhados'), trecho('rhProvisaoAcumulada'),
+   trecho('rhInssEmpregado'), trecho('rhPagamento'), trecho('rhTotais'), trecho('rhDetalheCartao')].join('\n'),
   ctx
 );
 const { rhCustoFuncionario: custo, rhMesesTrabalhados: meses, rhProvisaoAcumulada: prov, rhTotais: totais } = ctx;
@@ -216,8 +222,6 @@ console.log('\n=== 10) o detalhe de cada cartão ===');
   // Os cartões do topo só mostravam o total. O Fred pediu para abrir. Cada
   // cartão tem de bater EXATAMENTE com o número que ele mostra fechado — um
   // detalhe que não soma o mesmo faz o dono desconfiar de tudo, com razão.
-  const iCor = SRC.indexOf('const RH_COR');
-  vm.runInContext(SRC.slice(iCor, SRC.indexOf('};', iCor) + 2) + '\n' + trecho('rhDetalheCartao'), ctx);
   const det = ctx.rhDetalheCartao;
   const somaLinhas = (d) => c2(d.linhas.reduce((a, l) => a + l.v, 0));
 
@@ -235,7 +239,9 @@ console.log('\n=== 10) o detalhe de cada cartão ===');
   ok('detalhe "já devido" soma o cartão',    somaLinhas(det('acumulado', equipe, SEM_ANEXO_IV, HOJE)), c2(t.provisaoAcum));
 
   ok('cartão desconhecido cai no custo real', somaLinhas(det('qualquer', equipe, SEM_ANEXO_IV, HOJE)), c2(t.total));
-  ok('ignora quem está desligado',            det('caixa', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => l.nome === 'Salários').v, MIN + 3000);
+  // O cartão "caixa" virou a visão do dia do pagamento e não tem mais linha
+  // "Salários"; quem tem é o "custo real".
+  ok('ignora quem está desligado',            det('total', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => l.nome === 'Salários').v, MIN + 3000);
 
   // O INSS patronal aparece ZERADO quando não se paga. Sumir com a linha
   // esconderia do dono a melhor notícia da conta.
@@ -248,7 +254,10 @@ console.log('\n=== 10) o detalhe de cada cartão ===');
   ok('no Anexo IV a linha ganha valor',        c2(comIV.v), c2(MIN * 0.20));
 
   // O VT entra líquido: o que a loja paga de fato, já tirado o desconto de 6%.
-  ok('VT entra líquido no caixa',             c2(det('caixa', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => /Vale-transporte/.test(l.nome)).v), 102.74);
+  // No "custo real" o VT entra LÍQUIDO (o que a loja perde). No "dia do
+  // pagamento" entra BRUTO, porque é o valor que você compra.
+  ok('VT líquido no custo real',              c2(det('total', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => /Benefícios/.test(l.nome)).v), 102.74);
+  ok('VT bruto no dia do pagamento',          c2(det('caixa', equipe, SEM_ANEXO_IV, HOJE).linhas.find((l) => /Vale-transporte/.test(l.nome)).v), 200);
 
   // Equipe vazia não pode quebrar nem inventar número.
   ['total', 'caixa', 'provisao', 'acumulado'].forEach((k) => {
@@ -265,6 +274,58 @@ console.log('\n=== 10) o detalhe de cada cartão ===');
   const CORES = vm.runInContext('RH_COR', ctx);
   ok('toda linha tem cor definida', ['total','caixa','provisao','acumulado']
       .every((k) => det(k, equipe, SEM_ANEXO_IV, HOJE).linhas.every((l) => !!CORES[l.k])), true);
+}
+
+console.log('\n=== 11) quanto transferir para a conta dele ===');
+{
+  // "O salário dele é 1.800, quanto eu transfiro?" — pergunta do Fred, 02/11.
+  // O INSS é progressivo: aplicar uma alíquota única sobre o salário inteiro dá
+  // valor errado, e é o erro mais comum dessa conta.
+  const inss = ctx.rhInssEmpregado, pg = ctx.rhPagamento;
+
+  // Faixa a faixa: 7,5% até 1.621 e 9% no que passa.
+  ok('INSS de 1.800',                 inss(1800), 137.69);
+  // 1.621 × 7,5% = 121,575. Em ponto flutuante isso vale 12157.4999… × 100, e o
+  // arredondamento ingênuo devolvia 121,57 — um centavo errado na guia.
+  ok('INSS no mínimo (só 1ª faixa)',    inss(1621), 121.58);
+  ok('e meio centavo sobe, não desce',  inss(1621) > 121.57, true);
+  ok('INSS de 1.000',                 inss(1000), 75);
+  ok('INSS de 3.000 (3 faixas)',      inss(3000), c2(1621 * 0.075 + (2902.84 - 1621) * 0.09 + (3000 - 2902.84) * 0.12));
+  ok('INSS para no teto',             inss(50000), inss(8475.55));
+  ok('salário zero → zero',            inss(0), 0);
+  // A armadilha: 7,5% sobre tudo daria 135,00, e não 137,69.
+  ok('não é alíquota única',            inss(1800) === c2(1800 * 0.075), false);
+
+  const p = pg({ tipo: 'clt', salario: 1800 }, SEM_ANEXO_IV);
+  ok('transfere para ele',            p.liquido, 1662.31);
+  ok('recolhe de INSS',               p.inss, 137.69);
+  ok('deposita de FGTS',              c2(p.fgts), 144);
+  ok('e o IR não pega nesse salário',   p.podeTerIrrf, false);
+  // A soma tem de fechar com o que sai do caixa.
+  const c = custo({ tipo: 'clt', salario: 1800 }, SEM_ANEXO_IV);
+  ok('líquido + INSS + FGTS = caixa',  c2(p.liquido + p.inss + p.fgts), c2(c.caixa));
+
+  // Com vale-transporte, a transferência cai — mas o VT inteiro sai do caixa.
+  const v = pg({ tipo: 'clt', salario: 1800, vt: 200 }, SEM_ANEXO_IV);
+  ok('VT desconta até 6%',             v.vtDesconto, 108);
+  ok('transfere menos',                v.liquido, c2(1662.31 - 108));
+  const cv = custo({ tipo: 'clt', salario: 1800, vt: 200 }, SEM_ANEXO_IV);
+  ok('a soma fecha com o VT junto',    c2(v.liquido + v.inss + v.fgts + v.vtBruto), c2(cv.caixa));
+
+  // Salário alto: avisa do IR em vez de inventar um valor.
+  ok('avisa do IR acima do limite',    pg({ tipo: 'clt', salario: 6000 }, SEM_ANEXO_IV).podeTerIrrf, true);
+
+  // Quem não é CLT.
+  ok('PJ: transfere tudo, sem INSS',   [pg({ tipo: 'pj', salario: 3000 }, SEM_ANEXO_IV).liquido, pg({ tipo: 'pj', salario: 3000 }, SEM_ANEXO_IV).inss], [3000, 0]);
+  ok('sócio: 11% de pró-labore',       pg({ tipo: 'prolabore', salario: 3000 }, SEM_ANEXO_IV).inss, 330);
+  ok('sócio: INSS para no teto',        pg({ tipo: 'prolabore', salario: 50000 }, SEM_ANEXO_IV).inss, c2(8475.55 * 0.11));
+
+  // O detalhe do cartão continua somando o cartão, agora com as linhas novas.
+  const eq = [{ nome: 'A', tipo: 'clt', salario: 1800, admissao: '2026-03-01', vt: 200, ativo: true }];
+  const tt = totais(eq, SEM_ANEXO_IV, '2026-11-02');
+  const d = ctx.rhDetalheCartao('caixa', eq, SEM_ANEXO_IV, '2026-11-02');
+  ok('detalhe do pagamento soma o cartão', c2(d.linhas.reduce((a, l) => a + l.v, 0)), c2(tt.caixa));
+  ok('a 1ª linha é a transferência',    [d.linhas[0].nome, c2(d.linhas[0].v)], ['Transfere para a conta dele', 1554.31]);
 }
 
 console.log(`\n${falhas ? '❌' : '✅'}  ${total - falhas}/${total} passaram\n`);
