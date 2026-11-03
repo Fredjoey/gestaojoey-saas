@@ -694,6 +694,7 @@
             <button class="tab-button" onclick="switchTab('notas', event)">🧾 Compras</button>
             <button class="tab-button" onclick="switchTab('vendas', event)">🛒 Vendas</button>
             <button class="tab-button" onclick="switchTab('precificacao', event)">💡 Precificação</button>
+            <button class="tab-button" onclick="switchTab('rh', event)">👥 RH</button>
             <button class="tab-button" id="tabBtnCalendario" style="display:none;" onclick="switchTab('calendario', event)">📅 Calendário</button>
 
         </div>
@@ -1604,6 +1605,86 @@
         </div>
 
         <!-- VENDAS TAB -->
+        <!-- RH TAB -->
+        <div id="rh" class="tab-content">
+            <div class="info-box">
+                👥 A equipe e o que ela custa <b>de verdade</b> — com FGTS, 13º, férias e o que já está provisionado.
+                Nada daqui mexe no seu DRE até você mandar.
+            </div>
+
+            <div style="background:#2c2c2c; padding:1rem 1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #3a3a3a;">
+                <div style="display:grid; grid-template-columns:minmax(260px,1fr) auto; gap:16px; align-items:center;">
+                    <div class="form-group" style="margin:0;">
+                        <label>Regime no Simples Nacional</label>
+                        <select id="rhAnexo" onchange="rhSalvarCfg()" style="padding:10px; border:1px solid #444; border-radius:6px; font-size:14px; background:var(--bg4); color:var(--text); width:100%;">
+                            <option value="dentro">Anexo I, II, III ou V — patronal JÁ está no DAS</option>
+                            <option value="iv">Anexo IV — patronal de 20% por fora, em DARF</option>
+                        </select>
+                        <div style="font-size:11px; color:#777; margin-top:6px;">
+                            É o que mais muda a conta: no Anexo IV cada salário custa ~20% a mais. Na dúvida, pergunte ao contador.
+                        </div>
+                    </div>
+                    <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text2); cursor:pointer; white-space:nowrap;">
+                        <input type="checkbox" id="rhMulta" checked onchange="rhSalvarCfg()" style="width:16px; height:16px; cursor:pointer;">
+                        Provisionar multa de 40% do FGTS
+                    </label>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Custo real da folha</div>
+                    <div class="metric-value" id="rhTotalDisplay">R$ 0,00</div>
+                    <div style="font-size:11px; color:#777; margin-top:4px;" id="rhFatorDisplay">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Sai do caixa no mês</div>
+                    <div class="metric-value" id="rhCaixaDisplay" style="font-size:18px;">R$ 0,00</div>
+                    <div style="font-size:11px; color:#777; margin-top:4px;">salário + FGTS + benefícios</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Provisão do mês</div>
+                    <div class="metric-value" id="rhProvDisplay" style="font-size:18px;">R$ 0,00</div>
+                    <div style="font-size:11px; color:#777; margin-top:4px;">13º, férias e multa que vão vencer</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Já devido hoje</div>
+                    <div class="metric-value" id="rhAcumDisplay" style="font-size:18px; color:#f59e0b;">R$ 0,00</div>
+                    <div style="font-size:11px; color:#777; margin-top:4px;">se a equipe sair amanhã</div>
+                </div>
+            </div>
+
+            <div class="section-title">Equipe</div>
+            <div style="background:#2c2c2c; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #3a3a3a;">
+                <div style="display:grid; grid-template-columns:2fr 1.4fr 1.2fr 130px 150px; gap:12px; margin-bottom:12px;">
+                    <input type="text" id="rhNome" placeholder="Nome" style="padding:12px; border:1px solid #444; border-radius:6px; font-size:14px;">
+                    <input type="text" id="rhCargo" placeholder="Cargo (ex: Atendente)" style="padding:12px; border:1px solid #444; border-radius:6px; font-size:14px;">
+                    <select id="rhTipo" style="padding:12px; border:1px solid #444; border-radius:6px; font-size:14px; background:var(--bg4); color:var(--text);">
+                        <option value="clt">CLT</option>
+                        <option value="pj">PJ</option>
+                        <option value="diarista">Diarista / freela</option>
+                        <option value="prolabore">Pró-labore (sócio)</option>
+                    </select>
+                    <input type="number" id="rhSalario" placeholder="Salário" step="0.01" min="0" style="padding:12px; border:1px solid #444; border-radius:6px; font-size:14px;">
+                    <input type="date" id="rhAdmissao" style="padding:12px; border:1px solid #444; border-radius:6px; font-size:14px; background:var(--bg4); color:var(--text);">
+                </div>
+                <div style="display:grid; grid-template-columns:150px 150px 1fr auto; gap:12px;">
+                    <input type="number" id="rhVt" placeholder="Vale-transporte" step="0.01" min="0" style="padding:12px; border:1px solid #444; border-radius:6px; font-size:14px;">
+                    <input type="number" id="rhVa" placeholder="Outros benefícios" step="0.01" min="0" style="padding:12px; border:1px solid #444; border-radius:6px; font-size:14px;">
+                    <div style="font-size:11px; color:#777; align-self:center;">
+                        O vale-transporte pode ser descontado do funcionário em até 6% do salário — a conta já faz isso.
+                    </div>
+                    <button onclick="rhAdicionar()" id="rhBtnAdd" style="background:#27ae60; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; padding:12px 20px;">+ Adicionar</button>
+                </div>
+            </div>
+
+            <div id="rhLista"></div>
+
+            <div class="section-title" style="margin-top:2rem;">Usar no DRE</div>
+            <p class="text-secondary">Hoje o lucro usa o que estiver digitado em Custos Fixos. Aqui você troca por este cálculo — numa tacada só, sem contar duas vezes.</p>
+            <div id="rhDreBox" style="background:#2c2c2c; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #3a3a3a;"></div>
+        </div>
+
         <div id="vendas" class="tab-content">
             <!-- ANALISE POR PERIODO -->
             <div class="section-title">📊 Análise por Período</div>
@@ -2291,6 +2372,25 @@
                 fixedCosts = snap.docs.map(d => d.data());
                 renderFixedCosts();
                 updateCostsDisplay();
+                // O RH compara a folha com os custos fixos (pra não contar duas
+                // vezes), então redesenha quando eles mudam.
+                if (typeof renderRH === 'function') renderRH();
+            });
+
+            // Equipe (RH)
+            onSnapshot(collection(db, `clientes/${slug}/funcionarios`), (snap) => {
+                funcionarios = snap.docs.map(d => d.data());
+                if (typeof renderRH === 'function') renderRH();
+            });
+
+            // Config do RH (anexo do Simples + provisão da multa)
+            onSnapshot(doc(db, `clientes/${slug}/config/rh`), (snap) => {
+                const c = snap.exists ? (snap.data() || {}) : {};
+                rhCfg = { anexoIV: c.anexoIV === true, provisionarMulta: c.provisionarMulta !== false };
+                const sel = document.getElementById('rhAnexo'), mul = document.getElementById('rhMulta');
+                if (sel) sel.value = rhCfg.anexoIV ? 'iv' : 'dentro';
+                if (mul) mul.checked = rhCfg.provisionarMulta;
+                if (typeof renderRH === 'function') renderRH();
             });
 
             // Custos Variáveis
@@ -4571,6 +4671,319 @@
         }
 
         // ===== CUSTOS =====
+        // ===================== RH — FOLHA E CUSTO REAL =====================
+        // A conta que quase todo material da internet erra, porque assume empresa
+        // FORA do Simples. Nos Anexos I, II, III e V a contribuição patronal (20%)
+        // já está dentro do DAS — só o Anexo IV recolhe por fora, em DARF. Com isso
+        // o fator real do Joey é ~1,3× o salário, não os 1,8× que se lê por aí.
+        const RH_FGTS = 0.08;          // FGTS mensal
+        const RH_CPP  = 0.20;          // patronal — SÓ no Anexo IV
+        const RH_MULTA_FGTS = 0.40;    // multa rescisória sobre o FGTS depositado
+        const RH_VT_TETO_DESCONTO = 0.06; // o VT pode ser descontado do funcionário até 6% do salário
+
+        let funcionarios = [];
+        let rhCfg = { anexoIV: false, provisionarMulta: true };
+
+        const _rhN = (v) => { const n = Number(String(v ?? '').toString().replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+
+        // Custo real de UMA pessoa, por mês. Separa o que sai do caixa agora
+        // (salário, FGTS, benefícios) do que é provisão (13º, férias, multa): é tudo
+        // custo do mês, mas o dono precisa enxergar os dois, senão o 13º vira susto
+        // em dezembro.
+        function rhCustoFuncionario(f, cfg) {
+            cfg = cfg || rhCfg;
+            const sal = _rhN(f && f.salario);
+            const tipo = (f && f.tipo) || 'clt';
+            const o = {
+                tipo, salario: sal,
+                fgts: 0, decimo: 0, fgtsDecimo: 0, ferias: 0, tercoFerias: 0, fgtsFerias: 0,
+                cpp: 0, multaFgts: 0,
+                vtBruto: _rhN(f && f.vt), vtDesconto: 0, vtLiquido: 0,
+                outrosBen: _rhN(f && f.va) + _rhN(f && f.outrosBen),
+                caixa: 0, provisao: 0, total: 0, fator: 0,
+            };
+
+            if (tipo !== 'clt') {
+                // PJ, diária e pró-labore não geram FGTS/13º/férias. O custo é o valor
+                // acertado mais o que a loja pague por fora.
+                o.vtLiquido = o.vtBruto;
+                o.caixa = sal + o.vtLiquido + o.outrosBen;
+                o.total = o.caixa;
+                o.fator = sal ? o.total / sal : 0;
+                return o;
+            }
+
+            o.fgts = sal * RH_FGTS;
+            o.decimo = sal / 12;
+            o.fgtsDecimo = o.decimo * RH_FGTS;
+            o.ferias = sal / 12;
+            o.tercoFerias = o.ferias / 3;
+            o.fgtsFerias = (o.ferias + o.tercoFerias) * RH_FGTS;
+            if (cfg.anexoIV) o.cpp = sal * RH_CPP;
+            // Vale-transporte: a lei deixa descontar do funcionário até 6% do
+            // salário. O custo da loja é só o que passa disso.
+            o.vtDesconto = Math.min(o.vtBruto, sal * RH_VT_TETO_DESCONTO);
+            o.vtLiquido = o.vtBruto - o.vtDesconto;
+            const fgtsTotal = o.fgts + o.fgtsDecimo + o.fgtsFerias;
+            if (cfg.provisionarMulta) o.multaFgts = fgtsTotal * RH_MULTA_FGTS;
+
+            o.caixa = sal + o.fgts + o.cpp + o.vtLiquido + o.outrosBen;
+            o.provisao = o.decimo + o.fgtsDecimo + o.ferias + o.tercoFerias + o.fgtsFerias + o.multaFgts;
+            o.total = o.caixa + o.provisao;
+            o.fator = sal ? o.total / sal : 0;
+            return o;
+        }
+
+        // Meses inteiros entre duas datas (AAAA-MM-DD). Fração de mês com 15 dias ou
+        // mais conta como mês cheio — é a regra da CLT para 13º e férias.
+        function rhMesesTrabalhados(desdeYMD, ateYMD) {
+            if (!desdeYMD || !ateYMD) return 0;
+            const a = new Date(desdeYMD + 'T12:00:00'), b = new Date(ateYMD + 'T12:00:00');
+            if (isNaN(a) || isNaN(b) || b < a) return 0;
+            // Meses CHEIOS primeiro, contados de aniversário a aniversário — e só
+            // depois a sobra em dias. Comparar o dia do mês direto (b.getDate() -
+            // a.getDate()) erra quando o período atravessa a virada: de 20/01 a
+            // 05/02 são 16 dias, mês cheio pela CLT, e a conta antiga dava zero.
+            let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+            const aniv = new Date(a);
+            aniv.setMonth(a.getMonth() + m);
+            if (aniv > b) { m -= 1; aniv.setMonth(aniv.getMonth() - 1); }
+            const sobra = Math.floor((b - aniv) / 86400000);
+            if (sobra >= 15) m += 1;   // fração de 15 dias ou mais conta como mês
+            return Math.max(0, m);
+        }
+
+        // Quanto a loja JÁ DEVE hoje, se todo mundo sair amanhã. É dinheiro que vai
+        // sair e que não aparece em lugar nenhum até a hora de pagar.
+        // Estimativa: o valor exato do FGTS vem do extrato da Caixa.
+        function rhProvisaoAcumulada(f, hojeYMD, cfg) {
+            cfg = cfg || rhCfg;
+            const sal = _rhN(f && f.salario);
+            const vazio = { meses13: 0, decimo: 0, mesesFerias: 0, ferias: 0, tercoFerias: 0, fgtsAcum: 0, multa: 0, total: 0 };
+            if ((f && f.tipo) !== 'clt' || !sal || !f.admissao || !hojeYMD) return vazio;
+
+            const ano = hojeYMD.slice(0, 4);
+            // 13º: conta só os meses DESTE ano (zera todo 1º de janeiro, quando é pago).
+            const ini13 = f.admissao > `${ano}-01-01` ? f.admissao : `${ano}-01-01`;
+            const meses13 = Math.min(12, rhMesesTrabalhados(ini13, hojeYMD));
+            const decimo = (sal / 12) * meses13;
+
+            // Férias: 1/12 por mês desde o último aniversário de admissão.
+            const admDia = f.admissao.slice(5);
+            let ultimoAniv = `${ano}-${admDia}`;
+            if (ultimoAniv > hojeYMD) ultimoAniv = `${Number(ano) - 1}-${admDia}`;
+            if (ultimoAniv < f.admissao) ultimoAniv = f.admissao;
+            const mesesFerias = Math.min(12, rhMesesTrabalhados(ultimoAniv, hojeYMD));
+            const ferias = (sal / 12) * mesesFerias;
+            const tercoFerias = ferias / 3;
+
+            // FGTS acumulado desde a admissão, incluindo o depósito sobre o 13º (13/12).
+            const mesesTotais = rhMesesTrabalhados(f.admissao, hojeYMD);
+            const fgtsAcum = sal * RH_FGTS * mesesTotais * (13 / 12);
+            const multa = cfg.provisionarMulta ? fgtsAcum * RH_MULTA_FGTS : 0;
+
+            const total = decimo + ferias + tercoFerias + multa;
+            return { meses13, decimo, mesesFerias, ferias, tercoFerias, fgtsAcum, multa, total };
+        }
+
+        // Soma de todo mundo ativo.
+        function rhTotais(lista, cfg, hojeYMD) {
+            const ativos = (lista || []).filter((f) => f && f.ativo !== false);
+            const t = { pessoas: ativos.length, salarios: 0, caixa: 0, provisao: 0, total: 0, fator: 0, provisaoAcum: 0 };
+            for (const f of ativos) {
+                const c = rhCustoFuncionario(f, cfg);
+                t.salarios += c.salario; t.caixa += c.caixa; t.provisao += c.provisao; t.total += c.total;
+                if (hojeYMD) t.provisaoAcum += rhProvisaoAcumulada(f, hojeYMD, cfg).total;
+            }
+            t.fator = t.salarios ? t.total / t.salarios : 0;
+            return t;
+        }
+
+        // ---- RH: tela ----------------------------------------------------
+        const _rhBRL = (n) => 'R$ ' + (Number(n) || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        const _rhHojeYMD = () => new Date(new Date().toLocaleString('sv', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T')).toISOString().slice(0, 10);
+        const RH_TIPO_LABEL = { clt: 'CLT', pj: 'PJ', diarista: 'Diarista', prolabore: 'Pró-labore' };
+        // Id fixo da linha que o RH mantém nos custos fixos. Fixo de propósito:
+        // apertar "Usar no DRE" duas vezes ATUALIZA a mesma linha em vez de criar
+        // uma segunda e dobrar a folha no lucro.
+        const RH_FIXO_ID = 'rh-folha';
+
+        function rhSalvarCfg() {
+            const sel = document.getElementById('rhAnexo'), mul = document.getElementById('rhMulta');
+            rhCfg = { anexoIV: sel && sel.value === 'iv', provisionarMulta: !mul || mul.checked };
+            if (window._fb) window._fb.fbMerge('config', 'rh', rhCfg).catch(e => console.error('[rh] cfg:', e));
+            renderRH();
+        }
+
+        function rhAdicionar() {
+            const g = (id) => (document.getElementById(id) || {}).value;
+            const nome = String(g('rhNome') || '').trim();
+            const salario = _rhN(g('rhSalario'));
+            if (!nome) return alert('Qual o nome?');
+            if (salario <= 0) return alert('Qual o salário (ou valor combinado)?');
+            const f = {
+                id: Date.now(), nome, cargo: String(g('rhCargo') || '').trim(),
+                tipo: g('rhTipo') || 'clt', salario,
+                admissao: g('rhAdmissao') || '', vt: _rhN(g('rhVt')), va: _rhN(g('rhVa')),
+                ativo: true,
+            };
+            if (f.tipo === 'clt' && !f.admissao) {
+                if (!confirm('Sem a data de admissão eu não consigo calcular 13º e férias já devidos. Cadastrar assim mesmo?')) return;
+            }
+            funcionarios.push(f);
+            if (window._fb) window._fb.fbSave('funcionarios', f.id, f).catch(e => console.error('[rh]', e));
+            ['rhNome','rhCargo','rhSalario','rhAdmissao','rhVt','rhVa'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            renderRH();
+        }
+
+        function rhToggleAtivo(id) {
+            const f = funcionarios.find((x) => String(x.id) === String(id));
+            if (!f) return;
+            f.ativo = f.ativo === false;
+            if (window._fb) window._fb.fbSave('funcionarios', f.id, f).catch(e => console.error('[rh]', e));
+            renderRH();
+        }
+
+        function rhRemover(id) {
+            const f = funcionarios.find((x) => String(x.id) === String(id));
+            if (!f) return;
+            // Desligar é quase sempre o certo: apagar some com o histórico de quem
+            // trabalhou aqui, e as provisões que essa pessoa gerou.
+            if (!confirm(`Apagar ${f.nome} de vez?\n\nSe foi só um desligamento, prefira o botão Desligar — ele preserva o histórico.`)) return;
+            funcionarios = funcionarios.filter((x) => String(x.id) !== String(id));
+            if (window._fb) window._fb.fbDelete('funcionarios', id).catch(e => console.error('[rh]', e));
+            renderRH();
+        }
+
+        function rhLinha(f) {
+            const c = rhCustoFuncionario(f, rhCfg);
+            const p = rhProvisaoAcumulada(f, _rhHojeYMD(), rhCfg);
+            const off = f.ativo === false;
+            const clt = f.tipo === 'clt';
+            const det = clt
+                ? `FGTS ${_rhBRL(c.fgts)} · 13º ${_rhBRL(c.decimo + c.fgtsDecimo)} · férias ${_rhBRL(c.ferias + c.tercoFerias + c.fgtsFerias)}`
+                  + (c.cpp ? ` · patronal ${_rhBRL(c.cpp)}` : '')
+                  + (c.multaFgts ? ` · multa ${_rhBRL(c.multaFgts)}` : '')
+                  + (c.vtLiquido ? ` · VT ${_rhBRL(c.vtLiquido)}` : '')
+                : 'sem encargos trabalhistas';
+            return `
+            <div style="background:#2c2c2c; border:1px solid ${off ? '#3a3a3a' : '#444'}; border-radius:8px; padding:14px 16px; margin-bottom:10px; ${off ? 'opacity:.5;' : ''}">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+                <div style="min-width:220px;">
+                  <div style="font-weight:700; font-size:15px;">${_rhEsc(f.nome)}${off ? ' <span style="font-size:11px; color:#888;">(desligado)</span>' : ''}</div>
+                  <div style="font-size:12px; color:#888; margin-top:2px;">
+                    ${_rhEsc(f.cargo || 'sem cargo')} · ${RH_TIPO_LABEL[f.tipo] || f.tipo}
+                    ${f.admissao ? ` · desde ${f.admissao.split('-').reverse().join('/')}` : ' · <span style="color:#f59e0b">sem data de admissão</span>'}
+                  </div>
+                  <div style="font-size:11px; color:#777; margin-top:6px;">${det}</div>
+                </div>
+                <div style="text-align:right; min-width:150px;">
+                  <div style="font-size:11px; color:#888;">custo real</div>
+                  <div style="font-size:20px; font-weight:800; color:#27ae60;">${_rhBRL(c.total)}</div>
+                  <div style="font-size:11px; color:#777;">salário ${_rhBRL(c.salario)}${c.fator ? ` · ×${c.fator.toFixed(2)}` : ''}</div>
+                  ${p.total ? `<div style="font-size:11px; color:#f59e0b; margin-top:4px;">já devido ${_rhBRL(p.total)}</div>` : ''}
+                </div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <button onclick="rhToggleAtivo('${f.id}')" style="background:transparent; color:var(--text2); border:1px solid #444; border-radius:6px; cursor:pointer; padding:6px 12px; font-size:12px;">${off ? 'Reativar' : 'Desligar'}</button>
+                  <button onclick="rhRemover('${f.id}')" style="background:transparent; color:#888; border:none; cursor:pointer; padding:6px 8px; font-size:14px;" title="Apagar">✕</button>
+                </div>
+              </div>
+            </div>`;
+        }
+
+        const _rhEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+
+        function renderRH() {
+            const lista = document.getElementById('rhLista');
+            if (!lista) return;
+            const hoje = _rhHojeYMD();
+            const t = rhTotais(funcionarios, rhCfg, hoje);
+
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+            set('rhTotalDisplay', _rhBRL(t.total));
+            set('rhFatorDisplay', t.pessoas ? `${t.pessoas} pessoa(s) · ${_rhBRL(t.salarios)} de salário · fator ×${t.fator.toFixed(2)}` : 'ninguém cadastrado');
+            set('rhCaixaDisplay', _rhBRL(t.caixa));
+            set('rhProvDisplay', _rhBRL(t.provisao));
+            set('rhAcumDisplay', _rhBRL(t.provisaoAcum));
+
+            const ativos = funcionarios.filter((f) => f.ativo !== false);
+            const inativos = funcionarios.filter((f) => f.ativo === false);
+            lista.innerHTML = funcionarios.length
+                ? ativos.map(rhLinha).join('') +
+                  (inativos.length ? `<div style="font-size:12px; color:#777; margin:18px 0 8px;">Desligados</div>` + inativos.map(rhLinha).join('') : '')
+                : '<p class="text-secondary">Ninguém cadastrado ainda. Comece pelo primeiro acima.</p>';
+
+            renderRhDre(t);
+        }
+
+        // Quais custos fixos PARECEM folha e entrariam em conflito com a linha do RH.
+        // Pura para o teste: recebe a lista e devolve o diagnóstico.
+        function rhConflitosFolha(lista) {
+            // Acentos entram explicitamente: "Pró-labore" escapou da primeira versão
+            // desta regex e teria sobrado nos custos fixos, dobrando a folha.
+            const re = /sal[aá]rio|folha|funcion|colaborad|motoboy|entregador|pr[oó].?labore|equipe/i;
+            return (lista || []).filter((c) => c && String(c.id) !== RH_FIXO_ID && re.test(String(c.name || '')));
+        }
+
+        function renderRhDre(t) {
+            const box = document.getElementById('rhDreBox');
+            if (!box) return;
+            const atual = (fixedCosts || []).reduce((s2, c) => s2 + (Number(c.value) || 0), 0);
+            const jaTem = (fixedCosts || []).find((c) => String(c.id) === RH_FIXO_ID);
+            const conflitos = rhConflitosFolha(fixedCosts);
+            const somaConf = conflitos.reduce((s2, c) => s2 + (Number(c.value) || 0), 0);
+            const depois = atual - somaConf - (jaTem ? Number(jaTem.value) || 0) + t.total;
+
+            if (!t.pessoas) { box.innerHTML = '<p class="text-secondary">Cadastre a equipe primeiro.</p>'; return; }
+
+            box.innerHTML = `
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; margin-bottom:14px;">
+                <div><div style="font-size:11px; color:#888;">Custo fixo hoje</div><div style="font-size:20px; font-weight:800;">${_rhBRL(atual)}</div></div>
+                <div><div style="font-size:11px; color:#888;">Folha pelo RH</div><div style="font-size:20px; font-weight:800; color:#27ae60;">${_rhBRL(t.total)}</div></div>
+                <div><div style="font-size:11px; color:#888;">Custo fixo depois</div><div style="font-size:20px; font-weight:800; color:${depois > atual ? '#f59e0b' : '#27ae60'};">${_rhBRL(depois)}</div></div>
+                <div><div style="font-size:11px; color:#888;">Diferença no lucro</div><div style="font-size:20px; font-weight:800; color:${depois > atual ? '#e74c3c' : '#27ae60'};">${depois > atual ? '−' : '+'}${_rhBRL(Math.abs(depois - atual))}</div></div>
+              </div>
+              ${conflitos.length ? `
+                <div style="background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.45); border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+                  <div style="font-size:13px; font-weight:700; color:#f59e0b; margin-bottom:6px;">Estas linhas de custo fixo parecem folha e seriam contadas duas vezes:</div>
+                  <div style="font-size:13px; color:var(--text2);">${conflitos.map((c) => `${_rhEsc(c.name)} (${_rhBRL(c.value)})`).join(' · ')}</div>
+                  <div style="font-size:12px; color:#888; margin-top:6px;">Ao confirmar, elas são <b>removidas</b> e a folha do RH entra no lugar. Nada acontece antes disso.</div>
+                </div>` : ''}
+              <button onclick="rhAplicarNoDre()" style="background:#ff6b35; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:700; padding:12px 22px; font-size:14px;">
+                ${jaTem ? 'Atualizar a folha no DRE' : 'Usar no DRE'}
+              </button>
+              <div style="font-size:11px; color:#777; margin-top:8px;">
+                Cria (ou atualiza) uma única linha chamada <b>Folha (RH)</b> em Custos Fixos. Apertar de novo depois de mexer na equipe só atualiza o valor.
+              </div>`;
+        }
+
+        async function rhAplicarNoDre() {
+            const t = rhTotais(funcionarios, rhCfg, _rhHojeYMD());
+            const conflitos = rhConflitosFolha(fixedCosts);
+            const linhas = conflitos.map((c) => `• ${c.name} (${_rhBRL(c.value)})`).join('\n');
+            const msg = conflitos.length
+                ? `Vou colocar a folha do RH (${_rhBRL(t.total)}) nos custos fixos e REMOVER estas linhas:\n\n${linhas}\n\nConfirma?`
+                : `Vou colocar a folha do RH (${_rhBRL(t.total)}) nos custos fixos. Confirma?`;
+            if (!confirm(msg)) return;
+
+            // Remove as antigas ANTES de inserir: se algo falhar no meio, o dono
+            // fica com folha a menos (visível e fácil de refazer) em vez de folha
+            // dobrada, que passa despercebida e estraga o lucro do mês.
+            for (const c of conflitos) {
+                fixedCosts = fixedCosts.filter((x) => String(x.id) !== String(c.id));
+                if (window._fb) await window._fb.fbDelete('fixedCosts', c.id).catch((e) => console.error('[rh] del:', e));
+            }
+            const linha = { id: RH_FIXO_ID, name: 'Folha (RH)', value: Math.round(t.total * 100) / 100, category: 'Pessoal' };
+            const i = fixedCosts.findIndex((x) => String(x.id) === RH_FIXO_ID);
+            if (i >= 0) fixedCosts[i] = linha; else fixedCosts.push(linha);
+            if (window._fb) await window._fb.fbSave('fixedCosts', RH_FIXO_ID, linha).catch((e) => console.error('[rh] save:', e));
+
+            renderFixedCosts();
+            updateCostsDisplay();
+            renderRH();
+            alert(`Pronto. Custos fixos agora usam ${_rhBRL(linha.value)} de folha.`);
+        }
+
         let fixedCostsExpanded = true;
         let variableCostsExpanded = true;
 
