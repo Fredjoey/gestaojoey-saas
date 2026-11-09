@@ -665,6 +665,120 @@
   button, select, [role=button], input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]) { min-height: 44px; }
   button { min-width: 44px; }
 }
+
+@media (max-width: 768px) {
+  /* FASE 3: telas da Gestão */
+  /* faixa do relógio/notch: o conteúdo passa por baixo dela ao rolar */
+  body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--sat); background: #0f0f0f; z-index: 101; pointer-events: none; }
+
+  /* cabeçalho: marca centralizada em cima; Sair, Esconder valores e carrinho na linha de baixo */
+  .header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca marca" "acoes carrinho"; align-items: center; gap: 6px 8px; padding: calc(var(--sat) + 10px) 12px 8px; }
+  .header > div:last-of-type { grid-area: marca; gap: 10px !important; min-width: 0; }
+  .header > div:last-of-type > div { min-width: 0; }
+  .header > div:last-of-type > img { width: 64px !important; height: 64px !important; flex: none; }
+  .header > div:last-of-type > img:last-of-type { display: none !important; }
+  .header h1, .header .header-title { font-size: 1.5rem !important; line-height: 1.15; overflow-wrap: anywhere; }
+  .header p { font-size: 11px !important; }
+  .header > div:first-of-type { grid-area: acoes; position: static !important; transform: none !important; min-width: 0; flex-wrap: wrap; }
+  .header > a[title="Painel de Pedidos"] { grid-area: carrinho; position: static !important; transform: none !important; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; opacity: .85 !important; }
+
+  /* abas: rolagem de lado com ímã e degradê na borda em que ainda há aba escondida */
+  .tabs { top: var(--sat); margin: 0; padding: 0 12px; border-radius: 0; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; scroll-padding-inline: 40px; }
+  .tab-button { font-size: 15px !important; min-height: 46px; scroll-snap-align: center; }
+  .tabs.m-mais-dir { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+  .tabs.m-mais-esq { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+  .tabs.m-mais-esq.m-mais-dir { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+
+  /* menos caixa dentro de caixa */
+  .container { padding-top: 0; padding-left: 0; padding-right: 0; }
+  #contasPagarBanner { margin: 8px 12px !important; flex-wrap: wrap; }
+  .tab-content { padding: 12px; border-left: 0; border-right: 0; border-radius: 0; }
+  .tab-content :is([style*="padding:1.5rem"], [style*="padding: 1.5rem"], [style*="padding:1.25rem"], [style*="padding: 1.25rem"], [style*="padding:20px"], [style*="padding: 20px"], [style*="padding:24px"], [style*="padding: 24px"]) { padding: 12px !important; }
+  .recipe-card, .cost-card { padding: 12px; }
+
+  /* grades fixas: uma coluna por padrão. Quem cabe em mais ganha regra própria logo abaixo. */
+  :where(.tab-content, .modal-content, #painelReceitasCategoria, #modalReajuste, #modalFornNotas, #modalAdicionais) :where([style*="grid-template-columns"]):where(:not([style*="auto-fit"], [style*="auto-fill"], [style*="repeat(7"])) { grid-template-columns: minmax(0, 1fr) !important; }
+
+  /* formulários: campo principal inteiro e o resto em duas colunas */
+  :where(.tab-content, .modal-content) :is([style*="2fr 1fr 1fr 1fr auto"], [style*="2fr 1fr 1fr auto auto"], [style*="2fr 1fr 1fr 1fr 1fr;"], [style*="2fr 160px 160px auto"], [style*="2fr 130px 150px auto auto"], [style*="2fr 1.4fr 1.2fr 130px 150px"], [style*="2fr 90px 1fr 1fr 1fr 1fr auto"], [style*="2fr 1fr 1fr 1fr;"]) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  :where(.tab-content, .modal-content) :is([style*="2fr 1fr 1fr 1fr auto"], [style*="2fr 1fr 1fr auto auto"], [style*="2fr 1fr 1fr 1fr 1fr;"], [style*="2fr 160px 160px auto"], [style*="2fr 130px 150px auto auto"], [style*="2fr 1.4fr 1.2fr 130px 150px"], [style*="2fr 90px 1fr 1fr 1fr 1fr auto"], [style*="2fr 1fr 1fr 1fr;"]) > :first-child { grid-column: 1 / -1; }
+  :where(.tab-content, .modal-content) :is([style*="1fr 1fr 1fr 1fr;"], [style*="repeat(4,1fr)"], [style*="repeat(4, 1fr)"], [style*="1fr 1fr 1fr;"], [style*="150px 150px 1fr auto"]) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  :where(.tab-content, .modal-content) [style*="grid-template-columns"] > button:last-child { grid-column: 1 / -1; }
+  /* item da nota: os rótulos ficam no placeholder de cada campo */
+  .tab-content [style*="3fr 1fr 1fr 1fr 1fr auto"] { display: none !important; }
+
+  /* linhas de lista: nome em cima; valor e ações embaixo */
+  :where(.tab-content, .modal-content) [style*="2fr 1fr auto auto"] { grid-template-columns: minmax(0, 1fr) auto auto !important; }
+  :where(.tab-content, .modal-content) [style*="2fr 1fr auto auto"] > :first-child { grid-column: 1 / -1; }
+  :where(.tab-content, .modal-content) [style*="2fr 1fr auto auto"] > button:last-child { grid-column: auto; }
+  :where(.tab-content, .modal-content) [style*="2fr 1fr 1fr auto;"] { grid-template-columns: minmax(0, 1fr) auto auto auto !important; }
+  :where(.tab-content, .modal-content) [style*="2fr 1fr 1fr auto;"] > button:last-child { grid-column: auto; }
+
+  /* pseudo-tabelas que cabem: só apertam */
+  :where(.tab-content, .modal-content) [style*="2fr 0.5fr 0.5fr 1fr 1fr"] { grid-template-columns: minmax(0, 1.6fr) 30px 28px minmax(0, 1fr) minmax(0, 1fr) !important; gap: 4px !important; }
+  :where(.tab-content, .modal-content) [style*="3fr 1fr 1fr 1fr;"] { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) !important; }
+  :where(.tab-content, .modal-content) [style*="2fr 1fr 1fr 60px"], :where(.tab-content, .modal-content) [style*="2fr 1fr 1fr ;"] { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto !important; }
+  :where(.tab-content, .modal-content) [style*="56px 1fr 84px 110px"] { grid-template-columns: 44px minmax(0, 1fr) auto !important; }
+  :where(.tab-content, .modal-content) [style*="56px 1fr 84px 110px"] > :nth-child(3) { display: none; }
+  .historico-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .historico-item > :last-child { grid-column: 1 / -1; }
+
+  /* pseudo-tabela larga: rola só ela */
+  :where(.tab-content, .modal-content) :has(> [style*="100px 1fr 1.5fr 60px"]) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  :where(.tab-content, .modal-content) [style*="100px 1fr 1.5fr 60px"] { grid-template-columns: 90px 130px 170px 44px 44px 84px 84px !important; width: max-content; min-width: 100%; }
+
+  /* tabelas: rolagem só na caixa da tabela */
+  :where(.tab-content, .modal-content) :has(> table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-content table, .modal-content table { min-width: 0 !important; }
+  .tab-content th, .tab-content td, .modal-content th, .modal-content td { white-space: nowrap; }
+  /* nome longo quebra na primeira coluna, para os números aparecerem sem rolar */
+  .tab-content td:first-child { white-space: normal; min-width: 110px; max-width: 170px; }
+  #precTabela { table-layout: auto !important; width: auto !important; min-width: 100%; }
+
+  /* filtros e cabeçalhos de cartão quebram linha */
+  .recipe-header { flex-wrap: wrap; gap: 8px; }
+  .recipe-header > div { flex-wrap: wrap; width: 100%; }
+  .recipe-header > div select { flex: 1 1 100%; }
+  .recipe-header > div button { flex: 1 1 calc(50% - 4px); }
+  .tab-content div:has(> .anaPeriodBtn) { flex-wrap: wrap !important; margin-left: 0 !important; }
+  .tab-content input[type=date] { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .tab-content div:has(> .anaPeriodBtn) > input[type=date], .tab-content div:has(> .anaPeriodBtn) input[type=date] { flex: 1 1 120px; width: auto; }
+  .tab-content [style*="min-width:2"] { min-width: 0 !important; }
+  .tab-content select { max-width: 100%; }
+
+  /* filtro das vendas: busca em cima, categoria e limpar embaixo */
+  .tab-content div:has(> #vendasFiltroCategoria) { flex-wrap: wrap; }
+  #vendasFiltroNome { flex: 1 1 100% !important; }
+  #vendasFiltroCategoria { flex: 1 1 0; min-width: 0 !important; }
+  #notasFiltroStickyBar { top: calc(var(--sat) + 48px) !important; margin: -12px -12px 12px !important; }
+
+  /* linha do insumo: dados inteiros e os dois botões lado a lado */
+  .insumo-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .insumo-row > :not(button) { grid-column: 1 / -1; }
+
+  /* select escuro de verdade: sem isso o sistema pinta o controle de branco com letra clara */
+  select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23aaa' stroke-width='2'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; padding-right: 30px !important; }
+
+  /* Compras: nome em cima; valor e botões embaixo */
+  #notasAPagarLista > div { flex-wrap: wrap; }
+  #notasAPagarLista > div > div:first-child { flex: 1 1 100% !important; }
+  .recipe-card[style*="overflow:hidden"] > div[style*="justify-content:space-between"] { flex-wrap: wrap; gap: 8px; }
+  .recipe-card[style*="overflow:hidden"] > div[style*="justify-content:space-between"] > div:last-child { flex: 1 1 100%; justify-content: flex-end; }
+  .nota-item > button:last-child { grid-column: auto; }
+  :where(.tab-content, .modal-content) [style*="150px 150px 1fr auto"] > :nth-child(3) { grid-column: 1 / -1; }
+
+  /* botões de formulário: largura total e empilhados */
+  .tab-content > button, .tab-content .form-group button { width: 100%; }
+  .modal-footer { flex-direction: column-reverse; gap: 8px; }
+  .modal-footer button { width: 100%; margin: 0; }
+
+  /* modais em tela cheia */
+  .modal.show { align-items: stretch; justify-content: stretch; }
+  .modal-content { width: 100% !important; max-width: none !important; height: 100vh; height: 100dvh; max-height: none; border: 0; border-radius: 0; padding: calc(var(--sat) + 12px) 12px calc(var(--sab) + 16px); -webkit-overflow-scrolling: touch; }
+  .modal-close { width: 44px; height: 44px; }
+  #painelReceitasCategoria, #modalReajuste, #modalFornNotas, #modalAdicionais { padding: 0 !important; }
+  #painelReceitasCategoria > div, #modalReajuste > div, #modalFornNotas > div, #modalAdicionais > div { width: 100% !important; max-width: none !important; height: 100vh; height: 100dvh; max-height: none !important; border-radius: 0 !important; box-sizing: border-box; overflow-y: auto; }
+}
 </style>
 </head>
 <body>
@@ -12185,5 +12299,59 @@
     </script>
 
 <script src="assets/js/privacidade.js" defer></script>
+<script id="mobile-iphone-js">
+// iPhone (até 768px): só layout. No desktop nada aqui é criado nem executado.
+(function () {
+  var mq = window.matchMedia('(max-width: 768px)');
+  var tabs = null, obs = null, ativo = false;
+
+  function bordas() {
+    if (!tabs) return;
+    var fim = tabs.scrollLeft + tabs.clientWidth;
+    tabs.classList.toggle('m-mais-esq', tabs.scrollLeft > 4);
+    tabs.classList.toggle('m-mais-dir', fim < tabs.scrollWidth - 4);
+  }
+
+  // Rola só a faixa das abas (scrollIntoView também mexeria na página).
+  function mostrarAtiva(suave) {
+    var b = tabs && tabs.querySelector('.tab-button.active');
+    if (!b) return;
+    tabs.scrollTo({ left: b.offsetLeft - (tabs.clientWidth - b.offsetWidth) / 2, behavior: suave ? 'smooth' : 'auto' });
+  }
+
+  function aoMudar(lista) {
+    var mudouAba = lista.some(function (m) { return m.target !== tabs; });
+    if (mudouAba) { mostrarAtiva(true); bordas(); }
+  }
+
+  function ligar() {
+    if (ativo) return;
+    tabs = document.querySelector('.tabs');
+    if (!tabs) return;
+    ativo = true;
+    tabs.addEventListener('scroll', bordas, { passive: true });
+    window.addEventListener('resize', bordas);
+    obs = new MutationObserver(aoMudar);
+    obs.observe(tabs, { attributes: true, attributeFilter: ['class', 'style'], subtree: true });
+    mostrarAtiva(false);
+    bordas();
+  }
+
+  function desligar() {
+    if (!ativo) return;
+    ativo = false;
+    if (obs) obs.disconnect();
+    obs = null;
+    tabs.removeEventListener('scroll', bordas);
+    window.removeEventListener('resize', bordas);
+    tabs.classList.remove('m-mais-esq', 'm-mais-dir');
+    tabs = null;
+  }
+
+  function aplicar() { if (mq.matches) ligar(); else desligar(); }
+  if (mq.addEventListener) mq.addEventListener('change', aplicar); else mq.addListener(aplicar);
+  aplicar();
+})();
+</script>
 </body>
 </html>
