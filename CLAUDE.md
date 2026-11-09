@@ -47,6 +47,28 @@ que o sistema quebrou. Se um endereço novo precisar servir o Joey, ele entra NA
 Reverter, se um deploy sair ruim: Console → Hosting → histórico de versões → Reverter, **no site
 certo** (para o Fred, `sistema-joey`).
 
+⚠️ **Nunca rode deploy a partir do `joey-legado`.** O `gestao.hamburgueriajoey.com.br` hoje serve o
+arquivo DESTE repositório. O `gestao-joey.html` do legado parou em 06/10/2026: subir de lá faria o
+site do Fred voltar um mês (sem a aba RH, a embalagem do insumo e a correção da Análise).
+
+## iPhone (até 768px) — no ar desde 09/11/2026
+
+Tudo em dois blocos no `painel.html` e no `gestao-joey.html`: `<style id="mobile-iphone">` (só
+regras dentro de `@media (max-width: 768px)`) e `<script id="mobile-iphone-js">` (liga e desliga por
+`matchMedia`; no desktop não cria nada). Commits `372b207`, `e4fd82b`, `9ee1349` e `285f799`.
+Conferido em WebKit 390, 430 e 1280 (desktop idêntico em layout e pixels); **não** em iPhone real.
+
+- **Painel:** a página rola só no `.main-wrap`. O JS cria as abas do kanban (`#mKanbanTabs`), o menu
+  "⋯" (`#mMenuBtn`, abre a `.sidebar`, que some no celular) e o voltar do WhatsApp (`#mWppVoltar`).
+- **Gestão:** as grades são inline, então o CSS as reconhece pelo TEXTO do estilo
+  (`[style*="2fr 160px 160px auto"]`). ⚠️ **Mudou o `grid-template-columns` inline de uma grade? Confira
+  a regra dela no bloco** — sem regra própria, a grade cai no padrão de uma coluna.
+- Parte das `.tab-content` é filha direta do `body`, fora do `#appContainer`: a folga de baixo fica
+  na `.tab-content`.
+- **Botão da IA** (`#jiaFab`): 52px, some com modal ou menu aberto.
+- **PWA:** `manifest.json` (painel), `manifest-gestao.json` (gestão) e `apple-touch-icon.png`.
+- O `joey-legado` recebeu o mesmo bloco da Gestão (branch `feat/mobile-iphone`), mas não publica.
+
 ## Projetos Firebase e deploy das functions
 
 São **dois** projetos, e o `--project` no deploy **não é opcional**:
