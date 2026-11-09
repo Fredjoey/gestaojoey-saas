@@ -2,7 +2,13 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest-gestao.json">
+    <meta name="theme-color" content="#0f0f0f" media="(max-width: 768px)">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Gestão Joey">
     <title>Sistema Joey</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,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">
     <style>
@@ -636,6 +642,30 @@
           animation: ledPulse 2.5s ease-in-out infinite alternate;
         }
     </style>
+<style id="mobile-iphone">
+/* ===== iPhone (até 768px). Tudo aqui dentro do @media: o desktop não muda. ===== */
+@media (max-width: 768px) {
+  /* FASE 1: base */
+  :root {
+    --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+    --bg: #0f0f0f; --bg2: #141414; --accent: #E87722; --accent-hover: #cf6a1c;
+  }
+  /* só no body (não no html): assim o overflow vai para a viewport e o .tabs sticky continua funcionando */
+  body { overflow-x: hidden; background: #0f0f0f; padding-left: var(--sal); padding-right: var(--sar); }
+  #loginScreen { min-height: 100vh !important; min-height: 100dvh !important; padding: var(--sat) 16px var(--sab); }
+  .header { padding-top: calc(var(--sat) + 12px); }
+  #appContainer { padding-bottom: calc(var(--sab) + 16px); }
+
+  /* 16px: abaixo disso o iPhone dá zoom ao focar o campo */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea { font-size: 16px !important; }
+  select { background-color: #141414 !important; color: var(--text) !important; }
+
+  /* alvos de toque */
+  button, select, [role=button], input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]) { min-height: 44px; }
+  button { min-width: 44px; }
+}
+</style>
 </head>
 <body>
     <div id="loginScreen" style="display:none; align-items:center; justify-content:center; min-height:100vh; background:#242424;">

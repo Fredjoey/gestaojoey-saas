@@ -2,12 +2,16 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Joey – Painel</title>
 <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f0f0f" media="(max-width: 768px)">
 <meta name="theme-color" content="#ff6b35">
 <link rel="icon" href="/joey_favicon_refined.png">
-<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gestão Joey">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -659,6 +663,38 @@ body.suporte-on #botAlertBanner{top:36px}
 .aniv-btn:hover{background:rgba(236,72,153,.32)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+<style id="mobile-iphone">
+/* ===== iPhone (até 768px). Tudo aqui dentro do @media: o desktop não muda. ===== */
+@media (max-width: 768px) {
+  /* FASE 1: base */
+  :root {
+    --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+    --bg: #0f0f0f; --bg2: #141414; --orange: #E87722; --orange2: #f08f45; --orange-dim: rgba(232,119,34,.15);
+  }
+  html, body { height: 100vh; height: 100dvh; max-width: 100%; overflow-x: hidden; background: #0f0f0f; }
+  .sidebar { height: 100vh; height: 100dvh; }
+  .main-wrap { height: 100vh; height: 100dvh; padding: var(--sat) var(--sar) var(--sab) var(--sal); }
+  body.suporte-on .main-wrap { height: calc(100vh - 36px); height: calc(100dvh - 36px); }
+
+  /* 16px: abaixo disso o iPhone dá zoom ao focar o campo */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea { font-size: 16px !important; }
+  select { background-color: #141414; color: var(--text); }
+
+  /* alvos de toque */
+  button, select, [role=button], input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]) { min-height: 44px; }
+  button { min-width: 44px; }
+  .nav-item { min-height: 44px; }
+  .search-clear { min-height: 0; min-width: 0; padding: 10px; }
+  .auto-switch::after { content: ""; position: absolute; inset: -10px 0; }
+
+  #botAlertBanner { padding-top: calc(var(--sat) + 10px); padding-left: 16px; padding-right: 52px; }
+  #botAlertClose { top: calc(var(--sat) + 8px); transform: none; }
+  #suporteBar { padding-top: var(--sat); height: auto; min-height: 36px; }
+  #esperaFaixa { top: calc(var(--sat) + 8px); }
+  .notif { left: 12px; right: 12px; bottom: calc(var(--sab) + 12px); max-width: none; }
+}
+</style>
 </head>
 <body>
 
