@@ -694,6 +694,106 @@ body.suporte-on #botAlertBanner{top:36px}
   #esperaFaixa { top: calc(var(--sat) + 8px); }
   .notif { left: 12px; right: 12px; bottom: calc(var(--sab) + 12px); max-width: none; }
 }
+
+@media (max-width: 768px) {
+  /* FASE 2: painel de pedidos.
+     A página rola num lugar só (.main-wrap): o cabeçalho sai de cena e as abas do kanban ficam presas no topo. */
+  body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--sat); background: #0f0f0f; z-index: 400; }
+  .main-wrap { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+  .content { flex: none; overflow: visible; }
+  .content > [id^="panel-"] { height: auto !important; overflow: visible !important; }
+  .panel-inner { flex: none; overflow: visible; padding: 12px 12px 24px; }
+  .panel-head { flex-wrap: wrap; gap: 8px; }
+  .form-grid, .form-grid3 { grid-template-columns: 1fr; }
+  .prod-row { grid-template-columns: 52px minmax(0, 1fr) auto; }
+  #panel-relatorios [style*="grid-template-columns:1fr 1fr;gap:16px"] { grid-template-columns: minmax(0, 1fr) !important; }
+  #horariosDias [style*="align-items:flex-start"] { flex-wrap: wrap; }
+  #horariosDias [style*="margin-left:auto;flex-shrink:0"] { flex: 1 1 100% !important; min-width: 0; margin-left: 0 !important; }
+  #horariosDias input[type=time] { flex: 1 1 0; width: auto !important; min-width: 0; }
+  /* linha do bairro: nome em cima; taxa e os 3 botões embaixo */
+  #bairrosList > div[style*="130px auto auto auto"] { grid-template-columns: auto minmax(0,1fr) auto auto auto !important; }
+  #bairrosList > div[style*="130px auto auto auto"] > span:first-of-type { grid-column: 2 / -1; }
+  #bairrosList > div[style*="130px auto auto auto"] > span:last-of-type { grid-column: 1 / 3; text-align: left !important; }
+  #bairrosList > div[style*="1fr 130px auto auto;"] { grid-template-columns: minmax(0,1fr) auto auto !important; }
+  #bairrosList > div[style*="1fr 130px auto auto;"] > input:first-child { grid-column: 1 / -1; }
+  .hist-table, .ifl-tab { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Barra do topo: título + busca; embaixo só ícones. Nada cortado. */
+  .topbar { height: auto; flex-wrap: wrap; gap: 8px; padding: 8px 12px; background: #141414; }
+  .topbar-title { flex: 0 1 36%; min-width: 0; margin-right: 0; white-space: normal; line-height: 1.15; }
+  .search-wrap { flex: 1 1 50%; min-width: 0; max-width: none; height: 44px; background: #0f0f0f; }
+  .topbar-right { flex: 1 0 100%; margin-left: 0; gap: 6px; flex-wrap: wrap; }
+  .topbar-right .tb-btn { flex: 1 1 0; min-width: 44px; min-height: 44px; padding: 0; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+  .tb-btn[onclick^="testeImpressao"], .tb-btn[onclick^="abrirNovoPedidoModal"], .tb-btn[onclick^="copiarLink"] { font-size: 0; }
+  .tb-btn[onclick^="testeImpressao"]::before { content: "🖨️"; font-size: 18px; }
+  .tb-btn[onclick^="copiarLink"]::before { content: "📋"; font-size: 18px; }
+  .tb-btn[onclick^="abrirNovoPedidoModal"]::before { content: "+"; font-size: 28px; font-weight: 700; line-height: 1; }
+  #btnNotifPerm { flex: 1 0 100%; font-size: 14px; }
+
+  /* Menu ⋯: abre a barra lateral, que no celular fica escondida */
+  body.m-menu .sidebar { display: flex; position: fixed; top: 0; bottom: 0; left: 0; width: min(280px, 82vw); z-index: 450; padding-top: var(--sat); padding-bottom: var(--sab); overflow-y: auto; background: #141414; }
+  .sb-logo img { height: 56px; }
+  .sb-name { font-size: 20px; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+  .sb-bottom { padding-bottom: 16px; }
+  #mMenuFundo { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 449; }
+  body.m-menu #mMenuFundo { display: block; }
+
+  /* Cards de resumo: 2x2 compacta */
+  .tempo-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
+  .tempo-item, .bot-item { min-width: 0; padding: 8px 10px; gap: 8px; background: #141414; border-left: none; }
+  .tempo-item > span:first-child { font-size: 16px !important; }
+  .tempo-label { font-size: 9.5px; white-space: nowrap; }
+  .tempo-val { font-size: 13px; white-space: nowrap; }
+  .bot-item #autoAceitarLabel, .bot-item #impTopLabel { font-size: 11.5px !important; line-height: 1.2; }
+
+  /* Filtros e plantão: cabem na largura, quebrando linha se precisar */
+  .kanban-topbar { flex-wrap: wrap; padding: 8px 12px; background: #0f0f0f; }
+  #plantaoBar > div { padding: 8px 12px !important; }
+
+  /* Kanban: uma coluna por vez. Abas (criadas pelo script abaixo) + arrastar para o lado. */
+  #mKanbanTabs { display: flex; position: sticky; top: var(--sat); z-index: 40; background: #141414; border-bottom: 1px solid var(--border2); }
+  #mKanbanTabs button { flex: 1 1 0; min-width: 0; min-height: 58px; padding: 6px 2px 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text2); font: 600 11px/1.15 inherit; font-family: inherit; text-align: center; cursor: pointer; }
+  #mKanbanTabs button b { font-size: 16px; line-height: 1; font-weight: 800; }
+  #mKanbanTabs button.on { color: var(--m-cor); border-bottom-color: var(--m-cor); background: #0f0f0f; }
+  .kanban-board { flex: none; align-items: flex-start; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .kanban-board::-webkit-scrollbar { display: none; }
+  .kanban-col { flex: 0 0 100%; min-width: 100%; border-right: none; scroll-snap-align: start; scroll-snap-stop: always; min-height: calc(100vh - 170px); min-height: calc(100dvh - 170px); max-height: calc(100vh - 58px); max-height: calc(100dvh - 58px); }
+  .kanban-col.m-ativa { max-height: none; overflow: visible; }
+  .col-novo .col-header, .col-prod .col-header { display: none; }
+  .col-header .col-title, .col-header .col-count { display: none; }
+  .col-header, .col-header-top { justify-content: flex-end; }
+  .col-header { padding: 8px 12px; }
+  .col-body { flex: none; overflow: visible; padding: 10px 12px 16px; gap: 10px; }
+
+  /* Card do pedido: largura toda, botões grandes lado a lado */
+  .order-card { padding: 14px; }
+  .order-card:hover { transform: none; }
+  .oc-top { margin: -6px 0 2px; }
+  .oc-id, .oc-cliente { font-size: 15px; }
+  .oc-itens { font-size: 13px; color: rgba(255,255,255,.65); }
+  .oc-pag { font-size: 11px; }
+  .oc-total { font-size: 16px; }
+  .oc-actions { gap: 8px; margin-top: 12px; }
+  .oc-btn { min-height: 50px; padding: 8px 6px; border-radius: 10px; font-size: 14px; }
+
+  /* Modais em tela cheia */
+  .modal-overlay { align-items: stretch; justify-content: stretch; }
+  .modal-box { width: 100% !important; max-width: none !important; height: 100vh !important; height: 100dvh !important; max-height: none !important; border: none; border-radius: 0; padding: calc(var(--sat) + 8px) 14px calc(var(--sab) + 16px); }
+  .modal-header { position: sticky; top: 0; z-index: 5; margin: calc(-8px - var(--sat)) -14px 12px; padding: calc(var(--sat) + 8px) 14px 8px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+  .modal-close { flex-shrink: 0; width: 44px; height: 44px; }
+  .detail-val { max-width: 65%; overflow-wrap: anywhere; }
+
+  /* Conversas do WhatsApp: lista OU conversa, com botão de voltar (criado pelo script) */
+  #wpp-panel, #wpp-panel.com-chat { width: 100%; padding-top: var(--sat); padding-bottom: var(--sab); border-left: none; }
+  .wpp-lista-col { width: 100%; border-right: none; }
+  .wpp-conv-ultima { max-width: none; }
+  #wpp-panel.com-chat .wpp-lista-col { display: none; }
+  #wpp-panel:not(.com-chat) #wppChat { display: none !important; }
+  #wpp-panel.com-chat .wpp-chat-head { padding-left: 54px; }
+  #wppChat { position: relative; }
+  #mWppVoltar { display: none; position: absolute; left: 6px; top: 12px; z-index: 3; width: 44px; height: 44px; background: none; border: none; color: var(--text); font-size: 26px; line-height: 1; cursor: pointer; }
+  #wpp-panel.com-chat #mWppVoltar { display: block; }
+}
 </style>
 </head>
 <body>
@@ -16437,5 +16537,119 @@ document.addEventListener('click', function(e) {
     </div>
   </div>
 </div>
+<script id="mobile-iphone-js">
+// iPhone (até 768px): só layout. No desktop nada aqui é criado nem executado.
+(function () {
+  var mq = window.matchMedia('(max-width: 768px)');
+  var COR = { 'col-novo': 'var(--col-novo-hd)', 'col-prod': 'var(--col-prod-hd)', 'col-pronto': 'var(--col-pronto-hd)', 'col-entregue': 'var(--col-entregue-hd)' };
+  var ativo = false, idx = 0, tocou = false, timer = null, obs = null;
+  var board, tabs, scroller, menuBtn, fundo, voltar, busca, placeholderOriginal;
+
+  function colunas() { return Array.prototype.filter.call(board.children, function (c) { return c.classList.contains('kanban-col'); }); }
+
+  function pintar() {
+    var cols = colunas();
+    cols.forEach(function (c, i) { c.classList.toggle('m-ativa', i === idx); });
+    Array.prototype.forEach.call(tabs.children, function (b, i) { b.classList.toggle('on', i === idx); });
+  }
+
+  function sincronizar() {
+    var cols = colunas();
+    if (!cols.length) return;
+    var dados = cols.map(function (c) {
+      var t = c.querySelector('.col-title'), n = c.querySelector('.col-count');
+      return { titulo: t ? t.textContent : '', qtd: n ? (parseInt(n.textContent, 10) || 0) : 0, cor: COR[c.classList[1]] || 'var(--orange)' };
+    });
+    // Abre na primeira coluna com pedido, até o operador escolher uma.
+    if (!tocou) { var p = dados.findIndex(function (d) { return d.qtd > 0; }); if (p >= 0) idx = p; }
+    if (idx >= dados.length) idx = 0;
+    if (tabs.children.length !== dados.length) {
+      tabs.innerHTML = dados.map(function () { return '<button type="button"><b></b><span></span></button>'; }).join('');
+      Array.prototype.forEach.call(tabs.children, function (b, i) { b.addEventListener('click', function () { irPara(i); }); });
+    }
+    dados.forEach(function (d, i) {
+      var b = tabs.children[i];
+      b.style.setProperty('--m-cor', d.cor);
+      b.children[0].textContent = d.qtd;
+      b.children[1].textContent = d.titulo;
+    });
+    tabs.style.display = board.style.display === 'none' ? 'none' : '';
+    pintar();
+    var alvo = idx * board.clientWidth;
+    if (Math.abs(board.scrollLeft - alvo) > board.clientWidth / 2) board.scrollLeft = alvo;
+  }
+
+  function irPara(i) {
+    tocou = true; idx = i; pintar();
+    board.scrollTo({ left: i * board.clientWidth, behavior: 'smooth' });
+    // Se a página já rolou além das abas, a coluna nova começa do topo.
+    var y = board.getBoundingClientRect().top - tabs.offsetHeight - (parseFloat(getComputedStyle(tabs).top) || 0);
+    if (y < 0) scroller.scrollTop += y;
+  }
+
+  function aoRolar() {
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      var i = Math.round(board.scrollLeft / (board.clientWidth || 1));
+      if (i !== idx && i >= 0 && i < colunas().length) { idx = i; tocou = true; pintar(); }
+    }, 80);
+  }
+
+  function fecharMenu() { document.body.classList.remove('m-menu'); }
+
+  function ligar() {
+    if (ativo) return;
+    board = document.getElementById('kanbanBoard');
+    scroller = document.querySelector('.main-wrap');
+    if (!board || !scroller) return;
+    ativo = true;
+    tabs = document.createElement('div');
+    tabs.id = 'mKanbanTabs';
+    board.parentNode.insertBefore(tabs, board);
+    board.addEventListener('scroll', aoRolar, { passive: true });
+    obs = new MutationObserver(sincronizar);
+    obs.observe(board, { childList: true, attributes: true, attributeFilter: ['style'] });
+    sincronizar();
+
+    menuBtn = document.createElement('button');
+    menuBtn.type = 'button'; menuBtn.id = 'mMenuBtn'; menuBtn.className = 'tb-btn tb-btn-ghost';
+    menuBtn.textContent = '⋯'; menuBtn.setAttribute('aria-label', 'Menu');
+    menuBtn.addEventListener('click', function () { document.body.classList.add('m-menu'); });
+    document.querySelector('.topbar-right').appendChild(menuBtn);
+    fundo = document.createElement('div');
+    fundo.id = 'mMenuFundo';
+    fundo.addEventListener('click', fecharMenu);
+    document.body.appendChild(fundo);
+    document.querySelector('.sidebar').addEventListener('click', fecharMenu);
+
+    var painelWpp = document.getElementById('wpp-panel'), chatWpp = document.getElementById('wppChat');
+    if (painelWpp && chatWpp) {
+      voltar = document.createElement('button');
+      voltar.type = 'button'; voltar.id = 'mWppVoltar'; voltar.textContent = '‹';
+      voltar.setAttribute('aria-label', 'Voltar para a lista');
+      voltar.addEventListener('click', function () { painelWpp.classList.remove('com-chat'); });
+      chatWpp.appendChild(voltar);
+    }
+    busca = document.getElementById('searchInput');
+    if (busca) { placeholderOriginal = busca.placeholder; busca.placeholder = 'Buscar pedido…'; }
+  }
+
+  function desligar() {
+    if (!ativo) return;
+    ativo = false;
+    clearTimeout(timer);
+    if (obs) obs.disconnect();
+    board.removeEventListener('scroll', aoRolar);
+    colunas().forEach(function (c) { c.classList.remove('m-ativa'); });
+    [tabs, menuBtn, fundo, voltar].forEach(function (e) { if (e && e.parentNode) e.parentNode.removeChild(e); });
+    document.querySelector('.sidebar').removeEventListener('click', fecharMenu);
+    fecharMenu();
+    if (busca) busca.placeholder = placeholderOriginal;
+  }
+
+  if (mq.matches) ligar();
+  if (mq.addEventListener) mq.addEventListener('change', function (e) { if (e.matches) ligar(); else desligar(); });
+})();
+</script>
 </body>
 </html>
