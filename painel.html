@@ -794,6 +794,24 @@ body.suporte-on #botAlertBanner{top:36px}
   #mWppVoltar { display: none; position: absolute; left: 6px; top: 12px; z-index: 3; width: 44px; height: 44px; background: none; border: none; color: var(--text); font-size: 26px; line-height: 1; cursor: pointer; }
   #wpp-panel.com-chat #mWppVoltar { display: block; }
 }
+
+@media (max-width: 768px) {
+  /* FASE 4: botão flutuante da IA */
+  #jiaFab { width: 52px !important; height: 52px !important; right: 16px !important; bottom: calc(16px + var(--sab)) !important; }
+  /* folga no fim das listas: o botão nunca fica em cima do último botão */
+  .col-body, .content > [id^="panel-"] { padding-bottom: calc(var(--sab) + 84px); }
+  /* com menu ou modal aberto o botão sai de cena (o rodapé do modal fica onde ele estaria) */
+  body.m-menu #jiaFab, body:has(.modal-overlay.show) #jiaFab { display: none !important; }
+  /* aviso sobe para não ficar atrás do botão */
+  .notif { left: 16px; right: 16px; bottom: calc(var(--sab) + 80px); }
+  /* conversa com a IA em tela cheia */
+  #jiaModal { padding: 0 !important; }
+  #jiaBox { width: 100% !important; max-width: none !important; height: 100vh !important; height: 100dvh !important; max-height: none !important; border: 0 !important; border-radius: 0 !important; padding-top: var(--sat); padding-bottom: var(--sab); }
+  #jiaResize { display: none !important; }
+
+  /* select escuro de verdade: sem isso o sistema pinta o controle de branco com letra clara */
+  select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23aaa' stroke-width='2'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; padding-right: 30px !important; }
+}
 </style>
 </head>
 <body>

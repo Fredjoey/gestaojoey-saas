@@ -779,6 +779,19 @@
   #painelReceitasCategoria, #modalReajuste, #modalFornNotas, #modalAdicionais { padding: 0 !important; }
   #painelReceitasCategoria > div, #modalReajuste > div, #modalFornNotas > div, #modalAdicionais > div { width: 100% !important; max-width: none !important; height: 100vh; height: 100dvh; max-height: none !important; border-radius: 0 !important; box-sizing: border-box; overflow-y: auto; }
 }
+
+@media (max-width: 768px) {
+  /* FASE 4: botão flutuante da IA */
+  #jiaFab { width: 52px !important; height: 52px !important; right: 16px !important; bottom: calc(16px + var(--sab)) !important; }
+  /* folga no fim da página: o botão nunca fica em cima do último botão */
+  .tab-content { padding-bottom: calc(var(--sab) + 84px); }
+  /* com modal aberto o botão sai de cena (o rodapé do modal fica onde ele estaria) */
+  body:has(.modal.show) #jiaFab, body:has(#painelReceitasCategoria[style*="display: flex"]) #jiaFab, body:has(#modalReajuste[style*="display: flex"]) #jiaFab, body:has(#modalFornNotas[style*="display: flex"]) #jiaFab, body:has(#modalAdicionais[style*="display: flex"]) #jiaFab { display: none !important; }
+  /* conversa com a IA em tela cheia */
+  #jiaModal { padding: 0 !important; }
+  #jiaBox { width: 100% !important; max-width: none !important; height: 100vh !important; height: 100dvh !important; max-height: none !important; border: 0 !important; border-radius: 0 !important; padding-top: var(--sat); padding-bottom: var(--sab); }
+  #jiaResize { display: none !important; }
+}
 </style>
 </head>
 <body>
